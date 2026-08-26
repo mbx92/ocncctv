@@ -6,7 +6,10 @@ import {
   TrashIcon,
   ListBulletIcon,
   Squares2X2Icon,
-  MagnifyingGlassIcon
+  MagnifyingGlassIcon,
+  PencilSquareIcon,
+  CheckIcon,
+  XMarkIcon
 } from '@heroicons/vue/24/outline'
 
 const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
@@ -142,6 +145,50 @@ async function deleteFile(f) {
     useToast().error(e.data?.statusMessage || 'Gagal menghapus')
   }
 }
+
+const renameTarget = ref(null)
+const renameName = ref('')
+const renameSaving = ref(false)
+const renameError = ref('')
+
+function stem(name) {
+  const raw = String(name || '')
+  const i = raw.lastIndexOf('.')
+  return i > 0 ? raw.slice(0, i) : raw
+}
+
+function openRename(f) {
+  renameTarget.value = f
+  renameName.value = stem(f.filename)
+  renameError.value = ''
+}
+
+function closeRename() {
+  renameTarget.value = null
+  renameName.value = ''
+  renameError.value = ''
+}
+
+async function saveRename() {
+  const f = renameTarget.value
+  if (!f) return
+  renameSaving.value = true
+  renameError.value = ''
+  try {
+    const updated = await $fetch(`/api/library-files/${f.id}`, {
+      method: 'PUT',
+      body: { filename: renameName.value }
+    })
+    await refreshFiles()
+    if (previewFile.value?.id === f.id) previewFile.value = { ...previewFile.value, filename: updated.filename }
+    closeRename()
+    useToast().success('Nama file diubah.')
+  } catch (e) {
+    renameError.value = e.data?.statusMessage || 'Gagal mengubah nama'
+  } finally {
+    renameSaving.value = false
+  }
+}
 </script>
 
 <template>
@@ -240,6 +287,14 @@ async function deleteFile(f) {
                   <button
                     v-if="isAdmin"
                     type="button"
+                    class="inline-flex items-center gap-1 text-xs font-medium text-ink-600 hover:text-ink-800"
+                    @click.stop="openRename(f)"
+                  >
+                    <PencilSquareIcon class="w-3.5 h-3.5" />Rename
+                  </button>
+                  <button
+                    v-if="isAdmin"
+                    type="button"
                     class="inline-flex items-center gap-1 text-xs font-medium text-red-500 hover:text-red-700"
                     @click.stop="deleteFile(f)"
                   >
@@ -251,24 +306,26 @@ async function deleteFile(f) {
           </div>
 
           <div v-else-if="paged.length && filesView === 'grid'" class="overflow-y-auto overscroll-contain p-2">
-            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2">
-              <button
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2 items-stretch">
+              <div
                 v-for="f in paged"
                 :key="f.id"
-                type="button"
-                class="text-left rounded-panel border p-2 space-y-1.5 transition-colors"
+                role="button"
+                tabindex="0"
+                class="min-w-0 h-full flex flex-col text-left rounded-panel border p-2 gap-1.5 transition-colors cursor-pointer"
                 :class="previewFile?.id === f.id ? 'border-accent-400 bg-accent-50' : 'border-ink-200 hover:border-ink-300 bg-white'"
                 @click="previewFile = f"
+                @keydown.enter.prevent="previewFile = f"
               >
                 <div
-                  class="aspect-square rounded border border-ink-100 bg-ink-50 flex items-center justify-center"
+                  class="aspect-square w-full rounded border border-ink-100 bg-ink-50 flex items-center justify-center shrink-0"
                   :class="previewFile?.id === f.id ? 'border-accent-200' : ''"
                 >
                   <span class="text-[10px] font-mono font-semibold uppercase tracking-wide text-ink-500">{{ fileExt(f.filename) }}</span>
                 </div>
-                <div class="font-mono text-[11px] leading-snug break-all line-clamp-2 min-h-[2rem]">{{ f.filename }}</div>
-                <div class="text-[10px] text-ink-400">{{ formatSize(f.sizeBytes) }}</div>
-                <div class="flex items-center gap-2 pt-0.5" @click.stop>
+                <div class="font-mono text-[11px] leading-4 h-8 overflow-hidden break-all line-clamp-2">{{ f.filename }}</div>
+                <div class="text-[10px] text-ink-400 truncate">{{ formatSize(f.sizeBytes) }}</div>
+                <div class="mt-auto flex items-center gap-2 pt-0.5" @click.stop>
                   <a
                     :href="`/api/library-files/${f.id}?download=1`"
                     class="text-teal-600 hover:text-teal-700"
@@ -280,6 +337,16 @@ async function deleteFile(f) {
                   <button
                     v-if="isAdmin"
                     type="button"
+                    class="text-ink-600 hover:text-ink-800"
+                    title="Rename"
+                    aria-label="Rename"
+                    @click="openRename(f)"
+                  >
+                    <PencilSquareIcon class="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    v-if="isAdmin"
+                    type="button"
                     class="text-red-500 hover:text-red-700"
                     title="Hapus"
                     aria-label="Hapus"
@@ -288,7 +355,7 @@ async function deleteFile(f) {
                     <TrashIcon class="w-3.5 h-3.5" />
                   </button>
                 </div>
-              </button>
+              </div>
             </div>
           </div>
 
@@ -309,15 +376,36 @@ async function deleteFile(f) {
         </div>
 
     <AppModal v-if="previewFile" :title="previewFile.filename" size="xl" @close="previewFile = null">
-      <div class="h-[60vh] -m-4">
+      <div class="h-[70vh] -m-4">
         <ClientOnly>
           <ModelViewer
             :key="previewFile.id"
             :src="`/api/library-files/${previewFile.id}`"
             :filename="previewFile.filename"
+            class="h-full"
           />
         </ClientOnly>
       </div>
+    </AppModal>
+
+    <AppModal v-if="renameTarget" title="Rename file" :nested="!!previewFile" @close="closeRename">
+      <form class="space-y-3" @submit.prevent="saveRename">
+        <div>
+          <label class="label">Nama</label>
+          <div class="flex items-center gap-2">
+            <input v-model="renameName" class="input flex-1" required maxlength="160" />
+            <span class="font-mono text-sm text-ink-500 shrink-0">.{{ fileExt(renameTarget.filename).toLowerCase() }}</span>
+          </div>
+          <p class="text-xs text-ink-400 mt-1">Ekstensi tidak diubah agar file tetap bisa di-preview.</p>
+        </div>
+        <p v-if="renameError" class="text-sm text-red-600">{{ renameError }}</p>
+        <div class="flex justify-end gap-2">
+          <button type="button" class="btn-secondary" @click="closeRename"><XMarkIcon class="w-4 h-4" />Batal</button>
+          <button type="submit" class="btn-primary" :disabled="renameSaving">
+            <CheckIcon class="w-4 h-4" />{{ renameSaving ? 'Menyimpan…' : 'Simpan' }}
+          </button>
+        </div>
+      </form>
     </AppModal>
   </div>
 </template>

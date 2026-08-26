@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
 import { requireAdmin } from '../../utils/rbac.js'
-import { logAudit } from '../../utils/audit.js'
+import { parseMaterialType } from '../../utils/materialType.js'
 
 export default defineEventHandler(async (event) => {
   requireAdmin(event)
@@ -12,7 +12,7 @@ export default defineEventHandler(async (event) => {
     .update(schema.materials)
     .set({
       name: body.name,
-      type: body.type,
+      type: parseMaterialType(body.type, 'filament'),
       unit: body.unit,
       pricePerUnit: Math.round(Number(body.pricePerUnit) || 0),
       stockQuantity: Number(body.stockQuantity) || 0,

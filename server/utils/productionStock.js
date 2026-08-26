@@ -106,11 +106,17 @@ export async function applyProductionCompletion(tx, schema, job) {
   }
 
   const recipes = await tx
-    .select()
+    .select({
+      materialId: schema.productRecipes.materialId,
+      quantityUsed: schema.productRecipes.quantityUsed,
+      type: schema.materials.type
+    })
     .from(schema.productRecipes)
+    .leftJoin(schema.materials, eq(schema.productRecipes.materialId, schema.materials.id))
     .where(eq(schema.productRecipes.productId, productId))
   for (const r of recipes) {
-    const qty = (Number(r.quantityUsed) || 0) * printed
+    const units = r.type === 'part' ? good : printed
+    const qty = (Number(r.quantityUsed) || 0) * units
     if (!qty || !r.materialId) continue
     await bumpStock(tx, schema.materials, r.materialId, -qty)
   }
@@ -140,11 +146,17 @@ export async function reverseProductionCompletion(tx, schema, job) {
   }
 
   const recipes = await tx
-    .select()
+    .select({
+      materialId: schema.productRecipes.materialId,
+      quantityUsed: schema.productRecipes.quantityUsed,
+      type: schema.materials.type
+    })
     .from(schema.productRecipes)
+    .leftJoin(schema.materials, eq(schema.productRecipes.materialId, schema.materials.id))
     .where(eq(schema.productRecipes.productId, productId))
   for (const r of recipes) {
-    const qty = (Number(r.quantityUsed) || 0) * printed
+    const units = r.type === 'part' ? good : printed
+    const qty = (Number(r.quantityUsed) || 0) * units
     if (!qty || !r.materialId) continue
     await bumpStock(tx, schema.materials, r.materialId, qty)
   }

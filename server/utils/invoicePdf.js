@@ -117,6 +117,36 @@ export async function buildInvoicePdf(invoice) {
   const ch = String(invoice.channelLabel || '')
   page.drawText(ch, { x: right - font.widthOfTextAtSize(ch, 11), y, size: 11, font, color: ink })
 
+  y -= 20
+  page.drawText('PEMBAYARAN', {
+    x: right - fontBold.widthOfTextAtSize('PEMBAYARAN', 8),
+    y,
+    size: 8,
+    font: fontBold,
+    color: muted
+  })
+  y -= 14
+  const payParts = [invoice.paymentStatusLabel, invoice.paymentMethodLabel].filter(Boolean)
+  const payLine = String(payParts.join(' · ') || '—')
+  page.drawText(payLine, {
+    x: right - font.widthOfTextAtSize(payLine, 11),
+    y,
+    size: 11,
+    font,
+    color: ink
+  })
+  if (invoice.paidAt) {
+    y -= 13
+    const paidLabel = formatInvoiceDate(invoice.paidAt)
+    page.drawText(paidLabel, {
+      x: right - font.widthOfTextAtSize(paidLabel, 9),
+      y,
+      size: 9,
+      font,
+      color: muted
+    })
+  }
+
   y -= 28
   page.drawLine({ start: { x: left, y }, end: { x: right, y }, thickness: 1, color: line })
   y -= 18
@@ -152,6 +182,13 @@ export async function buildInvoicePdf(invoice) {
   const sub = formatInvoiceIDR(invoice.subtotal)
   page.drawText('Subtotal', { x: 330, y, size: 10, font, color: muted })
   page.drawText(sub, { x: right - font.widthOfTextAtSize(sub, 10), y, size: 10, font, color: ink })
+  if (invoice.discount) {
+    y -= 16
+    const discLabel = String(invoice.discountLabel || 'Diskon')
+    const discAmount = `- ${formatInvoiceIDR(invoice.discount)}`
+    page.drawText(discLabel, { x: 330, y, size: 10, font, color: muted })
+    page.drawText(discAmount, { x: right - font.widthOfTextAtSize(discAmount, 10), y, size: 10, font, color: ink })
+  }
   y -= 18
   const total = formatInvoiceIDR(invoice.total)
   page.drawText('Total', { x: 330, y, size: 11, font: fontBold, color: ink })

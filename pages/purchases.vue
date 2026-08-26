@@ -42,7 +42,15 @@ function emptyLine() {
   return { itemType: 'material', materialId: '', packagingId: '', quantity: 0, unitPrice: 0 }
 }
 function openAdd() {
-  form.value = { date: todayStr(), supplier: suppliers.value?.[0]?.name || '', category: 'material', notes: '', lines: [emptyLine()] }
+  form.value = {
+    date: todayStr(),
+    supplier: suppliers.value?.[0]?.name || '',
+    category: 'material',
+    notes: '',
+    shippingFee: 0,
+    platformFee: 0,
+    lines: [emptyLine()]
+  }
   errorMsg.value = ''
   showForm.value = true
 }
@@ -135,7 +143,10 @@ function onItemChange(line) {
 function lineTotal(line) {
   return Math.round((Number(line.quantity) || 0) * (Number(line.unitPrice) || 0))
 }
-const grandTotal = computed(() => (form.value.lines || []).reduce((a, l) => a + lineTotal(l), 0))
+const goodsTotal = computed(() => (form.value.lines || []).reduce((a, l) => a + lineTotal(l), 0))
+const shippingFee = computed(() => Math.max(Math.round(Number(form.value.shippingFee) || 0), 0))
+const platformFee = computed(() => Math.max(Math.round(Number(form.value.platformFee) || 0), 0))
+const grandTotal = computed(() => goodsTotal.value + shippingFee.value + platformFee.value)
 
 async function save() {
   errorMsg.value = ''
@@ -171,8 +182,8 @@ async function remove(p) {
       </button>
     </div>
     <p class="text-xs text-ink-500">
-      Satu pembelian menambahkan stok material/packaging dan otomatis membuat pengeluaran dengan jumlah yang sama.
-      Harga per unit barang ikut diperbarui dari harga beli terakhir (HPP ikut berubah).
+      Satu pembelian menambah stok dan membuat pengeluaran sebesar total (barang + ongkir + fee platform).
+      Ongkir dan fee dibagi ke harga satuan stok, jadi HPP memakai harga landed.
     </p>
 
     <div class="panel hidden md:block">
@@ -199,7 +210,14 @@ async function remove(p) {
                   {{ l.itemName }} - {{ formatNumber(l.quantity, 1) }} {{ l.unit }}
                 </div>
               </td>
-              <td class="num">{{ formatIDR(p.totalAmount) }}</td>
+              <td class="num">
+                <div>{{ formatIDR(p.totalAmount) }}</div>
+                <div v-if="(p.shippingFee || 0) + (p.platformFee || 0)" class="text-xs font-sans font-normal text-ink-400">
+                  <span v-if="p.shippingFee">ongkir {{ formatIDR(p.shippingFee) }}</span>
+                  <span v-if="p.shippingFee && p.platformFee"> · </span>
+                  <span v-if="p.platformFee">fee {{ formatIDR(p.platformFee) }}</span>
+                </div>
+              </td>
               <td class="text-right">
                 <button type="button" class="btn-danger" @click="remove(p)"><TrashIcon class="w-4 h-4" />Hapus</button>
               </td>
@@ -227,7 +245,15 @@ async function remove(p) {
             <div class="font-medium">{{ p.supplier }}</div>
             <div class="text-xs font-mono text-ink-500">{{ formatDate(p.date) }}</div>
           </div>
-          <div class="font-mono font-semibold">{{ formatIDR(p.totalAmount) }}</div>
+          <div class="font-mono font-semibold text-right">{{ formatIDR(p.totalAmount) }}</div>
+        </div>
+        <div
+          v-if="(p.shippingFee || 0) + (p.platformFee || 0)"
+          class="text-xs text-ink-400"
+        >
+          <span v-if="p.shippingFee">Ongkir {{ formatIDR(p.shippingFee) }}</span>
+          <span v-if="p.shippingFee && p.platformFee"> · </span>
+          <span v-if="p.platformFee">Fee {{ formatIDR(p.platformFee) }}</span>
         </div>
         <div class="text-xs text-ink-500">
           <div v-for="l in p.lines" :key="l.id">{{ l.itemName }} - {{ formatNumber(l.quantity, 1) }} {{ l.unit }}</div>
@@ -334,15 +360,43 @@ async function remove(p) {
               </div>
               <div>
                 <label class="label">Subtotal</label>
-                <div class="input-num bg-ink-50">{{ formatIDR(lineTotal(line)) }}</div>
+                <div class="input-num flex items-center justify-end bg-ink-50">{{ formatIDR(lineTotal(line)) }}</div>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="flex items-center justify-between pt-1 border-t border-ink-200">
-          <span class="text-sm text-ink-500">Total pengeluaran</span>
-          <span class="font-mono text-lg font-bold">{{ formatIDR(grandTotal) }}</span>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="label">Ongkir</label>
+            <IdrInput v-model="form.shippingFee" input-class="w-full" />
+          </div>
+          <div>
+            <label class="label">Fee platform</label>
+            <IdrInput v-model="form.platformFee" input-class="w-full" />
+          </div>
+        </div>
+        <p class="text-xs text-ink-400 -mt-1">
+          Marketplace / ekspedisi. Jumlah ini masuk pengeluaran dan dibagi ke harga satuan barang.
+        </p>
+
+        <div class="space-y-1 pt-1 border-t border-ink-200 text-sm">
+          <div class="flex items-center justify-between text-ink-500">
+            <span>Subtotal barang</span>
+            <span class="font-mono">{{ formatIDR(goodsTotal) }}</span>
+          </div>
+          <div class="flex items-center justify-between text-ink-500">
+            <span>Ongkir</span>
+            <span class="font-mono">{{ formatIDR(shippingFee) }}</span>
+          </div>
+          <div class="flex items-center justify-between text-ink-500">
+            <span>Fee platform</span>
+            <span class="font-mono">{{ formatIDR(platformFee) }}</span>
+          </div>
+          <div class="flex items-center justify-between pt-1">
+            <span class="text-ink-600 font-medium">Total pengeluaran</span>
+            <span class="font-mono text-lg font-bold">{{ formatIDR(grandTotal) }}</span>
+          </div>
         </div>
         <p v-if="errorMsg" class="text-sm text-red-600">{{ errorMsg }}</p>
         <div class="flex justify-end gap-2">

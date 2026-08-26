@@ -2,6 +2,7 @@ import { eq, sql } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
 import { logAudit } from '../../utils/audit.js'
 import { allocateInvoiceNumber } from '../../utils/invoice.js'
+import { parseSalePayment } from '../../utils/salePayment.js'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
@@ -11,6 +12,8 @@ export default defineEventHandler(async (event) => {
   const qty = Math.max(Math.round(Number(body.quantity) || 1), 1)
   const productId = Number(body.productId)
   const customerName = String(body.customerName || '').trim() || null
+  const channel = body.channel || 'direct'
+  const payment = parseSalePayment(body, channel, body.date, body)
   const db = useDb()
   const rows = await db.transaction(async (tx) => {
     const invoiceNumber = await allocateInvoiceNumber(tx, schema, body.date)
@@ -22,14 +25,15 @@ export default defineEventHandler(async (event) => {
         customOrderId: null,
         quantity: qty,
         salePricePerUnit: Math.round(Number(body.salePricePerUnit) || 0),
-        channel: body.channel || 'direct',
+        channel,
         marketplaceFeePercent:
           body.marketplaceFeePercent !== null && body.marketplaceFeePercent !== ''
             ? Number(body.marketplaceFeePercent)
             : null,
         notes: body.notes || null,
         customerName,
-        invoiceNumber
+        invoiceNumber,
+        ...payment
       })
       .returning()
     await tx

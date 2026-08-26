@@ -10,9 +10,12 @@ import {
   ListBulletIcon,
   Squares2X2Icon,
   ChevronLeftIcon,
-  ChevronRightIcon
+  ChevronRightIcon,
+  PencilSquareIcon,
+  XMarkIcon
 } from '@heroicons/vue/24/outline'
 import { PRODUCT_STATUSES, productStatusLabel, productStatusClass } from '~/utils/productStatus.js'
+import { materialTypeLabel } from '~/utils/materialType.js'
 
 const route = useRoute()
 const id = route.params.id
@@ -199,6 +202,50 @@ async function deleteFile(f) {
   await $fetch(`/api/files/${f.id}`, { method: 'DELETE' })
   if (previewFile.value?.id === f.id) previewFile.value = null
   await refreshFiles()
+}
+
+const renameTarget = ref(null)
+const renameName = ref('')
+const renameSaving = ref(false)
+const renameError = ref('')
+
+function fileStem(name) {
+  const raw = String(name || '')
+  const i = raw.lastIndexOf('.')
+  return i > 0 ? raw.slice(0, i) : raw
+}
+
+function openRename(f) {
+  renameTarget.value = f
+  renameName.value = fileStem(f.filename)
+  renameError.value = ''
+}
+
+function closeRename() {
+  renameTarget.value = null
+  renameName.value = ''
+  renameError.value = ''
+}
+
+async function saveRename() {
+  const f = renameTarget.value
+  if (!f) return
+  renameSaving.value = true
+  renameError.value = ''
+  try {
+    const updated = await $fetch(`/api/files/${f.id}`, {
+      method: 'PUT',
+      body: { filename: renameName.value }
+    })
+    await refreshFiles()
+    if (previewFile.value?.id === f.id) previewFile.value = { ...previewFile.value, filename: updated.filename }
+    closeRename()
+    useToast().success('Nama file diubah.')
+  } catch (e) {
+    renameError.value = e.data?.statusMessage || 'Gagal mengubah nama'
+  } finally {
+    renameSaving.value = false
+  }
 }
 
 function formatSize(bytes) {
@@ -563,6 +610,14 @@ const tab = computed({
                   <button
                     v-if="isAdmin"
                     type="button"
+                    class="inline-flex items-center gap-1 text-xs font-medium text-ink-600 hover:text-ink-800"
+                    @click.stop="openRename(f)"
+                  >
+                    <PencilSquareIcon class="w-3.5 h-3.5" />Rename
+                  </button>
+                  <button
+                    v-if="isAdmin"
+                    type="button"
                     class="inline-flex items-center gap-1 text-xs font-medium text-red-500 hover:text-red-700"
                     @click.stop="deleteFile(f)"
                   >
@@ -604,6 +659,16 @@ const tab = computed({
                   <button
                     v-if="isAdmin"
                     type="button"
+                    class="text-ink-600 hover:text-ink-800"
+                    title="Rename"
+                    aria-label="Rename"
+                    @click="openRename(f)"
+                  >
+                    <PencilSquareIcon class="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    v-if="isAdmin"
+                    type="button"
                     class="text-red-500 hover:text-red-700"
                     title="Hapus"
                     aria-label="Hapus"
@@ -633,6 +698,7 @@ const tab = computed({
               :key="previewFile.id"
               :src="`/api/files/${previewFile.id}`"
               :filename="previewFile.filename"
+              class="h-full"
             />
             <div v-else class="w-full h-full flex items-center justify-center text-sm text-ink-500 bg-ink-50 px-4 text-center">
               Pilih file di panel File 3D untuk melihat preview.
@@ -649,6 +715,9 @@ const tab = computed({
           <button v-if="isAdmin" class="btn-secondary shrink-0" @click="addRecipeRow"><PlusIcon class="w-3.5 h-3.5" />Baris</button>
         </div>
         <div class="p-3 sm:p-4 space-y-3">
+          <p class="text-xs text-ink-500">
+            Filament/resin terpotong saat dicetak (jadi+gagal). Komponen (switch, magnet) hanya terpotong untuk unit jadi.
+          </p>
           <div v-for="(r, i) in recipeRows" :key="i" class="border border-ink-200 rounded-panel p-3 space-y-3">
             <div class="flex items-start gap-3">
               <div class="flex gap-2 shrink-0">
@@ -676,7 +745,7 @@ const tab = computed({
                   <label class="label">Material</label>
                   <select v-model="r.materialId" class="input w-full" :disabled="!isAdmin">
                     <option v-for="m in materials" :key="m.id" :value="m.id">
-                      {{ m.name }} ({{ formatIDR(m.pricePerUnit) }}/{{ m.unit }})
+                      {{ m.name }} · {{ materialTypeLabel(m.type) }} ({{ formatIDR(m.pricePerUnit) }}/{{ m.unit }})
                     </option>
                   </select>
                 </div>
@@ -720,7 +789,7 @@ const tab = computed({
             </div>
           </div>
           <p v-if="!recipeRows.length" class="text-center text-ink-500 py-4 text-sm">
-            Belum ada baris recipe. Klik "+ Baris".
+            Belum ada baris recipe. Klik "+ Baris". Filament/resin untuk cetak; komponen (switch, magnet) juga di sini, bukan di packaging.
           </p>
         </div>
       </div>
@@ -751,7 +820,9 @@ const tab = computed({
               <button v-if="isAdmin" class="text-red-500 hover:text-red-700 text-lg leading-none px-1 shrink-0" @click="packRows.splice(i, 1)">&times;</button>
             </div>
           </div>
-          <p v-if="!packRows.length" class="text-sm text-ink-500">Belum ada packaging.</p>
+          <p v-if="!packRows.length" class="text-sm text-ink-500">
+            Belum ada packaging. Ini untuk box, bubble, stiker setelah produk jadi — bukan switch atau suku cadang.
+          </p>
         </div>
       </div>
 
@@ -810,5 +881,25 @@ const tab = computed({
         </div>
       </div>
     </div>
+
+    <AppModal v-if="renameTarget" title="Rename file" @close="closeRename">
+      <form class="space-y-3" @submit.prevent="saveRename">
+        <div>
+          <label class="label">Nama</label>
+          <div class="flex items-center gap-2">
+            <input v-model="renameName" class="input flex-1" required maxlength="160" />
+            <span class="font-mono text-sm text-ink-500 shrink-0">.{{ fileExt(renameTarget.filename).toLowerCase() }}</span>
+          </div>
+          <p class="text-xs text-ink-400 mt-1">Ekstensi tidak diubah agar file tetap bisa di-preview.</p>
+        </div>
+        <p v-if="renameError" class="text-sm text-red-600">{{ renameError }}</p>
+        <div class="flex justify-end gap-2">
+          <button type="button" class="btn-secondary" @click="closeRename"><XMarkIcon class="w-4 h-4" />Batal</button>
+          <button type="submit" class="btn-primary" :disabled="renameSaving">
+            <CheckIcon class="w-4 h-4" />{{ renameSaving ? 'Menyimpan…' : 'Simpan' }}
+          </button>
+        </div>
+      </form>
+    </AppModal>
   </div>
 </template>

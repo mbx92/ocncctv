@@ -8,6 +8,34 @@ function lineAmount(qty, unitPrice) {
   return Math.round((Number(qty) || 0) * (Number(unitPrice) || 0))
 }
 
+function extraFees(body) {
+  return {
+    shippingFee: Math.max(Math.round(Number(body.shippingFee) || 0), 0),
+    platformFee: Math.max(Math.round(Number(body.platformFee) || 0), 0)
+  }
+}
+
+function landedUnitPrices(lines, extras) {
+  const amounts = lines.map((l) => lineAmount(l.quantity, l.unitPrice))
+  const goods = amounts.reduce((a, b) => a + b, 0)
+  if (!goods || extras <= 0) {
+    return lines.map((l, i) => ({ ...l, landedUnit: l.unitPrice, extraShare: 0, goodsAmount: amounts[i] }))
+  }
+  let allocated = 0
+  return lines.map((l, i) => {
+    const share = i === lines.length - 1 ? extras - allocated : Math.round((extras * amounts[i]) / goods)
+    allocated += share
+    const landedAmount = amounts[i] + share
+    const qty = Number(l.quantity) || 0
+    return {
+      ...l,
+      extraShare: share,
+      goodsAmount: amounts[i],
+      landedUnit: qty > 0 ? Math.round(landedAmount / qty) : l.unitPrice
+    }
+  })
+}
+
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const supplier = sanitizeText(body.supplier || '')
@@ -28,21 +56,28 @@ export default defineEventHandler(async (event) => {
 
   if (!lines.length) throw createError({ statusCode: 400, statusMessage: 'Minimal satu baris barang dengan qty > 0' })
 
+  const { shippingFee, platformFee } = extraFees(body)
+  const extras = shippingFee + platformFee
+  const goodsTotal = lines.reduce((a, l) => a + lineAmount(l.quantity, l.unitPrice), 0)
+  const totalAmount = goodsTotal + extras
+  const priced = landedUnitPrices(lines, extras)
+
   const db = useDb()
   const result = await db.transaction(async (tx) => {
-    const totalAmount = lines.reduce((a, l) => a + lineAmount(l.quantity, l.unitPrice), 0)
     const [purchase] = await tx
       .insert(schema.supplierPurchases)
       .values({
         date: body.date,
         supplier,
         notes,
-        totalAmount
+        totalAmount,
+        shippingFee,
+        platformFee
       })
       .returning()
 
     const names = []
-    for (const line of lines) {
+    for (const line of priced) {
       const amount = lineAmount(line.quantity, line.unitPrice)
       await tx.insert(schema.supplierPurchaseLines).values({
         purchaseId: purchase.id,
@@ -59,7 +94,7 @@ export default defineEventHandler(async (event) => {
           .update(schema.materials)
           .set({
             stockQuantity: sql`${schema.materials.stockQuantity} + ${line.quantity}`,
-            pricePerUnit: line.unitPrice
+            pricePerUnit: line.landedUnit
           })
           .where(eq(schema.materials.id, line.materialId))
           .returning({ name: schema.materials.name, unit: schema.materials.unit })
@@ -70,7 +105,7 @@ export default defineEventHandler(async (event) => {
           .update(schema.packaging)
           .set({
             stockQuantity: sql`${schema.packaging.stockQuantity} + ${line.quantity}`,
-            pricePerUnit: line.unitPrice
+            pricePerUnit: line.landedUnit
           })
           .where(eq(schema.packaging.id, line.packagingId))
           .returning({ name: schema.packaging.name, unit: schema.packaging.unit })
@@ -89,7 +124,9 @@ export default defineEventHandler(async (event) => {
       .values({
         date: body.date,
         category: cat.key,
-        description: `Pembelian ke ${purchase.supplier}: ${names.join(', ')}`,
+        description: `Pembelian ke ${purchase.supplier}: ${names.join(', ')}${
+          extras ? ` · ongkir ${shippingFee.toLocaleString('id-ID')} · fee ${platformFee.toLocaleString('id-ID')}` : ''
+        }`,
         amount: totalAmount,
         relatedProductId: null
       })

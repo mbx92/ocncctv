@@ -30,6 +30,12 @@ defineProps({
       <div class="text-right">
         <div class="text-xs font-semibold uppercase tracking-wide text-ink-500">Channel</div>
         <div class="mt-1">{{ invoice.channelLabel }}</div>
+        <div class="text-xs font-semibold uppercase tracking-wide text-ink-500 mt-3">Pembayaran</div>
+        <div class="mt-1">
+          {{ invoice.paymentStatusLabel }}
+          <span v-if="invoice.paymentMethodLabel"> · {{ invoice.paymentMethodLabel }}</span>
+        </div>
+        <div v-if="invoice.paidAt" class="text-xs text-ink-500 mt-0.5">{{ formatDate(invoice.paidAt) }}</div>
       </div>
     </section>
 
@@ -56,10 +62,14 @@ defineProps({
     </table>
 
     <div class="flex justify-end pt-4">
-      <dl class="w-56 text-sm space-y-1">
+      <dl class="w-64 text-sm space-y-1">
         <div class="flex justify-between gap-4">
           <dt class="text-ink-500">Subtotal</dt>
           <dd class="font-mono">{{ formatIDR(invoice.subtotal) }}</dd>
+        </div>
+        <div v-if="invoice.discount" class="flex justify-between gap-4">
+          <dt class="text-ink-500">{{ invoice.discountLabel || 'Diskon' }}</dt>
+          <dd class="font-mono">− {{ formatIDR(invoice.discount) }}</dd>
         </div>
         <div class="flex justify-between gap-4 border-t border-ink-200 pt-2 font-semibold">
           <dt>Total</dt>

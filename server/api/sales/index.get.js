@@ -2,6 +2,7 @@ import { and, eq, gte, lte, desc, sql } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
 import { getHppForProducts } from '../../utils/productHpp.js'
 import { loadCustomOrderHppMap } from '../../utils/customOrders.js'
+import { saleMoney } from '../../utils/salePayment.js'
 
 export default defineEventHandler(async (event) => {
   const q = getQuery(event)
@@ -9,6 +10,9 @@ export default defineEventHandler(async (event) => {
   const conds = []
   if (q.productId) conds.push(eq(schema.sales.productId, Number(q.productId)))
   if (q.channel) conds.push(eq(schema.sales.channel, q.channel))
+  if (q.paymentStatus === 'paid' || q.paymentStatus === 'unpaid') {
+    conds.push(eq(schema.sales.paymentStatus, q.paymentStatus))
+  }
   if (q.dateFrom) conds.push(gte(schema.sales.date, q.dateFrom))
   if (q.dateTo) conds.push(lte(schema.sales.date, q.dateTo))
 
@@ -27,7 +31,15 @@ export default defineEventHandler(async (event) => {
       marketplaceFeePercent: schema.sales.marketplaceFeePercent,
       notes: schema.sales.notes,
       invoiceNumber: schema.sales.invoiceNumber,
-      customerName: sql`coalesce(${schema.sales.customerName}, ${schema.customOrders.customerName})`.as('customerName')
+      customerName: sql`coalesce(${schema.sales.customerName}, ${schema.customOrders.customerName})`.as('customerName'),
+      imageKey: schema.products.imageKey,
+      paymentStatus: schema.sales.paymentStatus,
+      paymentMethod: schema.sales.paymentMethod,
+      paidAt: schema.sales.paidAt,
+      discountAmount: schema.sales.discountAmount,
+      discountKind: schema.sales.discountKind,
+      discountPercent: schema.sales.discountPercent,
+      paymentNotes: schema.sales.paymentNotes
     })
     .from(schema.sales)
     .leftJoin(schema.products, eq(schema.sales.productId, schema.products.id))
@@ -39,17 +51,19 @@ export default defineEventHandler(async (event) => {
   const customHpp = await loadCustomOrderHppMap(rows.map((r) => r.customOrderId))
 
   return rows.map((r) => {
-    const fee = r.marketplaceFeePercent || 0
-    const netPricePerUnit = Math.round(r.salePricePerUnit * (1 - fee / 100))
+    const money = saleMoney(r)
     const hpp = r.customOrderId ? customHpp.get(r.customOrderId)?.total ?? 0 : hppMap.get(r.productId)?.total ?? 0
+    const netPricePerUnit = r.quantity ? Math.round(money.net / r.quantity) : 0
     return {
       ...r,
       isCustom: !!r.customOrderId,
       netPricePerUnit,
-      grossRevenue: r.salePricePerUnit * r.quantity,
-      netRevenue: netPricePerUnit * r.quantity,
+      grossRevenue: money.gross,
+      feeAmount: money.fee,
+      discountAmount: money.discount,
+      netRevenue: money.net,
       hppPerUnit: hpp,
-      netMargin: (netPricePerUnit - hpp) * r.quantity
+      netMargin: money.net - hpp * r.quantity
     }
   })
 })

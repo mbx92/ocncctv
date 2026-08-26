@@ -64,7 +64,10 @@ async function remove(p) {
 <template>
   <div class="space-y-4">
     <div class="flex items-center justify-between gap-2">
-      <h1 class="text-xl font-bold">Packaging</h1>
+      <div>
+        <h1 class="text-xl font-bold">Packaging</h1>
+        <p class="text-sm text-ink-500">Box, bubble, stiker setelah produk jadi. Switch/magnet ada di Material → Komponen.</p>
+      </div>
       <button v-if="isAdmin" class="btn-primary" @click="openAdd">
         <PlusIcon class="w-4 h-4" /><span class="hidden sm:inline">Tambah Packaging</span><span class="sm:hidden">Tambah</span>
       </button>

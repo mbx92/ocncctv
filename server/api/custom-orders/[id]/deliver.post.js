@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm'
 import { useDb, schema } from '../../../db/index.js'
 import { logAudit } from '../../../utils/audit.js'
 import { allocateInvoiceNumber } from '../../../utils/invoice.js'
+import { parseSalePayment } from '../../../utils/salePayment.js'
 
 export default defineEventHandler(async (event) => {
   const id = Number(getRouterParam(event, 'id'))
@@ -36,11 +37,13 @@ export default defineEventHandler(async (event) => {
       body.salePricePerUnit != null && body.salePricePerUnit !== ''
         ? Math.max(Math.round(Number(body.salePricePerUnit) || 0), 0)
         : order.pricePerUnit
-    const invoiceNumber = await allocateInvoiceNumber(tx, schema, body.date || order.date)
+    const saleDate = body.date || order.date
+    const payment = parseSalePayment(body, order.channel, saleDate)
+    const invoiceNumber = await allocateInvoiceNumber(tx, schema, saleDate)
     const [sale] = await tx
       .insert(schema.sales)
       .values({
-        date: body.date || order.date,
+        date: saleDate,
         productId: null,
         customOrderId: id,
         quantity: qty,
@@ -52,7 +55,8 @@ export default defineEventHandler(async (event) => {
             : null,
         notes: body.notes || `Custom · ${order.customerName} · ${order.title}`,
         customerName: order.customerName,
-        invoiceNumber
+        invoiceNumber,
+        ...payment
       })
       .returning()
     await tx.update(schema.customOrders).set({ status: 'delivered' }).where(eq(schema.customOrders.id, id))

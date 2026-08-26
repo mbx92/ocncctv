@@ -11,6 +11,18 @@ const CHANNEL_LABEL = {
   other: 'Lainnya'
 }
 
+const PAYMENT_METHOD_LABEL = {
+  cash: 'Tunai',
+  transfer: 'Transfer',
+  marketplace: 'Cair marketplace',
+  other: 'Lainnya'
+}
+
+const PAYMENT_STATUS_LABEL = {
+  unpaid: 'Belum dibayar',
+  paid: 'Lunas'
+}
+
 const MONTHS_ID = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
 
 function yyyymmFromDate(dateStr) {
@@ -88,7 +100,13 @@ export async function loadSaleInvoiceRow(tx, schema, id) {
       channel: schema.sales.channel,
       notes: schema.sales.notes,
       invoiceNumber: schema.sales.invoiceNumber,
-      customerName: schema.sales.customerName
+      customerName: schema.sales.customerName,
+      paymentStatus: schema.sales.paymentStatus,
+      paymentMethod: schema.sales.paymentMethod,
+      paidAt: schema.sales.paidAt,
+      discountAmount: schema.sales.discountAmount,
+      discountKind: schema.sales.discountKind,
+      discountPercent: schema.sales.discountPercent
     })
     .from(schema.sales)
     .leftJoin(schema.products, eq(schema.sales.productId, schema.products.id))
@@ -101,6 +119,11 @@ export function toInvoicePayload(row, settings) {
   const qty = row.quantity
   const unitPrice = row.salePricePerUnit
   const amount = qty * unitPrice
+  const discount = Math.min(Math.max(Math.round(Number(row.discountAmount) || 0), 0), amount)
+  const discountKind = row.discountKind === 'percent' ? 'percent' : 'amount'
+  const discountPercent = Math.min(Math.max(Number(row.discountPercent) || 0, 0), 100)
+  const paid = row.paymentStatus === 'paid'
+  const methodLabel = PAYMENT_METHOD_LABEL[row.paymentMethod] || row.paymentMethod || null
   const itemName = row.customOrderId
     ? `Custom — ${row.customTitle || 'desain pelanggan'}`
     : row.productName || 'Produk'
@@ -112,6 +135,11 @@ export function toInvoicePayload(row, settings) {
     customerName,
     channel: row.channel,
     channelLabel: CHANNEL_LABEL[row.channel] || row.channel,
+    paymentStatus: paid ? 'paid' : 'unpaid',
+    paymentStatusLabel: paid ? PAYMENT_STATUS_LABEL.paid : PAYMENT_STATUS_LABEL.unpaid,
+    paymentMethod: paid ? row.paymentMethod || null : null,
+    paymentMethodLabel: paid ? methodLabel : null,
+    paidAt: paid ? row.paidAt || null : null,
     notes: row.notes,
     isCustom: !!row.customOrderId,
     item: {
@@ -121,7 +149,16 @@ export function toInvoicePayload(row, settings) {
       amount
     },
     subtotal: amount,
-    total: amount,
+    discount,
+    discountKind,
+    discountPercent,
+    discountLabel:
+      discount > 0
+        ? discountKind === 'percent'
+          ? `Diskon ${discountPercent}%`
+          : 'Diskon'
+        : null,
+    total: amount - discount,
     business: {
       name: settings.invoiceBusinessName || 'Numa3D',
       address: settings.invoiceAddress || null,

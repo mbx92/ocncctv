@@ -3,6 +3,7 @@ import { useDb, schema } from '../db/index.js'
 import { getHppForProducts } from './productHpp.js'
 import { loadCustomOrderHppMap } from './customOrders.js'
 import { toDateStr } from './dates.js'
+import { saleMoney } from './salePayment.js'
 
 export async function loadSalesWithHpp({ dateFrom, dateTo } = {}) {
   const db = useDb()
@@ -24,7 +25,8 @@ export async function loadSalesWithHpp({ dateFrom, dateTo } = {}) {
       quantity: schema.sales.quantity,
       salePricePerUnit: schema.sales.salePricePerUnit,
       channel: schema.sales.channel,
-      marketplaceFeePercent: schema.sales.marketplaceFeePercent
+      marketplaceFeePercent: schema.sales.marketplaceFeePercent,
+      discountAmount: schema.sales.discountAmount
     })
     .from(schema.sales)
     .leftJoin(schema.products, eq(schema.sales.productId, schema.products.id))
@@ -35,13 +37,11 @@ export async function loadSalesWithHpp({ dateFrom, dateTo } = {}) {
   const customHpp = await loadCustomOrderHppMap(rows.map((r) => r.customOrderId))
 
   return rows.map((r) => {
-    const fee = r.marketplaceFeePercent || 0
-    const netPricePerUnit = Math.round(r.salePricePerUnit * (1 - fee / 100))
+    const money = saleMoney(r)
     const hppPerUnit = r.customOrderId
       ? customHpp.get(r.customOrderId)?.total ?? 0
       : hppMap.get(r.productId)?.total ?? 0
-    const grossRevenue = r.salePricePerUnit * r.quantity
-    const netRevenue = netPricePerUnit * r.quantity
+    const netPricePerUnit = r.quantity ? Math.round(money.net / r.quantity) : 0
     const totalHpp = hppPerUnit * r.quantity
     return {
       ...r,
@@ -49,11 +49,12 @@ export async function loadSalesWithHpp({ dateFrom, dateTo } = {}) {
       isCustom: !!r.customOrderId,
       netPricePerUnit,
       hppPerUnit,
-      grossRevenue,
-      netRevenue,
+      grossRevenue: money.gross,
+      netRevenue: money.net,
       totalHpp,
-      feeAmount: grossRevenue - netRevenue,
-      netMargin: netRevenue - totalHpp
+      feeAmount: money.fee,
+      discountAmount: money.discount,
+      netMargin: money.net - totalHpp
     }
   })
 }

@@ -12,7 +12,7 @@ import {
 } from 'drizzle-orm/pg-core'
 
 export const userRoleEnum = pgEnum('user_role', ['admin', 'staff'])
-export const materialTypeEnum = pgEnum('material_type', ['filament', 'resin'])
+export const materialTypeEnum = pgEnum('material_type', ['filament', 'resin', 'part'])
 export const productStatusEnum = pgEnum('product_status', ['draft', 'rnd', 'active', 'discontinued'])
 export const salesChannelEnum = pgEnum('sales_channel', [
   'tokopedia',
@@ -23,6 +23,7 @@ export const salesChannelEnum = pgEnum('sales_channel', [
   'direct',
   'other'
 ])
+export const salePaymentStatusEnum = pgEnum('sale_payment_status', ['unpaid', 'paid'])
 export const capitalTypeEnum = pgEnum('capital_type', ['deposit', 'withdrawal'])
 export const productionStatusEnum = pgEnum('production_status', [
   'queued',
@@ -260,6 +261,13 @@ export const sales = pgTable(
     notes: text('notes'),
     invoiceNumber: text('invoice_number'),
     customerName: text('customer_name'),
+    paymentStatus: salePaymentStatusEnum('payment_status').notNull().default('paid'),
+    paymentMethod: text('payment_method'),
+    paidAt: date('paid_at'),
+    discountAmount: integer('discount_amount').notNull().default(0),
+    discountKind: text('discount_kind').notNull().default('amount'),
+    discountPercent: real('discount_percent').notNull().default(0),
+    paymentNotes: text('payment_notes'),
     createdAt: timestamp('created_at').notNull().defaultNow()
   },
   (t) => ({
@@ -359,6 +367,8 @@ export const supplierPurchases = pgTable('supplier_purchases', {
   supplier: text('supplier').notNull(),
   notes: text('notes'),
   totalAmount: integer('total_amount').notNull().default(0),
+  shippingFee: integer('shipping_fee').notNull().default(0),
+  platformFee: integer('platform_fee').notNull().default(0),
   expenseId: integer('expense_id').references(() => expenses.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at').notNull().defaultNow()
 })

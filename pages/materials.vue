@@ -10,6 +10,8 @@ import {
   PhotoIcon
 } from '@heroicons/vue/24/outline'
 
+import { MATERIAL_TYPES, materialTypeLabel, materialTypeBadge, materialLowStock } from '~/utils/materialType.js'
+
 const { data: materials, refresh } = await useFetch('/api/materials')
 const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
 
@@ -31,6 +33,15 @@ const showForm = ref(false)
 const editing = ref(null)
 const form = ref({})
 const errorMsg = ref('')
+
+watch(
+  () => form.value.type,
+  (type) => {
+    if (!showForm.value || editing.value) return
+    const preset = MATERIAL_TYPES.find((t) => t.id === type)
+    if (preset) form.value.unit = preset.unit
+  }
+)
 
 function openAdd() {
   editing.value = null
@@ -90,7 +101,10 @@ async function saveAdjust() {
 <template>
   <div class="space-y-4">
     <div class="flex items-center justify-between gap-2">
-      <h1 class="text-xl font-bold">Material</h1>
+      <div>
+        <h1 class="text-xl font-bold">Material</h1>
+        <p class="text-sm text-ink-500">Filament, resin, dan komponen rakit (switch, magnet). Bukan box/stiker.</p>
+      </div>
       <button v-if="isAdmin" class="btn-primary" @click="openAdd">
         <PlusIcon class="w-4 h-4" /><span class="hidden sm:inline">Tambah Material</span><span class="sm:hidden">Tambah</span>
       </button>
@@ -133,12 +147,12 @@ async function saveAdjust() {
               </td>
               <td class="font-medium">{{ m.name }}</td>
               <td>
-                <span class="badge" :class="m.type === 'filament' ? 'bg-teal-500/10 text-teal-600' : 'bg-accent-100 text-accent-700'">
-                  {{ m.type }}
+                <span class="badge" :class="materialTypeBadge(m.type)">
+                  {{ materialTypeLabel(m.type) }}
                 </span>
               </td>
               <td class="num">{{ formatIDR(m.pricePerUnit) }}/{{ m.unit }}</td>
-              <td class="num" :class="m.stockQuantity < 200 ? 'text-amber-600 font-semibold' : ''">
+              <td class="num" :class="materialLowStock(m) ? 'text-amber-600 font-semibold' : ''">
                 {{ formatNumber(m.stockQuantity, 1) }} {{ m.unit }}
               </td>
               <td class="text-ink-500">{{ m.supplier || '-' }}</td>
@@ -179,12 +193,12 @@ async function saveAdjust() {
         <div class="min-w-0 flex-1 space-y-1">
           <div class="flex items-start justify-between gap-2">
             <span class="font-medium break-words">{{ m.name }}</span>
-            <span class="badge shrink-0" :class="m.type === 'filament' ? 'bg-teal-500/10 text-teal-600' : 'bg-accent-100 text-accent-700'">
-              {{ m.type }}
+            <span class="badge shrink-0" :class="materialTypeBadge(m.type)">
+              {{ materialTypeLabel(m.type) }}
             </span>
           </div>
           <div class="text-sm font-mono">{{ formatIDR(m.pricePerUnit) }}/{{ m.unit }}</div>
-          <div class="text-sm font-mono" :class="m.stockQuantity < 200 ? 'text-amber-600 font-semibold' : 'text-ink-500'">
+          <div class="text-sm font-mono" :class="materialLowStock(m) ? 'text-amber-600 font-semibold' : 'text-ink-500'">
             Stok {{ formatNumber(m.stockQuantity, 1) }} {{ m.unit }}
           </div>
           <div class="text-xs text-ink-400">{{ m.supplier || 'tanpa supplier' }}</div>
@@ -220,7 +234,7 @@ async function saveAdjust() {
             @changed="refresh()"
           />
           <p class="text-xs text-ink-500 pt-1">
-            Gambar membantu membedakan filament dengan warna/merek mirip saat memilih di recipe.
+            Gambar membantu membedakan filament, resin, atau komponen (switch, magnet) saat memilih di recipe.
           </p>
         </div>
         <div>
@@ -231,8 +245,7 @@ async function saveAdjust() {
           <div>
             <label class="label">Tipe</label>
             <select v-model="form.type" class="input">
-              <option value="filament">Filament</option>
-              <option value="resin">Resin</option>
+              <option v-for="t in MATERIAL_TYPES" :key="t.id" :value="t.id">{{ t.label }}</option>
             </select>
           </div>
           <div>
@@ -240,6 +253,7 @@ async function saveAdjust() {
             <select v-model="form.unit" class="input">
               <option value="gram">gram</option>
               <option value="ml">ml</option>
+              <option value="pcs">pcs</option>
             </select>
           </div>
         </div>

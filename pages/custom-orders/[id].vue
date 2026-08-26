@@ -501,7 +501,12 @@ async function deliver() {
             class="max-h-48 rounded border border-ink-200 object-contain bg-ink-50"
           />
           <ClientOnly v-else-if="isModel(f.filename)">
-            <ModelViewer :src="`/api/custom-order-files/${f.id}`" :filename="f.filename" class="h-56 rounded border border-ink-200" />
+            <ModelViewer
+              :src="`/api/custom-order-files/${f.id}`"
+              :filename="f.filename"
+              compact
+              class="h-56 rounded border border-ink-200"
+            />
           </ClientOnly>
         </li>
       </ul>

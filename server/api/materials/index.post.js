@@ -1,6 +1,7 @@
 import { useDb, schema } from '../../db/index.js'
 import { requireAdmin } from '../../utils/rbac.js'
 import { logAudit } from '../../utils/audit.js'
+import { parseMaterialType } from '../../utils/materialType.js'
 
 export default defineEventHandler(async (event) => {
   requireAdmin(event)
@@ -11,7 +12,7 @@ export default defineEventHandler(async (event) => {
     .insert(schema.materials)
     .values({
       name: body.name,
-      type: body.type || 'filament',
+      type: parseMaterialType(body.type),
       unit: body.unit || 'gram',
       pricePerUnit: Math.round(Number(body.pricePerUnit) || 0),
       stockQuantity: Number(body.stockQuantity) || 0,
