@@ -12,8 +12,19 @@ export default defineNuxtRouteMiddleware(async (to) => {
     }
   }
 
-  const adminOnlyPaths = ['/users', '/audit-log']
-  if (adminOnlyPaths.includes(to.path) && authUser.value.role !== 'admin') {
-    return navigateTo('/')
+  if (to.path === '/users') {
+    return navigateTo(
+      authUser.value.role === 'admin' ? { path: '/settings', query: { tab: 'user' } } : '/settings'
+    )
+  }
+  if (to.path === '/audit-log') {
+    return navigateTo(
+      authUser.value.role === 'admin' ? { path: '/settings', query: { tab: 'audit' } } : '/settings'
+    )
+  }
+
+  const adminOnlyTabs = ['user', 'audit']
+  if (to.path === '/settings' && adminOnlyTabs.includes(String(to.query.tab || '')) && authUser.value.role !== 'admin') {
+    return navigateTo('/settings')
   }
 })

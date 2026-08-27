@@ -30,9 +30,23 @@ function wrapText(font, text, size, maxWidth) {
   return lines
 }
 
+function wrapParagraphs(font, text, size, maxWidth) {
+  const paragraphs = String(text || '').replace(/\r\n/g, '\n').split('\n')
+  const lines = []
+  for (const p of paragraphs) {
+    if (!p.trim()) {
+      lines.push('')
+      continue
+    }
+    const wrapped = wrapText(font, p, size, maxWidth)
+    lines.push(...(wrapped.length ? wrapped : ['']))
+  }
+  return lines
+}
+
 export async function buildInvoicePdf(invoice) {
   const doc = await PDFDocument.create()
-  const page = doc.addPage([595.28, 841.89])
+  const page = doc.addPage([595.28, 841.89]) // A4 portrait (210 × 297 mm)
   const font = await doc.embedFont(StandardFonts.Helvetica)
   const fontBold = await doc.embedFont(StandardFonts.HelveticaBold)
   const ink = rgb(0.12, 0.14, 0.16)
@@ -205,8 +219,8 @@ export async function buildInvoicePdf(invoice) {
   }
   const footer = String(invoice.business.footer || '')
   if (footer) {
-    for (const row of wrapText(font, footer, 10, right - left)) {
-      page.drawText(row, { x: left, y, size: 10, font, color: ink })
+    for (const row of wrapParagraphs(font, footer, 10, right - left)) {
+      if (row) page.drawText(row, { x: left, y, size: 10, font, color: ink })
       y -= 13
     }
   }

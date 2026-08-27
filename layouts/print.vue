@@ -3,3 +3,13 @@
     <slot />
   </div>
 </template>
+
+<style>
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+}
+</style>
+

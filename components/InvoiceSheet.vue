@@ -79,7 +79,7 @@ defineProps({
     </div>
 
     <p v-if="invoice.notes" class="mt-6 text-xs text-ink-500">Catatan: {{ invoice.notes }}</p>
-    <p class="mt-8 text-sm text-ink-600">{{ invoice.business.footer }}</p>
+    <p class="mt-8 text-sm text-ink-600 whitespace-pre-line">{{ invoice.business.footer }}</p>
   </article>
 </template>
 

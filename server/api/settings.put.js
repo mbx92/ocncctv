@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
       invoiceBusinessName: String(body.invoiceBusinessName || '').trim() || 'Numa3D',
       invoiceAddress: String(body.invoiceAddress || '').trim() || null,
       invoicePhone: String(body.invoicePhone || '').trim() || null,
-      invoiceFooter: String(body.invoiceFooter || '').trim() || null,
+      invoiceFooter: String(body.invoiceFooter || '').replace(/\r\n/g, '\n').trim() || null,
       invoiceShareTtlDays: clampShareTtlDays(body.invoiceShareTtlDays)
     })
     .where(eq(schema.appSettings.id, current.id))

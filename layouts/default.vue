@@ -15,9 +15,7 @@ import {
   ChartBarIcon,
   WalletIcon,
   Cog6ToothIcon,
-  UsersIcon,
   UserIcon,
-  ClipboardDocumentListIcon,
   Bars3Icon,
   XMarkIcon,
   ArrowRightStartOnRectangleIcon
@@ -43,15 +41,7 @@ const baseNav = [
   { to: '/capital', label: 'Modal', icon: WalletIcon },
   { to: '/settings', label: 'Pengaturan', icon: Cog6ToothIcon }
 ]
-const nav = computed(() =>
-  isAdmin.value
-    ? [
-        ...baseNav,
-        { to: '/users', label: 'User', icon: UsersIcon },
-        { to: '/audit-log', label: 'Log Aktivitas', icon: ClipboardDocumentListIcon }
-      ]
-    : baseNav
-)
+const nav = baseNav
 
 const roleLabel = { admin: 'Admin', staff: 'Staff' }
 

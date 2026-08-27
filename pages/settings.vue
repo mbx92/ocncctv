@@ -13,18 +13,25 @@ const form = ref({
 const savedMsg = ref('')
 const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
 
-const tabs = [
-  { id: 'umum', label: 'Umum' },
-  { id: 'integrasi', label: 'Integrasi' },
-  { id: 'invoice', label: 'Invoice' },
-  { id: 'hpp', label: 'Perhitungan HPP' }
-]
+const tabs = computed(() => {
+  const list = [
+    { id: 'umum', label: 'Umum' },
+    { id: 'integrasi', label: 'Integrasi' },
+    { id: 'invoice', label: 'Invoice' },
+    { id: 'hpp', label: 'Perhitungan HPP' }
+  ]
+  if (isAdmin.value) {
+    list.push({ id: 'user', label: 'User' }, { id: 'audit', label: 'Log aktivitas' })
+  }
+  return list
+})
+const formTabs = new Set(['umum', 'invoice', 'hpp'])
 const route = useRoute()
 const router = useRouter()
 const tab = computed({
   get() {
     const id = String(route.query.tab || 'umum')
-    return tabs.some((t) => t.id === id) ? id : 'umum'
+    return tabs.value.some((t) => t.id === id) ? id : 'umum'
   },
   set(id) {
     router.replace({ query: { ...route.query, tab: id } })
@@ -70,7 +77,7 @@ watch(
 </script>
 
 <template>
-  <div class="space-y-4 max-w-2xl">
+  <div class="space-y-4" :class="tab === 'user' || tab === 'audit' ? 'max-w-5xl' : 'max-w-2xl'">
     <h1 class="text-xl font-bold">Pengaturan</h1>
     <p v-if="!isAdmin" class="text-xs text-ink-500">Read-only — hanya admin yang bisa mengubah pengaturan.</p>
 
@@ -87,7 +94,7 @@ watch(
       </button>
     </div>
 
-    <form v-if="tab !== 'integrasi'" class="panel p-4 space-y-4" @submit.prevent="save">
+    <form v-if="formTabs.has(tab)" class="panel p-4 space-y-4" @submit.prevent="save">
       <template v-if="tab === 'umum'">
         <p class="text-xs text-ink-500">Identitas usaha dipakai di invoice dan tampilan internal.</p>
         <div>
@@ -110,7 +117,14 @@ watch(
         </p>
         <div>
           <label class="label">Catatan kaki invoice</label>
-          <input v-model="form.invoiceFooter" class="input" :disabled="!isAdmin" placeholder="Terima kasih telah berbelanja." />
+          <textarea
+            v-model="form.invoiceFooter"
+            class="input min-h-[7rem]"
+            rows="5"
+            :disabled="!isAdmin"
+            placeholder="Terima kasih telah berbelanja.&#10;BCA 1234567890 a.n. Numa3D"
+          ></textarea>
+          <p class="text-xs text-ink-500 mt-1">Bisa beberapa baris — rekening, QRIS, atau catatan lain. Tampil di bawah total invoice.</p>
         </div>
         <div>
           <label class="label">Umur tautan bagikan (hari)</label>
@@ -130,7 +144,7 @@ watch(
           <div class="font-semibold">{{ form.invoiceBusinessName || 'Numa3D' }}</div>
           <div v-if="form.invoiceAddress" class="text-ink-600 whitespace-pre-line text-xs">{{ form.invoiceAddress }}</div>
           <div v-if="form.invoicePhone" class="text-ink-600 text-xs">{{ form.invoicePhone }}</div>
-          <div class="text-ink-500 text-xs pt-2">{{ form.invoiceFooter || 'Terima kasih telah berbelanja.' }}</div>
+          <div class="text-ink-500 text-xs pt-2 whitespace-pre-line">{{ form.invoiceFooter || 'Terima kasih telah berbelanja.' }}</div>
         </div>
       </template>
 
@@ -175,6 +189,12 @@ watch(
       </div>
     </form>
 
+    <div v-else-if="tab === 'user'">
+      <SettingsUsers />
+    </div>
+    <div v-else-if="tab === 'audit'">
+      <SettingsAuditLog />
+    </div>
     <div v-else class="space-y-4">
       <div class="panel">
         <div class="panel-header">
