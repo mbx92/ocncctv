@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
     })
     .where(eq(schema.packaging.id, id))
     .returning()
-  if (!rows.length) throw createError({ statusCode: 404, statusMessage: 'Packaging tidak ditemukan' })
-  await logAudit(event, { action: 'update', entity: 'packaging', entityId: id, summary: `Ubah packaging "${rows[0].name}"` })
+  if (!rows.length) throw createError({ statusCode: 404, statusMessage: 'Produk tidak ditemukan' })
+  await logAudit(event, { action: 'update', entity: 'packaging', entityId: id, summary: `Ubah produk "${rows[0].name}"` })
   return rows[0]
 })

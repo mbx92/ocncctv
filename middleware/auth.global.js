@@ -1,5 +1,14 @@
+const PUBLIC_PATHS = new Set(['/login', '/manifest.webmanifest', '/sw.js', '/dev-sw.js'])
+
 export default defineNuxtRouteMiddleware(async (to) => {
-  if (to.path === '/login' || to.path.startsWith('/i/')) return
+  if (
+    PUBLIC_PATHS.has(to.path) ||
+    to.path.startsWith('/i/') ||
+    to.path.startsWith('/q/') ||
+    to.path.startsWith('/workbox-')
+  ) {
+    return
+  }
 
   const authUser = useState('authUser', () => null)
   if (!authUser.value) {

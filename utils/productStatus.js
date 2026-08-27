@@ -1,20 +1,31 @@
-// Label & warna badge status produk — dipakai di daftar, detail, katalog.
-export const PRODUCT_STATUSES = ['draft', 'rnd', 'active', 'discontinued']
+export const PRODUCT_STATUSES = ['waiting', 'in_progress', 'done']
 
 export const productStatusLabel = {
-  draft: 'Draft',
-  rnd: 'R&D',
-  active: 'Aktif',
-  discontinued: 'Discontinued'
+  waiting: 'Menunggu',
+  in_progress: 'Berjalan',
+  done: 'Selesai',
+  draft: 'Menunggu',
+  rnd: 'Menunggu',
+  active: 'Berjalan',
+  discontinued: 'Selesai'
 }
 
 export const productStatusBadge = {
+  waiting: 'bg-amber-100 text-amber-800',
+  in_progress: 'bg-sky-100 text-sky-800',
+  done: 'bg-green-100 text-green-700',
   draft: 'bg-amber-100 text-amber-800',
-  rnd: 'bg-ink-200 text-ink-600',
-  active: 'bg-green-100 text-green-700',
-  discontinued: 'bg-ink-100 text-ink-400 line-through'
+  rnd: 'bg-amber-100 text-amber-800',
+  active: 'bg-sky-100 text-sky-800',
+  discontinued: 'bg-green-100 text-green-700'
+}
+
+export function normalizeProductStatus(status) {
+  if (status === 'in_progress' || status === 'active') return 'in_progress'
+  if (status === 'done' || status === 'discontinued') return 'done'
+  return 'waiting'
 }
 
 export function productStatusClass(status) {
-  return productStatusBadge[status] || productStatusBadge.draft
+  return productStatusBadge[normalizeProductStatus(status)] || productStatusBadge.waiting
 }

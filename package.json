@@ -1,5 +1,5 @@
 {
-  "name": "numa3d",
+  "name": "OCN",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,6 +10,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "node scripts/seed.js",
     "db:seed:ops": "node scripts/seed-ops.js",
+    "catalog:sync": "node scripts/sync-supplier-catalog.js",
     "start": "node .output/server/index.mjs"
   },
   "dependencies": {

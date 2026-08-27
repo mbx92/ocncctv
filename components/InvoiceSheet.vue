@@ -28,9 +28,7 @@ defineProps({
         <div class="font-medium mt-1">{{ invoice.customerName }}</div>
       </div>
       <div class="text-right">
-        <div class="text-xs font-semibold uppercase tracking-wide text-ink-500">Channel</div>
-        <div class="mt-1">{{ invoice.channelLabel }}</div>
-        <div class="text-xs font-semibold uppercase tracking-wide text-ink-500 mt-3">Pembayaran</div>
+        <div class="text-xs font-semibold uppercase tracking-wide text-ink-500">Pembayaran</div>
         <div class="mt-1">
           {{ invoice.paymentStatusLabel }}
           <span v-if="invoice.paymentMethodLabel"> · {{ invoice.paymentMethodLabel }}</span>
@@ -49,14 +47,17 @@ defineProps({
         </tr>
       </thead>
       <tbody>
-        <tr class="border-t border-ink-100">
+        <tr v-for="(item, i) in invoice.items?.length ? invoice.items : [invoice.item]" :key="i" class="border-t border-ink-100">
           <td class="py-3 pr-2">
-            {{ invoice.item.name }}
-            <span v-if="invoice.isCustom" class="text-xs text-ink-400"> · custom</span>
+            {{ item.name }}
+            <span v-if="item.code" class="text-xs text-ink-400"> · {{ item.code }}</span>
+            <span v-if="item.lineType === 'service'" class="text-xs text-ink-400"> · Jasa</span>
           </td>
-          <td class="py-3 px-2 text-right font-mono">{{ invoice.item.quantity }}</td>
-          <td class="py-3 px-2 text-right font-mono">{{ formatIDR(invoice.item.unitPrice) }}</td>
-          <td class="py-3 pl-2 text-right font-mono">{{ formatIDR(invoice.item.amount) }}</td>
+          <td class="py-3 px-2 text-right font-mono whitespace-nowrap">
+            {{ item.unit ? `${item.quantity} ${item.unit}` : item.quantity }}
+          </td>
+          <td class="py-3 px-2 text-right font-mono whitespace-nowrap">{{ formatIDR(item.unitPrice) }}</td>
+          <td class="py-3 pl-2 text-right font-mono whitespace-nowrap">{{ formatIDR(item.amount) }}</td>
         </tr>
       </tbody>
     </table>

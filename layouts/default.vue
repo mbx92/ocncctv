@@ -2,12 +2,13 @@
 import {
   Squares2X2Icon,
   CircleStackIcon,
-  CpuChipIcon,
-  ArchiveBoxIcon,
+  WrenchScrewdriverIcon,
   CubeIcon,
+  FolderIcon,
   CubeTransparentIcon,
   PrinterIcon,
-  PuzzlePieceIcon,
+  ClipboardDocumentListIcon,
+  QueueListIcon,
   BuildingStorefrontIcon,
   BanknotesIcon,
   ShoppingCartIcon,
@@ -26,19 +27,20 @@ const isAdmin = computed(() => authUser.value?.role === 'admin')
 
 const baseNav = [
   { to: '/', label: 'Dashboard', icon: Squares2X2Icon },
-  { to: '/materials', label: 'Material', icon: CircleStackIcon },
-  { to: '/machines', label: 'Mesin', icon: CpuChipIcon },
-  { to: '/packaging', label: 'Packaging', icon: ArchiveBoxIcon },
-  { to: '/products', label: 'Produk & HPP', icon: CubeIcon },
+  { to: '/materials', label: 'Perlengkapan', icon: CircleStackIcon },
+  { to: '/machines', label: 'Peralatan', icon: WrenchScrewdriverIcon },
+  { to: '/products', label: 'Produk', icon: CubeIcon },
+  { to: '/projects', label: 'Proyek', icon: FolderIcon },
   { to: '/gallery', label: 'Galeri 3D', icon: CubeTransparentIcon },
   { to: '/production', label: 'Produksi', icon: PrinterIcon },
-  { to: '/custom-orders', label: 'Custom', icon: PuzzlePieceIcon },
-  { to: '/catalog', label: 'Katalog', icon: BuildingStorefrontIcon },
+  { to: '/rab', label: 'RAB', icon: ClipboardDocumentListIcon },
+  { to: '/jasa', label: 'Jasa', icon: QueueListIcon },
+  { to: '/catalog', label: 'Katalog Supplier', icon: BuildingStorefrontIcon },
   { to: '/purchases', label: 'Pembelian', icon: TruckIcon },
   { to: '/expenses', label: 'Pengeluaran', icon: BanknotesIcon },
   { to: '/sales', label: 'Penjualan', icon: ShoppingCartIcon },
   { to: '/reports', label: 'Laporan', icon: ChartBarIcon },
-  { to: '/capital', label: 'Modal', icon: WalletIcon },
+  { to: '/capital', label: 'Modal Usaha', icon: WalletIcon },
   { to: '/settings', label: 'Pengaturan', icon: Cog6ToothIcon }
 ]
 const nav = baseNav
@@ -73,8 +75,8 @@ async function logout() {
       <button class="p-2 -ml-2 rounded hover:bg-ink-800" aria-label="Buka menu" @click="drawerOpen = true">
         <Bars3Icon class="w-6 h-6" />
       </button>
-      <img src="/logo-mark.svg" alt="" class="w-6 h-6" />
-      <span class="font-bold tracking-wide">NUMA3D</span>
+      <img src="/logo-mark.png" alt="" class="w-6 h-6 object-contain" />
+      <span class="font-bold tracking-wide">OCN</span>
       <span v-if="authUser" class="ml-auto text-xs text-ink-400 truncate max-w-[8rem]">{{ authUser.username }}</span>
     </header>
 
@@ -84,8 +86,8 @@ async function logout() {
         <div class="absolute inset-0 bg-ink-950/60" @click="drawerOpen = false"></div>
         <aside class="relative bg-ink-900 text-ink-100 w-72 max-w-[85vw] h-full flex flex-col pt-safe pb-safe">
           <div class="px-4 py-4 flex items-center gap-2 border-b border-ink-700">
-            <img src="/logo-mark.svg" alt="" class="w-6 h-6" />
-            <span class="font-bold tracking-wide">NUMA3D</span>
+            <img src="/logo-mark.png" alt="" class="w-6 h-6 object-contain" />
+            <span class="font-bold tracking-wide">OCN</span>
             <button class="ml-auto p-1 rounded hover:bg-ink-800" aria-label="Tutup menu" @click="drawerOpen = false">
               <XMarkIcon class="w-5 h-5" />
             </button>
@@ -135,8 +137,8 @@ async function logout() {
     <!-- Sidebar (desktop / tablet standalone) -->
     <aside class="hidden md:flex bg-ink-900 text-ink-100 w-56 h-screen sticky top-0 shrink-0 flex-col pt-safe pb-safe">
       <div class="px-4 py-4 flex items-center gap-2 border-b border-ink-700">
-        <img src="/logo-mark.svg" alt="" class="w-6 h-6" />
-        <span class="font-bold tracking-wide">NUMA3D</span>
+        <img src="/logo-mark.png" alt="" class="w-6 h-6 object-contain" />
+        <span class="font-bold tracking-wide">OCN</span>
         <span class="text-[10px] uppercase tracking-widest text-ink-400 ml-auto">Workshop</span>
       </div>
       <nav class="flex flex-col overflow-y-auto flex-1">
@@ -178,7 +180,7 @@ async function logout() {
       </nav>
     </aside>
 
-    <main class="flex-1 w-full min-w-0 p-3 sm:p-4 md:p-6">
+    <main class="flex-1 w-full min-w-0 p-3 sm:p-4 md:p-6 pb-safe">
       <slot />
     </main>
   </div>

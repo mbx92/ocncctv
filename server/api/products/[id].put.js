@@ -7,13 +7,14 @@ export default defineEventHandler(async (event) => {
   requireAdmin(event)
   const id = Number(getRouterParam(event, 'id'))
   const body = await readBody(event)
-  const seriesId = body.seriesId === '' || body.seriesId == null ? null : Number(body.seriesId)
   const db = useDb()
   const patch = {
     name: body.name,
-    description: body.description || null,
-    status: body.status,
-    seriesId: Number.isInteger(seriesId) && seriesId > 0 ? seriesId : null
+    description: body.description || null
+  }
+  if ('seriesId' in body) {
+    const seriesId = body.seriesId === '' || body.seriesId == null ? null : Number(body.seriesId)
+    patch.seriesId = Number.isInteger(seriesId) && seriesId > 0 ? seriesId : null
   }
   if (body.stockQuantity !== undefined && body.stockQuantity !== '') {
     patch.stockQuantity = Math.max(Math.round(Number(body.stockQuantity) || 0), 0)
@@ -24,7 +25,7 @@ export default defineEventHandler(async (event) => {
 
     .where(eq(schema.products.id, id))
     .returning()
-  if (!rows.length) throw createError({ statusCode: 404, statusMessage: 'Produk tidak ditemukan' })
-  await logAudit(event, { action: 'update', entity: 'product', entityId: id, summary: `Ubah info produk "${rows[0].name}"` })
+  if (!rows.length) throw createError({ statusCode: 404, statusMessage: 'Proyek tidak ditemukan' })
+  await logAudit(event, { action: 'update', entity: 'product', entityId: id, summary: `Ubah info proyek "${rows[0].name}"` })
   return rows[0]
 })

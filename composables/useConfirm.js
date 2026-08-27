@@ -6,17 +6,18 @@ const state = reactive({
   message: '',
   confirmText: 'Hapus',
   cancelText: 'Batal',
-  danger: true,
+  variant: 'danger', // danger | primary | warning
   resolve: null
 })
 
 export function useConfirm() {
   function confirm(message, opts = {}) {
-    state.title = opts.title || 'Konfirmasi'
+    const variant = opts.variant || (opts.danger === false ? 'primary' : 'danger')
+    state.title = opts.title || (variant === 'danger' ? 'Hapus' : 'Konfirmasi')
     state.message = message
-    state.confirmText = opts.confirmText || 'Hapus'
+    state.confirmText = opts.confirmText || (variant === 'danger' ? 'Hapus' : 'Ya')
     state.cancelText = opts.cancelText || 'Batal'
-    state.danger = opts.danger ?? true
+    state.variant = variant
     state.visible = true
     return new Promise((resolve) => {
       state.resolve = resolve

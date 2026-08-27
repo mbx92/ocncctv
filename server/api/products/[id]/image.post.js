@@ -10,7 +10,7 @@ export default defineEventHandler(async (event) => {
   const id = Number(getRouterParam(event, 'id'))
   const db = useDb()
   const existing = await db.select().from(schema.products).where(eq(schema.products.id, id))
-  if (!existing.length) throw createError({ statusCode: 404, statusMessage: 'Produk tidak ditemukan' })
+  if (!existing.length) throw createError({ statusCode: 404, statusMessage: 'Proyek tidak ditemukan' })
 
   const { objectKey } = await uploadImage(event, `products/${id}/images`)
   const rows = await db.transaction(async (tx) => {
@@ -23,6 +23,6 @@ export default defineEventHandler(async (event) => {
     await syncProductCover(tx, schema, id)
     return tx.select().from(schema.products).where(eq(schema.products.id, id))
   })
-  await logAudit(event, { action: 'update', entity: 'product', entityId: id, summary: `Tambah foto produk "${rows[0].name}"` })
+  await logAudit(event, { action: 'update', entity: 'product', entityId: id, summary: `Tambah foto proyek "${rows[0].name}"` })
   return rows[0]
 })

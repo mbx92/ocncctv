@@ -8,12 +8,21 @@ import {
   date,
   timestamp,
   uniqueIndex,
+  index as pgIndex,
   boolean
 } from 'drizzle-orm/pg-core'
 
 export const userRoleEnum = pgEnum('user_role', ['admin', 'staff'])
-export const materialTypeEnum = pgEnum('material_type', ['filament', 'resin', 'part'])
-export const productStatusEnum = pgEnum('product_status', ['draft', 'rnd', 'active', 'discontinued'])
+export const materialTypeEnum = pgEnum('material_type', ['filament', 'resin', 'part', 'consumable'])
+export const productStatusEnum = pgEnum('product_status', [
+  'draft',
+  'rnd',
+  'active',
+  'discontinued',
+  'waiting',
+  'in_progress',
+  'done'
+])
 export const salesChannelEnum = pgEnum('sales_channel', [
   'tokopedia',
   'shopee',
@@ -32,11 +41,26 @@ export const productionStatusEnum = pgEnum('production_status', [
   'cancelled'
 ])
 export const customOrderStatusEnum = pgEnum('custom_order_status', [
+  'draft',
+  'sent',
+  'deal',
+  'lost',
   'open',
   'ready',
   'delivered',
   'cancelled'
 ])
+export const customOrderLineTypeEnum = pgEnum('custom_order_line_type', ['catalog', 'service'])
+
+// Master jasa RAB. Tidak ada stok. Nama & harga jual disalin ke baris penawaran.
+export const services = pgTable('services', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  unit: text('unit').notNull().default('titik'),
+  salePrice: integer('sale_price').notNull().default(0),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').notNull().defaultNow()
+})
 
 export const suppliers = pgTable('suppliers', {
   id: serial('id').primaryKey(),
@@ -45,8 +69,33 @@ export const suppliers = pgTable('suppliers', {
   createdAt: timestamp('created_at').notNull().defaultNow()
 })
 
-// Series produk: katalog adalah kumpulan series, dan tiap series berisi
-// beberapa produk. Satu produk hanya bisa masuk satu series (series_id).
+// Daftar harga distributor (satu baris = satu SKU di tab Google Sheet).
+// Harga disimpan integer rupiah. Dipakai halaman Katalog; nanti juga picker RAB.
+export const supplierCatalogItems = pgTable(
+  'supplier_catalog_items',
+  {
+    id: serial('id').primaryKey(),
+    ref: text('ref').notNull(),
+    sheetKey: text('sheet_key').notNull(),
+    sheetLabel: text('sheet_label').notNull(),
+    supplierName: text('supplier_name').notNull(),
+    code: text('code').notNull(),
+    name: text('name').notNull(),
+    category: text('category'),
+    supplierPrice: integer('supplier_price').notNull().default(0),
+    lastPrice: integer('last_price'),
+    lastSyncedAt: timestamp('last_synced_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow()
+  },
+  (t) => ({
+    refUniq: uniqueIndex('supplier_catalog_items_ref_uidx').on(t.ref),
+    sheetKeyIdx: pgIndex('supplier_catalog_items_sheet_key_idx').on(t.sheetKey),
+    sheetCodeIdx: pgIndex('supplier_catalog_items_sheet_code_idx').on(t.sheetKey, t.code)
+  })
+)
+
+// Series produk 3D: pengelompokan opsional di halaman Produk.
+// Satu produk hanya bisa masuk satu series (series_id).
 export const productSeries = pgTable('product_series', {
   id: serial('id').primaryKey(),
   name: text('name').notNull(),
@@ -71,10 +120,13 @@ export const users = pgTable('users', {
 export const materials = pgTable('materials', {
   id: serial('id').primaryKey(),
   name: text('name').notNull(),
-  type: materialTypeEnum('type').notNull().default('filament'),
-  unit: text('unit').notNull().default('gram'), // gram | ml
+  type: materialTypeEnum('type').notNull().default('consumable'),
+  unit: text('unit').notNull().default('pcs'),
   pricePerUnit: integer('price_per_unit').notNull().default(0),
   stockQuantity: real('stock_quantity').notNull().default(0),
+  // ok = ada, low = menipis, empty = habis. Dihitung dari stockQuantity vs lowStockQuantity.
+  stockStatus: text('stock_status').notNull().default('ok'),
+  lowStockQuantity: real('low_stock_quantity').notNull().default(2),
   supplier: text('supplier'),
   // Object key gambar di MinIO (bucket sama dengan file 3D). null = tanpa gambar.
   imageKey: text('image_key'),
@@ -103,14 +155,17 @@ export const machines = pgTable('machines', {
   tuyaLastCurrentMa: integer('tuya_last_current_ma'),
   tuyaLastOn: boolean('tuya_last_on'),
   tuyaLastReadAt: timestamp('tuya_last_read_at'),
-  tuyaLastError: text('tuya_last_error')
+  tuyaLastError: text('tuya_last_error'),
+  // owned = sudah dimiliki (aset/modal, tanpa pengeluaran).
+  // purchased = beli baru (kas keluar, tercatat di pengeluaran).
+  acquisition: text('acquisition').notNull().default('owned')
 })
 
 export const products = pgTable('products', {
   id: serial('id').primaryKey(),
   name: text('name').notNull(),
   description: text('description'),
-  status: productStatusEnum('status').notNull().default('draft'),
+  status: productStatusEnum('status').notNull().default('waiting'),
   // Object key gambar di MinIO — dipakai sebagai foto utama di katalog.
   imageKey: text('image_key'),
   // Series tempat produk ini bernaung (boleh null = belum punya series).
@@ -119,6 +174,9 @@ export const products = pgTable('products', {
   }),
   // Stok barang jadi. Bertambah saat produksi selesai, berkurang saat penjualan.
   stockQuantity: integer('stock_quantity').notNull().default(0),
+  plannedStartDate: date('planned_start_date'),
+  startedAt: date('started_at'),
+  completedAt: date('completed_at'),
   createdAt: timestamp('created_at').notNull().defaultNow()
 })
 
@@ -214,26 +272,74 @@ export const productPackaging = pgTable('product_packaging', {
   quantityUsed: real('quantity_used').notNull().default(1)
 })
 
-export const customOrders = pgTable('custom_orders', {
-  id: serial('id').primaryKey(),
-  date: date('date').notNull(),
-  customerName: text('customer_name').notNull(),
-  title: text('title').notNull(),
-  channel: salesChannelEnum('channel').notNull().default('direct'),
-  quantity: integer('quantity').notNull().default(1),
-  pricePerUnit: integer('price_per_unit').notNull().default(0),
-  materialId: integer('material_id')
-    .notNull()
-    .references(() => materials.id),
-  materialQuantityUsed: real('material_quantity_used').notNull().default(0),
-  packagingId: integer('packaging_id').references(() => packaging.id, { onDelete: 'set null' }),
-  packagingQuantityUsed: real('packaging_quantity_used').notNull().default(0),
-  machineId: integer('machine_id').references(() => machines.id, { onDelete: 'set null' }),
-  printTimeMinutes: integer('print_time_minutes').notNull().default(0),
-  notes: text('notes'),
-  status: customOrderStatusEnum('status').notNull().default('open'),
-  createdAt: timestamp('created_at').notNull().defaultNow()
-})
+// Pembagian upah teknisi per proyek. Mengurangi laba di tab Revenue; tidak otomatis jadi pengeluaran kas.
+export const projectTechnicianWages = pgTable(
+  'project_technician_wages',
+  {
+    id: serial('id').primaryKey(),
+    productId: integer('product_id')
+      .notNull()
+      .references(() => products.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    amount: integer('amount').notNull().default(0),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: timestamp('created_at').notNull().defaultNow()
+  },
+  (t) => ({
+    productIdx: pgIndex('project_technician_wages_product_id_idx').on(t.productId)
+  })
+)
+
+export const customOrders = pgTable(
+  'custom_orders',
+  {
+    id: serial('id').primaryKey(),
+    date: date('date').notNull(),
+    customerName: text('customer_name').notNull(),
+    title: text('title').notNull(),
+    channel: salesChannelEnum('channel').notNull().default('direct'),
+    quantity: integer('quantity').notNull().default(1),
+    pricePerUnit: integer('price_per_unit').notNull().default(0),
+    materialId: integer('material_id').references(() => materials.id),
+    materialQuantityUsed: real('material_quantity_used').notNull().default(0),
+    packagingId: integer('packaging_id').references(() => packaging.id, { onDelete: 'set null' }),
+    packagingQuantityUsed: real('packaging_quantity_used').notNull().default(0),
+    machineId: integer('machine_id').references(() => machines.id, { onDelete: 'set null' }),
+    printTimeMinutes: integer('print_time_minutes').notNull().default(0),
+    notes: text('notes'),
+    status: customOrderStatusEnum('status').notNull().default('draft'),
+    projectId: integer('project_id').references(() => products.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at').notNull().defaultNow()
+  },
+  (t) => ({
+    projectUniq: uniqueIndex('custom_orders_project_id_uidx').on(t.projectId)
+  })
+)
+
+export const customOrderLines = pgTable(
+  'custom_order_lines',
+  {
+    id: serial('id').primaryKey(),
+    customOrderId: integer('custom_order_id')
+      .notNull()
+      .references(() => customOrders.id, { onDelete: 'cascade' }),
+    lineType: customOrderLineTypeEnum('line_type').notNull().default('catalog'),
+    catalogItemId: integer('catalog_item_id').references(() => supplierCatalogItems.id, {
+      onDelete: 'set null'
+    }),
+    serviceId: integer('service_id').references(() => services.id, { onDelete: 'set null' }),
+    name: text('name').notNull(),
+    code: text('code'),
+    unit: text('unit'),
+    quantity: real('quantity').notNull().default(1),
+    costPrice: integer('cost_price').notNull().default(0),
+    salePrice: integer('sale_price').notNull().default(0),
+    sortOrder: integer('sort_order').notNull().default(0)
+  },
+  (t) => ({
+    orderIdx: pgIndex('custom_order_lines_custom_order_id_idx').on(t.customOrderId)
+  })
+)
 
 export const customOrderFiles = pgTable('custom_order_files', {
   id: serial('id').primaryKey(),
@@ -320,7 +426,7 @@ export const appSettings = pgTable('app_settings', {
   electricityRatePerKwh: integer('electricity_rate_per_kwh').notNull().default(1445),
   machineUsageHoursPerMonth: integer('machine_usage_hours_per_month').notNull().default(100),
   defaultMarginPercent: real('default_margin_percent').notNull().default(40),
-  invoiceBusinessName: text('invoice_business_name').notNull().default('Numa3D'),
+  invoiceBusinessName: text('invoice_business_name').notNull().default('OCN'),
   invoiceAddress: text('invoice_address'),
   invoicePhone: text('invoice_phone'),
   invoiceFooter: text('invoice_footer'),
@@ -344,9 +450,27 @@ export const invoiceShareLinks = pgTable(
   })
 )
 
-// Mutasi modal pemilik: setoran (deposit) & penarikan (withdrawal). Dipakai untuk
-// menghitung posisi modal = total setoran - total penarikan. Bukan bagian laba
-// rugi, melainkan posisi ekuitas pemilik.
+// Tautan publik penawaran RAB. Umur tautan memakai invoice_share_ttl_days.
+export const rabShareLinks = pgTable(
+  'rab_share_links',
+  {
+    id: serial('id').primaryKey(),
+    customOrderId: integer('custom_order_id')
+      .notNull()
+      .references(() => customOrders.id, { onDelete: 'cascade' }),
+    token: text('token').notNull(),
+    expiresAt: timestamp('expires_at').notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow()
+  },
+  (t) => ({
+    tokenUniq: uniqueIndex('rab_share_links_token_uidx').on(t.token),
+    orderIdx: pgIndex('rab_share_links_custom_order_id_idx').on(t.customOrderId)
+  })
+)
+
+// Mutasi modal awal usaha: setoran (deposit) & penarikan (withdrawal).
+// Posisi modal = total setoran − total penarikan. Ekuitas pemilik, bukan laba rugi;
+// tidak dicampur dengan beli mesin.
 export const capitalTransactions = pgTable('capital_transactions', {
   id: serial('id').primaryKey(),
   date: date('date').notNull(),
@@ -359,8 +483,8 @@ export const capitalTransactions = pgTable('capital_transactions', {
 export const purchaseItemTypeEnum = pgEnum('purchase_item_type', ['material', 'packaging'])
 
 // Pembelian ke supplier: satu dokumen = beberapa baris barang.
-// Saat disimpan, stok material/packaging bertambah dan satu baris pengeluaran
-// dibuat otomatis (agar kas & laba rugi tetap sinkron).
+// Qty beli selalu jadi pengeluaran. Hanya stockQuantity yang masuk gudang
+// (Produk / Perlengkapan). Sisa qty = langsung dipakai proyek, tidak stok.
 export const supplierPurchases = pgTable('supplier_purchases', {
   id: serial('id').primaryKey(),
   date: date('date').notNull(),
@@ -370,6 +494,7 @@ export const supplierPurchases = pgTable('supplier_purchases', {
   shippingFee: integer('shipping_fee').notNull().default(0),
   platformFee: integer('platform_fee').notNull().default(0),
   expenseId: integer('expense_id').references(() => expenses.id, { onDelete: 'set null' }),
+  projectId: integer('project_id').references(() => products.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at').notNull().defaultNow()
 })
 
@@ -408,6 +533,7 @@ export const supplierPurchaseLines = pgTable('supplier_purchase_lines', {
   materialId: integer('material_id').references(() => materials.id),
   packagingId: integer('packaging_id').references(() => packaging.id),
   quantity: real('quantity').notNull().default(0),
+  stockQuantity: real('stock_quantity').notNull().default(0),
   unitPrice: integer('unit_price').notNull().default(0),
   amount: integer('amount').notNull().default(0)
 })

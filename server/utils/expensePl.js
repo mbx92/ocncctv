@@ -1,5 +1,5 @@
-// Material: stok, biayanya sudah di HPP unit terjual.
-// Mesin: aset; biaya masuk HPP lewat depresiasi per jam, bukan harga beli penuh.
+// Peralatan (kategori machine): beli baru memotong kas, tapi bukan opex periodik.
+// Perlengkapan (kategori material): habis pakai, bukan HPP kamera — potong laba dan kas.
 export function isOperatingExpenseCategory(category) {
-  return category !== 'material' && category !== 'machine'
+  return category !== 'machine'
 }

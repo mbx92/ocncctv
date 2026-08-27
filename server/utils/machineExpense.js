@@ -1,20 +1,27 @@
 import { eq } from 'drizzle-orm'
 import { localDateStr } from './dates.js'
 
-const MACHINE_CATEGORY = 'machine'
+const EQUIPMENT_CATEGORY = 'machine'
+
+export function normalizeAcquisition(value) {
+  return value === 'purchased' ? 'purchased' : 'owned'
+}
 
 function expensePayload(machine) {
   return {
     date: machine.purchaseDate || localDateStr(),
-    category: MACHINE_CATEGORY,
-    description: `Pembelian mesin: ${machine.name}`,
+    category: EQUIPMENT_CATEGORY,
+    description: `Pembelian peralatan: ${machine.name}`,
     amount: Math.round(Number(machine.purchasePrice) || 0)
   }
 }
 
 export async function syncMachinePurchaseExpense(tx, schema, machine) {
+  const acquisition = normalizeAcquisition(machine.acquisition)
   const payload = expensePayload(machine)
-  if (payload.amount <= 0) {
+  const shouldExpense = acquisition === 'purchased' && payload.amount > 0
+
+  if (!shouldExpense) {
     if (machine.expenseId) {
       await tx.delete(schema.expenses).where(eq(schema.expenses.id, machine.expenseId))
       const [updated] = await tx
@@ -54,7 +61,7 @@ export async function assertNotMachineLinkedExpense(db, schema, expenseId) {
   if (row) {
     throw createError({
       statusCode: 409,
-      statusMessage: `Pengeluaran ini dari mesin "${row.name}". Ubah atau hapus lewat halaman Mesin.`
+      statusMessage: `Pengeluaran ini dari peralatan "${row.name}". Ubah atau hapus lewat halaman Peralatan.`
     })
   }
 }

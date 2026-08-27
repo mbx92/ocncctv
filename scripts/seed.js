@@ -4,7 +4,7 @@ import { drizzle } from 'drizzle-orm/node-postgres'
 import * as schema from '../server/db/schema.js'
 
 const pool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL || 'postgres://mbx@localhost:5432/numa3d'
+  connectionString: process.env.DATABASE_URL || 'postgres://mbx@localhost:5432/ocn'
 })
 const db = drizzle(pool, { schema })
 
@@ -70,9 +70,9 @@ async function main() {
   const [vas, gantungan, miniatur] = await db
     .insert(schema.products)
     .values([
-      { name: 'Vas Bunga Spiral', description: 'Vas dekoratif mode vase, PLA', status: 'active', seriesId: vasSeries.id },
-      { name: 'Gantungan Kunci Custom Nama', description: 'Gantungan kunci nama custom 2 warna', status: 'active', seriesId: customSeries.id },
-      { name: 'Miniatur Rumah Adat', description: 'Prototipe resin, masih riset pasar', status: 'rnd' }
+      { name: 'Vas Bunga Spiral', description: 'Vas dekoratif mode vase, PLA', status: 'in_progress', seriesId: vasSeries.id },
+      { name: 'Gantungan Kunci Custom Nama', description: 'Gantungan kunci nama custom 2 warna', status: 'in_progress', seriesId: customSeries.id },
+      { name: 'Miniatur Rumah Adat', description: 'Prototipe resin, masih riset pasar', status: 'waiting' }
     ])
     .returning()
 

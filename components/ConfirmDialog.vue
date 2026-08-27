@@ -1,7 +1,29 @@
 <script setup>
-import { XMarkIcon, TrashIcon, CheckIcon } from '@heroicons/vue/24/outline'
+import { XMarkIcon, TrashIcon, CheckIcon, ExclamationTriangleIcon } from '@heroicons/vue/24/outline'
 
 const { state, respond } = useConfirm()
+
+const variantUi = computed(() => {
+  if (state.variant === 'primary') {
+    return {
+      icon: CheckIcon,
+      wrap: 'bg-teal-50 text-teal-700',
+      btn: 'btn-primary'
+    }
+  }
+  if (state.variant === 'warning') {
+    return {
+      icon: ExclamationTriangleIcon,
+      wrap: 'bg-amber-50 text-amber-800',
+      btn: 'bg-amber-600 text-white hover:bg-amber-700'
+    }
+  }
+  return {
+    icon: TrashIcon,
+    wrap: 'bg-red-50 text-red-700',
+    btn: 'bg-red-600 text-white hover:bg-red-700'
+  }
+})
 
 function onKeydown(e) {
   if (state.visible && e.key === 'Escape') respond(false)
@@ -18,16 +40,18 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
         <div class="panel-header">
           <span class="panel-title">{{ state.title }}</span>
         </div>
-        <div class="p-4 text-sm text-ink-700 whitespace-pre-line">{{ state.message }}</div>
+        <div class="p-4 flex items-start gap-3">
+          <div class="w-10 h-10 rounded-full flex items-center justify-center shrink-0" :class="variantUi.wrap">
+            <component :is="variantUi.icon" class="w-5 h-5" />
+          </div>
+          <p class="text-sm text-ink-700 whitespace-pre-line pt-1.5">{{ state.message }}</p>
+        </div>
         <div class="px-4 pb-4 flex justify-end gap-2">
-          <button class="btn-secondary" @click="respond(false)"><XMarkIcon class="w-4 h-4" />{{ state.cancelText }}</button>
-          <button
-            class="btn"
-            :class="state.danger ? 'bg-red-600 text-white hover:bg-red-700' : 'btn-primary'"
-            autofocus
-            @click="respond(true)"
-          >
-            <component :is="state.danger ? TrashIcon : CheckIcon" class="w-4 h-4" />{{ state.confirmText }}
+          <button class="btn-secondary" @click="respond(false)">
+            <XMarkIcon class="w-4 h-4" />{{ state.cancelText }}
+          </button>
+          <button class="btn" :class="variantUi.btn" autofocus @click="respond(true)">
+            <component :is="variantUi.icon" class="w-4 h-4" />{{ state.confirmText }}
           </button>
         </div>
       </div>

@@ -14,8 +14,10 @@ export default defineEventHandler(async () => {
   const lines = await db.select().from(schema.supplierPurchaseLines)
   const materials = await db.select({ id: schema.materials.id, name: schema.materials.name, unit: schema.materials.unit }).from(schema.materials)
   const packaging = await db.select({ id: schema.packaging.id, name: schema.packaging.name, unit: schema.packaging.unit }).from(schema.packaging)
+  const projects = await db.select({ id: schema.products.id, name: schema.products.name }).from(schema.products)
   const matMap = new Map(materials.map((m) => [m.id, m]))
   const packMap = new Map(packaging.map((p) => [p.id, p]))
+  const projectMap = new Map(projects.map((p) => [p.id, p]))
 
   const linesByPurchase = new Map()
   for (const line of lines) {
@@ -35,6 +37,7 @@ export default defineEventHandler(async () => {
     ...p,
     supplier: sanitizeText(p.supplier) || p.supplier,
     notes: p.notes ? sanitizeText(p.notes) : p.notes,
+    projectName: projectMap.get(p.projectId)?.name || null,
     lines: linesByPurchase.get(p.id) || []
   }))
 })

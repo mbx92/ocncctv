@@ -5,11 +5,8 @@ import { isOperatingExpenseCategory } from '../../utils/expensePl.js'
 import { toDateStr } from '../../utils/dates.js'
 
 // Ringkasan laba rugi.
-//
-// Pembelian material (kategori expense "material") SENGAJA tidak dikurangkan
-// dari laba: biaya material sudah masuk HPP per unit yang terjual. Kalau
-// keduanya dikurangkan, biaya material terhitung dua kali. Pembelian material
-// tetap dilaporkan terpisah sebagai arus kas keluar.
+// Perlengkapan (kategori material) dipotong dari laba: bukan bahan HPP kamera.
+// Pembelian peralatan (machine) tidak dipotong dari laba (aset), tetap memotong kas.
 export default defineEventHandler(async (event) => {
   const q = getQuery(event)
   const dateFrom = toDateStr(q.dateFrom)
@@ -27,7 +24,7 @@ export default defineEventHandler(async (event) => {
 
   const grossRevenue = sales.reduce((a, s) => a + s.grossRevenue, 0)
   const netRevenue = sales.reduce((a, s) => a + s.netRevenue, 0)
-  const marketplaceFees = sales.reduce((a, s) => a + s.feeAmount, 0)
+  const discounts = sales.reduce((a, s) => a + (s.discountAmount || 0), 0)
   const cogs = sales.reduce((a, s) => a + s.totalHpp, 0)
   const grossProfit = netRevenue - cogs
 
@@ -44,7 +41,7 @@ export default defineEventHandler(async (event) => {
     unitsSold: sales.reduce((a, s) => a + s.quantity, 0),
     orderCount: sales.length,
     grossRevenue,
-    marketplaceFees,
+    discounts,
     netRevenue,
     cogs,
     grossProfit,

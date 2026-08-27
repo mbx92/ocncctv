@@ -13,9 +13,9 @@ export default defineEventHandler(async (event) => {
   } catch (e) {
     throw createError({
       statusCode: 409,
-      statusMessage: 'Produk punya data penjualan, tidak bisa dihapus. Set status discontinued saja.'
+      statusMessage: 'Proyek punya data penjualan, tidak bisa dihapus. Tandai selesai saja.'
     })
   }
-  await logAudit(event, { action: 'delete', entity: 'product', entityId: id, summary: `Hapus produk "${existing[0]?.name || id}"` })
+  await logAudit(event, { action: 'delete', entity: 'product', entityId: id, summary: `Hapus proyek "${existing[0]?.name || id}"` })
   return { ok: true }
 })

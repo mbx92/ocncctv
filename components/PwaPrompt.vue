@@ -1,7 +1,7 @@
 <script setup>
 import { ArrowDownTrayIcon, ShareIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 
-const STORAGE_KEY = 'numa3d-pwa-prompt-dismissed'
+const STORAGE_KEY = 'ocn-pwa-prompt-dismissed'
 const dismissed = ref(true)
 const isIos = ref(false)
 const isStandalone = ref(false)
@@ -43,7 +43,7 @@ onMounted(() => {
       v-if="needRefresh"
       class="fixed bottom-4 left-3 right-3 sm:left-auto sm:right-4 sm:max-w-sm z-[91] panel p-3 shadow-lg mb-[env(safe-area-inset-bottom,0px)]"
     >
-      <div class="text-sm font-semibold">Versi baru Numa3D</div>
+      <div class="text-sm font-semibold">Versi baru OCN</div>
       <p class="text-xs text-ink-500 mt-0.5">Muat ulang untuk memakai pembaruan.</p>
       <div class="flex gap-2 mt-2">
         <button type="button" class="btn-primary" @click="reloadApp">Muat ulang</button>
@@ -58,7 +58,7 @@ onMounted(() => {
       <div class="flex items-start gap-3">
         <img src="/pwa-192x192.png" alt="" class="w-10 h-10 rounded-panel shrink-0" />
         <div class="min-w-0 flex-1">
-          <div class="text-sm font-semibold">Pasang Numa3D</div>
+          <div class="text-sm font-semibold">Pasang OCN</div>
           <p v-if="canNativeInstall" class="text-xs text-ink-500 mt-0.5">
             Tambahkan ke layar utama supaya cepat dibuka seperti aplikasi.
           </p>

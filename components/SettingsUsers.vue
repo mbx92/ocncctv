@@ -85,14 +85,16 @@ async function remove(u) {
               <td><span class="badge" :class="roleBadge[u.role]">{{ roleLabel[u.role] }}</span></td>
               <td class="text-sm text-ink-500">{{ formatDate(u.createdAt) }}</td>
               <td class="whitespace-nowrap text-right">
-                <button class="btn-secondary" @click="openEdit(u)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
-                <button
-                  class="btn-danger ml-1"
-                  :disabled="u.id === authUser?.id"
-                  @click="remove(u)"
-                >
-                  <TrashIcon class="w-3.5 h-3.5" />Hapus
-                </button>
+                <div class="btn-actions justify-end">
+                  <button class="btn-action" @click="openEdit(u)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
+                  <button
+                    class="btn-action-danger"
+                    :disabled="u.id === authUser?.id"
+                    @click="remove(u)"
+                  >
+                    <TrashIcon class="w-3.5 h-3.5" />Hapus
+                  </button>
+                </div>
               </td>
             </tr>
             <tr v-if="!total">

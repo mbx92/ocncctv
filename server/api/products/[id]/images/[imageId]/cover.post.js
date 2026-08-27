@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
     action: 'update',
     entity: 'product',
     entityId: id,
-    summary: `Set sampul produk id ${id} ke foto ${imageId}`
+    summary: `Set sampul proyek id ${id} ke foto ${imageId}`
   })
   return row
 })

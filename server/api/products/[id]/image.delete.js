@@ -9,10 +9,10 @@ export default defineEventHandler(async (event) => {
   const id = Number(getRouterParam(event, 'id'))
   const db = useDb()
   const rows = await db.select().from(schema.products).where(eq(schema.products.id, id))
-  if (!rows.length) throw createError({ statusCode: 404, statusMessage: 'Produk tidak ditemukan' })
+  if (!rows.length) throw createError({ statusCode: 404, statusMessage: 'Proyek tidak ditemukan' })
 
   await removeImageQuietly(rows[0].imageKey)
   await db.update(schema.products).set({ imageKey: null }).where(eq(schema.products.id, id))
-  await logAudit(event, { action: 'update', entity: 'product', entityId: id, summary: `Hapus foto produk "${rows[0].name}"` })
+  await logAudit(event, { action: 'update', entity: 'product', entityId: id, summary: `Hapus foto proyek "${rows[0].name}"` })
   return { ok: true }
 })

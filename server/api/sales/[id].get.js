@@ -1,5 +1,5 @@
 import { getSettings } from '../../utils/settings.js'
-import { ensureSaleInvoiceNumber, loadSaleInvoiceRow, toInvoicePayload } from '../../utils/invoice.js'
+import { ensureSaleInvoiceNumber, loadSaleInvoiceRow, buildInvoicePayload } from '../../utils/invoice.js'
 import { useDb, schema } from '../../db/index.js'
 
 export default defineEventHandler(async (event) => {
@@ -12,5 +12,5 @@ export default defineEventHandler(async (event) => {
     return { ...row, invoiceNumber: ensured.invoiceNumber }
   })
   const settings = await getSettings()
-  return toInvoicePayload(payload, settings)
+  return buildInvoicePayload(db, schema, payload, settings)
 })

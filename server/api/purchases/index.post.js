@@ -2,6 +2,8 @@ import { eq, sql } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
 import { logAudit } from '../../utils/audit.js'
 import { assertExpenseCategory } from '../../utils/expenseCategory.js'
+import { setExpenseProducts } from '../../utils/expenseProducts.js'
+import { applyMaterialStockDelta } from '../../utils/materialStock.js'
 import { sanitizeText } from '../../utils/sanitizeText.js'
 
 function lineAmount(qty, unitPrice) {
@@ -36,6 +38,20 @@ function landedUnitPrices(lines, extras) {
   })
 }
 
+function parseStockQuantity(line, quantity) {
+  if (line.stockQuantity === undefined || line.stockQuantity === null || line.stockQuantity === '') {
+    return quantity
+  }
+  const stock = Number(line.stockQuantity) || 0
+  if (stock < 0) {
+    throw createError({ statusCode: 400, statusMessage: 'Qty masuk stok tidak boleh negatif' })
+  }
+  if (stock > quantity) {
+    throw createError({ statusCode: 400, statusMessage: 'Qty masuk stok tidak boleh lebih dari qty beli' })
+  }
+  return stock
+}
+
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const supplier = sanitizeText(body.supplier || '')
@@ -45,16 +61,23 @@ export default defineEventHandler(async (event) => {
   }
   const rawLines = Array.isArray(body.lines) ? body.lines : []
   const lines = rawLines
-    .map((l) => ({
-      itemType: l.itemType === 'packaging' ? 'packaging' : 'material',
-      materialId: l.itemType === 'packaging' ? null : Number(l.materialId) || null,
-      packagingId: l.itemType === 'packaging' ? Number(l.packagingId) || null : null,
-      quantity: Number(l.quantity) || 0,
-      unitPrice: Math.round(Number(l.unitPrice) || 0)
-    }))
+    .map((l) => {
+      const quantity = Number(l.quantity) || 0
+      return {
+        itemType: l.itemType === 'packaging' ? 'packaging' : 'material',
+        materialId: l.itemType === 'packaging' ? null : Number(l.materialId) || null,
+        packagingId: l.itemType === 'packaging' ? Number(l.packagingId) || null : null,
+        quantity,
+        stockQuantity: parseStockQuantity(l, quantity),
+        unitPrice: Math.round(Number(l.unitPrice) || 0)
+      }
+    })
     .filter((l) => l.quantity > 0 && ((l.itemType === 'material' && l.materialId) || (l.itemType === 'packaging' && l.packagingId)))
 
   if (!lines.length) throw createError({ statusCode: 400, statusMessage: 'Minimal satu baris barang dengan qty > 0' })
+
+  const projectIdRaw = Number(body.projectId)
+  const projectId = Number.isInteger(projectIdRaw) && projectIdRaw > 0 ? projectIdRaw : null
 
   const { shippingFee, platformFee } = extraFees(body)
   const extras = shippingFee + platformFee
@@ -64,6 +87,14 @@ export default defineEventHandler(async (event) => {
 
   const db = useDb()
   const result = await db.transaction(async (tx) => {
+    if (projectId) {
+      const [project] = await tx
+        .select({ id: schema.products.id, name: schema.products.name })
+        .from(schema.products)
+        .where(eq(schema.products.id, projectId))
+      if (!project) throw createError({ statusCode: 400, statusMessage: 'Proyek tidak ditemukan' })
+    }
+
     const [purchase] = await tx
       .insert(schema.supplierPurchases)
       .values({
@@ -72,7 +103,8 @@ export default defineEventHandler(async (event) => {
         notes,
         totalAmount,
         shippingFee,
-        platformFee
+        platformFee,
+        projectId
       })
       .returning()
 
@@ -85,31 +117,48 @@ export default defineEventHandler(async (event) => {
         materialId: line.materialId,
         packagingId: line.packagingId,
         quantity: line.quantity,
+        stockQuantity: line.stockQuantity,
         unitPrice: line.unitPrice,
         amount
       })
 
       if (line.itemType === 'material') {
-        const [row] = await tx
-          .update(schema.materials)
-          .set({
-            stockQuantity: sql`${schema.materials.stockQuantity} + ${line.quantity}`,
+        let row
+        if (line.stockQuantity > 0) {
+          row = await applyMaterialStockDelta(tx, schema, {
+            id: line.materialId,
+            delta: line.stockQuantity,
             pricePerUnit: line.landedUnit
           })
-          .where(eq(schema.materials.id, line.materialId))
-          .returning({ name: schema.materials.name, unit: schema.materials.unit })
-        if (!row) throw createError({ statusCode: 400, statusMessage: 'Material tidak ditemukan' })
+        } else {
+          const [found] = await tx
+            .select({ name: schema.materials.name, unit: schema.materials.unit })
+            .from(schema.materials)
+            .where(eq(schema.materials.id, line.materialId))
+          row = found
+        }
+        if (!row) throw createError({ statusCode: 400, statusMessage: 'Perlengkapan tidak ditemukan' })
         names.push(`${row.name} ${line.quantity} ${row.unit}`)
       } else {
-        const [row] = await tx
-          .update(schema.packaging)
-          .set({
-            stockQuantity: sql`${schema.packaging.stockQuantity} + ${line.quantity}`,
-            pricePerUnit: line.landedUnit
-          })
-          .where(eq(schema.packaging.id, line.packagingId))
-          .returning({ name: schema.packaging.name, unit: schema.packaging.unit })
-        if (!row) throw createError({ statusCode: 400, statusMessage: 'Packaging tidak ditemukan' })
+        let row
+        if (line.stockQuantity > 0) {
+          const [updated] = await tx
+            .update(schema.packaging)
+            .set({
+              stockQuantity: sql`${schema.packaging.stockQuantity} + ${line.stockQuantity}`,
+              pricePerUnit: line.landedUnit
+            })
+            .where(eq(schema.packaging.id, line.packagingId))
+            .returning({ name: schema.packaging.name, unit: schema.packaging.unit })
+          row = updated
+        } else {
+          const [found] = await tx
+            .select({ name: schema.packaging.name, unit: schema.packaging.unit })
+            .from(schema.packaging)
+            .where(eq(schema.packaging.id, line.packagingId))
+          row = found
+        }
+        if (!row) throw createError({ statusCode: 400, statusMessage: 'Produk tidak ditemukan' })
         names.push(`${row.name} ${line.quantity} ${row.unit}`)
       }
     }
@@ -128,9 +177,10 @@ export default defineEventHandler(async (event) => {
           extras ? ` · ongkir ${shippingFee.toLocaleString('id-ID')} · fee ${platformFee.toLocaleString('id-ID')}` : ''
         }`,
         amount: totalAmount,
-        relatedProductId: null
+        relatedProductId: projectId
       })
       .returning()
+    await setExpenseProducts(tx, schema, expense.id, projectId ? [projectId] : [])
 
     const [updated] = await tx
       .update(schema.supplierPurchases)

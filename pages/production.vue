@@ -69,7 +69,7 @@ const completeSaving = ref(false)
 
 function openAdd() {
   editing.value = null
-  const first = products.value?.find((p) => p.status === 'active') || products.value?.[0]
+  const first = products.value?.find((p) => p.status === 'in_progress') || products.value?.[0]
   form.value = {
     date: todayStr(),
     productId: first?.id || '',
@@ -179,11 +179,11 @@ async function save() {
     const ok = await useConfirm().confirm(
       form.value.customOrderId
         ? good
-          ? `${good} unit jadi untuk pelanggan (tidak masuk stok produk)${failed ? `, ${failed} gagal` : ''}. Lanjutkan?`
-          : 'Semua unit gagal. Stok produk tidak berubah, material tetap terpotong. Lanjutkan?'
+          ? `${good} unit jadi untuk pelanggan (tidak masuk stok proyek)${failed ? `, ${failed} gagal` : ''}. Lanjutkan?`
+          : 'Semua unit gagal. Stok proyek tidak berubah, material tetap terpotong. Lanjutkan?'
         : good
-          ? `${good} unit jadi masuk stok produk${failed ? `, ${failed} unit gagal (material tetap terpotong)` : ''}. Lanjutkan?`
-          : `Semua unit gagal. Stok produk tidak bertambah, material tetap terpotong. Lanjutkan?`,
+          ? `${good} unit jadi masuk stok proyek${failed ? `, ${failed} unit gagal (material tetap terpotong)` : ''}. Lanjutkan?`
+          : `Semua unit gagal. Stok proyek tidak bertambah, material tetap terpotong. Lanjutkan?`,
       { title: 'Konfirmasi selesai', confirmText: 'Ya, selesai', danger: !good }
     )
     if (!ok) return
@@ -259,10 +259,10 @@ async function submitComplete() {
       j.isCustom
         ? good
           ? `Selesaikan produksi "${jobTitle(j)}"? ${good} unit jadi untuk pelanggan (tidak masuk stok)${failed ? `, ${failed} gagal` : ''}.`
-          : `Selesaikan "${jobTitle(j)}" sebagai gagal semua? Stok produk tidak berubah, material tetap terpotong.`
+          : `Selesaikan "${jobTitle(j)}" sebagai gagal semua? Stok proyek tidak berubah, material tetap terpotong.`
         : good
           ? `Selesaikan produksi "${j.productName}"? ${good} unit jadi masuk stok${failed ? `, ${failed} unit gagal` : ''}.`
-          : `Selesaikan "${j.productName}" sebagai gagal semua? Stok produk tidak bertambah, material tetap terpotong.`,
+          : `Selesaikan "${j.productName}" sebagai gagal semua? Stok proyek tidak bertambah, material tetap terpotong.`,
       { title: 'Konfirmasi hasil produksi', confirmText: 'Ya, selesaikan', danger: !good }
     )
   if (!ok) return
@@ -280,10 +280,10 @@ async function submitComplete() {
       j.isCustom
         ? good
           ? `${good} unit siap diserahkan ke pelanggan`
-          : 'Produksi ditandai gagal, stok produk tidak berubah'
+          : 'Produksi ditandai gagal, stok proyek tidak berubah'
         : good
           ? `${good} unit masuk stok ${j.productName}`
-          : 'Produksi ditandai gagal, stok produk tidak berubah'
+          : 'Produksi ditandai gagal, stok proyek tidak berubah'
     )
   } catch (e) {
     completeError.value = e.data?.statusMessage || 'Gagal menyelesaikan produksi'
@@ -313,7 +313,7 @@ async function retryFailed(j) {
 }
 
 async function remove(j) {
-  const extra = j.stockApplied ? ' Stok produk dan material akan dikembalikan.' : ''
+  const extra = j.stockApplied ? ' Stok proyek dan material akan dikembalikan.' : ''
   if (!(await useConfirm().confirm(`Hapus produksi "${jobTitle(j)}"?${extra}`))) return
   try {
     await $fetch(`/api/productions/${j.id}`, { method: 'DELETE' })
@@ -334,8 +334,8 @@ async function remove(j) {
       </button>
     </div>
     <p class="text-xs text-ink-500">
-      Progress mengikuti durasi cetak (recipe atau pesanan custom) sejak produksi dimulai. Katalog: unit jadi masuk stok.
-      Custom: unit jadi untuk pelanggan, tidak masuk stok produk.
+      Progress mengikuti durasi pekerjaan (recipe atau RAB) sejak produksi dimulai. Proyek: unit jadi masuk stok.
+      RAB: unit jadi untuk pelanggan, tidak masuk stok proyek.
       Unit gagal: job tetap selesai (material sudah terpotong); tombol Ulang membuat antrian baru.
     </p>
 
@@ -353,9 +353,9 @@ async function remove(j) {
         <div class="text-xs text-ink-400">unit jadi</div>
       </div>
       <div class="panel p-3 sm:p-4 col-span-2">
-        <div class="text-xs font-semibold uppercase tracking-wide text-ink-500">Stok produk tersedia</div>
+        <div class="text-xs font-semibold uppercase tracking-wide text-ink-500">Stok proyek tersedia</div>
         <div class="mt-1 font-mono text-lg sm:text-xl font-semibold">{{ formatNumber(stockTotal) }} unit</div>
-        <div class="text-xs text-ink-400">semua produk · berkurang saat penjualan</div>
+        <div class="text-xs text-ink-400">semua proyek · berkurang saat penjualan</div>
       </div>
     </div>
 
@@ -371,12 +371,12 @@ async function remove(j) {
         <label class="label">Jenis</label>
         <select v-model="filters.custom" class="input">
           <option value="">Semua</option>
-          <option value="0">Katalog</option>
-          <option value="1">Custom</option>
+          <option value="0">Proyek</option>
+          <option value="1">RAB</option>
         </select>
       </div>
       <div>
-        <label class="label">Produk</label>
+        <label class="label">Proyek</label>
         <select v-model="filters.productId" class="input">
           <option value="">Semua</option>
           <option v-for="p in products" :key="p.id" :value="p.id">{{ p.name }}</option>
@@ -401,15 +401,15 @@ async function remove(j) {
           </div>
           <div class="min-w-0 flex-1">
             <div class="flex items-start justify-between gap-2">
-              <NuxtLink v-if="j.customOrderId" :to="`/custom-orders/${j.customOrderId}`" class="font-medium break-words hover:underline">{{ jobTitle(j) }}</NuxtLink>
-              <span v-else class="font-medium break-words">{{ jobTitle(j) }}</span>
+              <NuxtLink v-if="j.customOrderId" :to="`/rab/${j.customOrderId}`" class="font-medium break-words hover:underline">{{ jobTitle(j) }}</NuxtLink>
+              <NuxtLink v-else :to="`/projects/${j.productId}`" class="font-medium break-words hover:underline">{{ jobTitle(j) }}</NuxtLink>
               <span class="badge shrink-0" :class="statusBadge[j.status]">{{ statusLabel[j.status] }}</span>
             </div>
             <div class="text-xs text-ink-500 font-mono">
               {{ formatDate(j.date) }} · rencana {{ j.quantityPlanned }}
               <template v-if="j.status === 'done'"> · jadi {{ j.quantityGood }} · gagal {{ j.quantityFailed }}</template>
             </div>
-            <div v-if="j.isCustom" class="text-xs text-ink-400">custom · tidak masuk stok</div>
+            <div v-if="j.isCustom" class="text-xs text-ink-400">RAB · tidak masuk stok</div>
             <div v-else-if="j.machineName" class="text-xs text-ink-400">{{ j.machineName }}</div>
             <div v-if="jobProgress(j)" class="mt-2 space-y-1">
               <div class="flex justify-between gap-2 text-[11px]" :class="jobProgress(j).over ? 'text-amber-700' : 'text-ink-500'">
@@ -426,22 +426,22 @@ async function remove(j) {
             </div>
           </div>
         </div>
-        <div class="flex flex-wrap gap-1">
-          <button v-if="j.status === 'queued'" class="btn-secondary" @click="setStatus(j, 'in_progress')">
+        <div class="btn-actions">
+          <button v-if="j.status === 'queued'" class="btn-action" @click="setStatus(j, 'in_progress')">
             <PlayIcon class="w-3.5 h-3.5" />Mulai
           </button>
-          <button v-if="j.status === 'queued' || j.status === 'in_progress'" class="btn-primary" @click="openComplete(j)">
+          <button v-if="j.status === 'queued' || j.status === 'in_progress'" class="btn-action-primary" @click="openComplete(j)">
             <CheckIcon class="w-3.5 h-3.5" />Selesai
           </button>
           <button
             v-if="j.status === 'done' && j.quantityFailed > 0 && !j.retried"
-            class="btn-secondary"
+            class="btn-action"
             @click="retryFailed(j)"
           >
-            <ArrowPathIcon class="w-4 h-4" />Ulang
+            <ArrowPathIcon class="w-3.5 h-3.5" />Ulang
           </button>
-          <button class="btn-secondary" @click="openEdit(j)"><PencilSquareIcon class="w-4 h-4" />Edit</button>
-          <button class="btn-danger" @click="remove(j)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+          <button class="btn-action" @click="openEdit(j)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
+          <button class="btn-action-danger" @click="remove(j)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
         </div>
       </div>
       <p v-if="!total" class="panel p-6 text-center text-sm text-ink-500">Belum ada produksi.</p>
@@ -463,7 +463,7 @@ async function remove(j) {
           <thead>
             <tr>
               <th>Tanggal</th>
-              <th>Produk</th>
+              <th>Proyek</th>
               <th>Mesin</th>
               <th class="text-right">Rencana</th>
               <th class="text-right">Jadi</th>
@@ -477,10 +477,10 @@ async function remove(j) {
               <td class="whitespace-nowrap font-mono text-xs">{{ formatDate(j.date) }}</td>
               <td>
                 <div class="font-medium">
-                  <NuxtLink v-if="j.customOrderId" :to="`/custom-orders/${j.customOrderId}`" class="hover:underline">{{ jobTitle(j) }}</NuxtLink>
-                  <span v-else>{{ j.productName }}</span>
+                  <NuxtLink v-if="j.customOrderId" :to="`/rab/${j.customOrderId}`" class="hover:underline">{{ jobTitle(j) }}</NuxtLink>
+                  <NuxtLink v-else :to="`/projects/${j.productId}`" class="hover:underline">{{ jobTitle(j) }}</NuxtLink>
                 </div>
-                <div class="text-xs text-ink-400">{{ j.isCustom ? 'custom' : `stok ${formatNumber(j.productStock)}` }}</div>
+                <div class="text-xs text-ink-400">{{ j.isCustom ? 'RAB' : `stok ${formatNumber(j.productStock)}` }}</div>
               </td>
               <td class="text-ink-500">{{ j.machineName || '—' }}</td>
               <td class="num">{{ j.quantityPlanned }}</td>
@@ -509,25 +509,27 @@ async function remove(j) {
                 </div>
               </td>
               <td class="whitespace-nowrap text-right">
-                <button v-if="j.status === 'queued'" class="btn-secondary" @click="setStatus(j, 'in_progress')">
-                  <PlayIcon class="w-4 h-4" />Mulai
-                </button>
-                <button
-                  v-if="j.status === 'queued' || j.status === 'in_progress'"
-                  class="btn-primary ml-1"
-                  @click="openComplete(j)"
-                >
-                  <CheckIcon class="w-4 h-4" />Selesai
-                </button>
-                <button
-                  v-if="j.status === 'done' && j.quantityFailed > 0 && !j.retried"
-                  class="btn-secondary ml-1"
-                  @click="retryFailed(j)"
-                >
-                  <ArrowPathIcon class="w-4 h-4" />Ulang
-                </button>
-                <button class="btn-secondary ml-1" @click="openEdit(j)"><PencilSquareIcon class="w-4 h-4" />Edit</button>
-                <button class="btn-danger ml-1" @click="remove(j)"><TrashIcon class="w-4 h-4" />Hapus</button>
+                <div class="btn-actions justify-end">
+                  <button v-if="j.status === 'queued'" class="btn-action" @click="setStatus(j, 'in_progress')">
+                    <PlayIcon class="w-3.5 h-3.5" />Mulai
+                  </button>
+                  <button
+                    v-if="j.status === 'queued' || j.status === 'in_progress'"
+                    class="btn-action-primary"
+                    @click="openComplete(j)"
+                  >
+                    <CheckIcon class="w-3.5 h-3.5" />Selesai
+                  </button>
+                  <button
+                    v-if="j.status === 'done' && j.quantityFailed > 0 && !j.retried"
+                    class="btn-action"
+                    @click="retryFailed(j)"
+                  >
+                    <ArrowPathIcon class="w-3.5 h-3.5" />Ulang
+                  </button>
+                  <button class="btn-action" @click="openEdit(j)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
+                  <button class="btn-action-danger" @click="remove(j)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+                </div>
               </td>
             </tr>
             <tr v-if="!total">
@@ -562,15 +564,15 @@ async function remove(j) {
           </div>
         </div>
         <div>
-          <label class="label">{{ form.customOrderId ? 'Pesanan custom' : 'Produk' }}</label>
-          <p v-if="form.customOrderId" class="input bg-ink-50">Custom — lihat halaman pesanan</p>
+          <label class="label">{{ form.customOrderId ? 'RAB' : 'Proyek' }}</label>
+          <p v-if="form.customOrderId" class="input-display !justify-start">RAB — lihat halaman RAB</p>
           <select v-else v-model="form.productId" class="input" required>
             <option v-for="p in products" :key="p.id" :value="p.id">
               {{ p.name }} · stok {{ formatNumber(p.stockQuantity) }}{{ p.hasRecipe ? '' : ' (belum recipe)' }}
             </option>
           </select>
           <p v-if="selectedProduct && !selectedProduct.hasRecipe" class="text-xs text-amber-600 mt-1">
-            Belum ada recipe — stok produk tetap bertambah saat selesai, material tidak terpotong.
+            Belum ada recipe — stok proyek tetap bertambah saat selesai, material tidak terpotong.
           </p>
           <p v-else-if="selectedProduct" class="text-xs text-ink-500 mt-1">
             Durasi recipe {{ formatMinutes(selectedProduct.printMinutesPerUnit) }} / unit
@@ -601,7 +603,7 @@ async function remove(j) {
           </template>
         </div>
         <p v-if="form.status === 'done'" class="text-xs text-ink-500">
-          {{ form.customOrderId ? 'Unit jadi untuk pelanggan, tidak masuk stok produk.' : 'Unit jadi masuk stok. Gagal cetak tetap memotong material.' }}
+          {{ form.customOrderId ? 'Unit jadi untuk pelanggan, tidak masuk stok proyek.' : 'Unit jadi masuk stok. Gagal cetak tetap memotong material.' }}
         </p>
         <div>
           <label class="label">Catatan</label>
@@ -625,13 +627,13 @@ async function remove(j) {
         </p>
         <p class="text-xs text-ink-500">
           Estimasi cetak {{ formatMinutes(completeTarget.durationMinutes || completeTarget.printMinutesPerUnit * completeTarget.quantityPlanned) }}.
-          {{ completeTarget.isCustom ? 'Unit jadi untuk pelanggan, tidak masuk stok produk.' : 'Dari durasi recipe.' }}
+          {{ completeTarget.isCustom ? 'Unit jadi untuk pelanggan, tidak masuk stok proyek.' : 'Dari durasi recipe.' }}
         </p>
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="label">Unit jadi</label>
             <input v-model.number="completeForm.good" type="number" min="0" class="input-num" />
-            <p class="text-[11px] text-ink-400 mt-1">{{ completeTarget.isCustom ? 'Untuk pelanggan' : 'Masuk stok produk' }}</p>
+            <p class="text-[11px] text-ink-400 mt-1">{{ completeTarget.isCustom ? 'Untuk pelanggan' : 'Masuk stok proyek' }}</p>
           </div>
           <div>
             <label class="label">Unit gagal</label>

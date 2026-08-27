@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CLI TinyTuya untuk Numa3D: scan LAN, baca daya plug, ambil local key dari cloud."""
+"""CLI TinyTuya untuk OCN: scan LAN, baca daya plug, ambil local key dari cloud."""
 from __future__ import annotations
 
 import argparse

@@ -5,6 +5,7 @@ import { sanitizeText } from '~/utils/sanitizeText.js'
 const { data: purchases, refresh } = await useFetch('/api/purchases')
 const { data: materials } = await useFetch('/api/materials')
 const { data: packagingItems } = await useFetch('/api/packaging')
+const { data: projects } = await useFetch('/api/products')
 const { data: suppliers, refresh: refreshSuppliers } = await useFetch('/api/suppliers')
 const { data: categories, refresh: refreshCategories } = await useFetch('/api/expense-categories')
 
@@ -39,13 +40,21 @@ const categoryError = ref('')
 const savingCategory = ref(false)
 
 function emptyLine() {
-  return { itemType: 'material', materialId: '', packagingId: '', quantity: 0, unitPrice: 0 }
+  return {
+    itemType: 'packaging',
+    materialId: '',
+    packagingId: '',
+    quantity: 0,
+    stockQuantity: 0,
+    unitPrice: 0
+  }
 }
 function openAdd() {
   form.value = {
     date: todayStr(),
     supplier: suppliers.value?.[0]?.name || '',
-    category: 'material',
+    category: 'packaging',
+    projectId: '',
     notes: '',
     shippingFee: 0,
     platformFee: 0,
@@ -53,6 +62,20 @@ function openAdd() {
   }
   errorMsg.value = ''
   showForm.value = true
+}
+
+function onProjectChange() {
+  for (const line of form.value.lines || []) {
+    line.stockQuantity = form.value.projectId ? 0 : Number(line.quantity) || 0
+  }
+}
+
+function onQtyInput(line) {
+  if (!form.value.projectId) line.stockQuantity = Number(line.quantity) || 0
+}
+
+function usedQty(line) {
+  return Math.max((Number(line.quantity) || 0) - (Number(line.stockQuantity) || 0), 0)
 }
 function openSuppliers() {
   supplierForm.value = { name: '', notes: '' }
@@ -155,7 +178,7 @@ async function save() {
     await $fetch('/api/purchases', { method: 'POST', body: form.value })
     showForm.value = false
     await refresh()
-    useToast().success('Pembelian tersimpan. Stok bertambah dan pengeluaran tercatat.')
+    useToast().success('Pembelian tersimpan. Pengeluaran tercatat; sisa masuk stok sesuai isian.')
   } catch (e) {
     errorMsg.value = e.data?.statusMessage || 'Gagal menyimpan'
   } finally {
@@ -182,8 +205,8 @@ async function remove(p) {
       </button>
     </div>
     <p class="text-xs text-ink-500">
-      Satu pembelian menambah stok dan membuat pengeluaran sebesar total (barang + ongkir + fee platform).
-      Ongkir dan fee dibagi ke harga satuan stok, jadi HPP memakai harga landed.
+      Beli untuk proyek: kas terpotong, barang terpakai tidak masuk gudang. Sisa isi di kolom masuk stok — jenis Produk masuk stok Produk.
+      Tanpa proyek, seluruh qty masuk stok (beli persediaan).
     </p>
 
     <div class="panel hidden md:block">
@@ -203,11 +226,15 @@ async function remove(p) {
               <td class="whitespace-nowrap font-mono text-xs">{{ formatDate(p.date) }}</td>
               <td class="font-medium">
                 {{ p.supplier }}
+                <div v-if="p.projectName" class="text-xs text-ink-500">Proyek {{ p.projectName }}</div>
                 <div v-if="p.notes" class="text-xs text-ink-400">{{ p.notes }}</div>
               </td>
               <td class="text-sm text-ink-600">
                 <div v-for="l in p.lines" :key="l.id">
-                  {{ l.itemName }} - {{ formatNumber(l.quantity, 1) }} {{ l.unit }}
+                  {{ l.itemName }} — {{ formatNumber(l.quantity, 1) }} {{ l.unit }}
+                  <span v-if="Number(l.stockQuantity) > 0" class="text-ink-400">
+                    · stok +{{ formatNumber(l.stockQuantity, 1) }}
+                  </span>
                 </div>
               </td>
               <td class="num">
@@ -219,7 +246,7 @@ async function remove(p) {
                 </div>
               </td>
               <td class="text-right">
-                <button type="button" class="btn-danger" @click="remove(p)"><TrashIcon class="w-4 h-4" />Hapus</button>
+                <button type="button" class="btn-action-danger" @click="remove(p)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
               </td>
             </tr>
             <tr v-if="!total">
@@ -243,6 +270,7 @@ async function remove(p) {
         <div class="flex items-start justify-between gap-2">
           <div>
             <div class="font-medium">{{ p.supplier }}</div>
+            <div v-if="p.projectName" class="text-xs text-ink-500">Proyek {{ p.projectName }}</div>
             <div class="text-xs font-mono text-ink-500">{{ formatDate(p.date) }}</div>
           </div>
           <div class="font-mono font-semibold text-right">{{ formatIDR(p.totalAmount) }}</div>
@@ -256,9 +284,12 @@ async function remove(p) {
           <span v-if="p.platformFee">Fee {{ formatIDR(p.platformFee) }}</span>
         </div>
         <div class="text-xs text-ink-500">
-          <div v-for="l in p.lines" :key="l.id">{{ l.itemName }} - {{ formatNumber(l.quantity, 1) }} {{ l.unit }}</div>
+          <div v-for="l in p.lines" :key="l.id">
+            {{ l.itemName }} — {{ formatNumber(l.quantity, 1) }} {{ l.unit }}
+            <span v-if="Number(l.stockQuantity) > 0"> · stok +{{ formatNumber(l.stockQuantity, 1) }}</span>
+          </div>
         </div>
-        <button type="button" class="btn-danger" @click="remove(p)"><TrashIcon class="w-4 h-4" />Hapus</button>
+        <button type="button" class="btn-action-danger" @click="remove(p)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
       </div>
       <p v-if="!total" class="panel p-6 text-center text-sm text-ink-500">Belum ada pembelian.</p>
     </div>
@@ -281,6 +312,13 @@ async function remove(p) {
                 <PlusIcon class="w-4 h-4" />
               </button>
             </div>
+          </div>
+          <div class="sm:col-span-2 min-w-0">
+            <label class="label">Proyek (opsional)</label>
+            <select v-model="form.projectId" class="input" @change="onProjectChange">
+              <option value="">Tanpa proyek — seluruh qty masuk stok</option>
+              <option v-for="proj in projects" :key="proj.id" :value="proj.id">{{ proj.name }}</option>
+            </select>
           </div>
           <div class="sm:col-span-2 min-w-0">
             <label class="label">Kategori pengeluaran</label>
@@ -312,8 +350,8 @@ async function remove(p) {
                 <div>
                   <label class="label">Jenis</label>
                   <select v-model="line.itemType" class="input" @change="onTypeChange(line)">
-                    <option value="material">Material</option>
-                    <option value="packaging">Packaging</option>
+                    <option value="material">Perlengkapan</option>
+                    <option value="packaging">Produk</option>
                   </select>
                 </div>
                 <div>
@@ -325,7 +363,7 @@ async function remove(p) {
                     required
                     @change="onItemChange(line)"
                   >
-                    <option value="" disabled>Pilih material...</option>
+                    <option value="" disabled>Pilih perlengkapan...</option>
                     <option v-for="m in materials" :key="m.id" :value="m.id">{{ m.name }} ({{ m.unit }})</option>
                   </select>
                   <select
@@ -335,7 +373,7 @@ async function remove(p) {
                     required
                     @change="onItemChange(line)"
                   >
-                    <option value="" disabled>Pilih packaging...</option>
+                    <option value="" disabled>Pilih produk...</option>
                     <option v-for="pk in packagingItems" :key="pk.id" :value="pk.id">{{ pk.name }} ({{ pk.unit }})</option>
                   </select>
                 </div>
@@ -349,18 +387,43 @@ async function remove(p) {
                 <XMarkIcon class="w-5 h-5" />
               </button>
             </div>
-            <div class="grid grid-cols-3 gap-2">
-              <div>
-                <label class="label">Qty ({{ selectedItem(line)?.unit || 'unit' }})</label>
-                <input v-model.number="line.quantity" type="number" min="0" step="0.1" class="input-num w-full" required />
+            <div class="grid grid-cols-12 gap-2">
+              <div class="col-span-6 sm:col-span-3 min-w-0">
+                <label class="label">Qty beli ({{ selectedItem(line)?.unit || 'unit' }})</label>
+                <input
+                  v-model.number="line.quantity"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  class="input-num w-full"
+                  required
+                  @input="onQtyInput(line)"
+                />
               </div>
-              <div>
+              <div class="col-span-6 sm:col-span-3 min-w-0">
+                <label class="label">Masuk stok</label>
+                <input
+                  v-model.number="line.stockQuantity"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  class="input-num w-full"
+                />
+                <p class="text-[11px] text-ink-400 mt-0.5">
+                  {{
+                    line.itemType === 'packaging'
+                      ? 'Sisa ke Produk'
+                      : 'Sisa ke Perlengkapan'
+                  }}{{ usedQty(line) ? ` · terpakai ${formatNumber(usedQty(line), 1)}` : '' }}
+                </p>
+              </div>
+              <div class="col-span-6 sm:col-span-3 min-w-0">
                 <label class="label">Harga / unit</label>
                 <IdrInput v-model="line.unitPrice" required input-class="w-full" />
               </div>
-              <div>
+              <div class="col-span-6 sm:col-span-3 min-w-0">
                 <label class="label">Subtotal</label>
-                <div class="input-num flex items-center justify-end bg-ink-50">{{ formatIDR(lineTotal(line)) }}</div>
+                <div class="input-display">{{ formatIDR(lineTotal(line)) }}</div>
               </div>
             </div>
           </div>
@@ -435,7 +498,7 @@ async function remove(p) {
                 <div class="font-medium text-sm truncate">{{ s.name }}</div>
                 <div v-if="s.notes" class="text-xs text-ink-400 truncate">{{ s.notes }}</div>
               </div>
-              <button type="button" class="btn-danger" @click="removeSupplier(s)">
+              <button type="button" class="btn-action-danger" @click="removeSupplier(s)">
                 <TrashIcon class="w-3.5 h-3.5" />
               </button>
             </li>
@@ -450,7 +513,7 @@ async function remove(p) {
         <form class="space-y-3" @submit.prevent="saveCategory">
           <div>
             <label class="label">Nama kategori baru</label>
-            <input v-model="categoryForm.name" class="input" required placeholder="Packaging / Iklan / Ongkir" />
+            <input v-model="categoryForm.name" class="input" required placeholder="Produk / Iklan / Ongkir" />
           </div>
           <p v-if="categoryError" class="text-sm text-red-600">{{ categoryError }}</p>
           <div class="flex justify-end">
@@ -468,7 +531,7 @@ async function remove(p) {
               <button
                 v-if="!c.isSystem"
                 type="button"
-                class="btn-danger ml-auto"
+                class="btn-action-danger ml-auto"
                 @click="removeCategory(c)"
               >
                 <TrashIcon class="w-3.5 h-3.5" />

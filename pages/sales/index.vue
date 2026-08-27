@@ -11,41 +11,23 @@ import {
   BanknotesIcon,
   PhotoIcon
 } from '@heroicons/vue/24/outline'
+import { normalizeProductStatus, productStatusLabel, productStatusClass } from '~/utils/productStatus.js'
 
-const channelLabel = {
-  tokopedia: 'Tokopedia',
-  shopee: 'Shopee',
-  tiktok_shop: 'TikTok Shop',
-  instagram: 'Instagram',
-  whatsapp: 'WhatsApp',
-  direct: 'Langsung',
-  other: 'Lainnya'
-}
-// Fee default per channel sebagai prefill (bisa diubah saat input)
-const defaultFee = { tokopedia: 6.5, shopee: 8, tiktok_shop: 8, instagram: 0, whatsapp: 0, direct: 0, other: 0 }
 const paymentLabel = { unpaid: 'Belum bayar', paid: 'Lunas' }
 const paymentMethodLabel = {
   cash: 'Tunai',
   transfer: 'Transfer',
-  marketplace: 'Cair marketplace',
+  marketplace: 'Lainnya',
   other: 'Lainnya'
 }
-const marketplaceChannels = new Set(['tokopedia', 'shopee', 'tiktok_shop'])
-function defaultPaymentStatus(channel) {
-  return marketplaceChannels.has(channel) ? 'unpaid' : 'paid'
-}
-function defaultPaymentMethod(channel, status) {
-  if (status !== 'paid') return ''
-  return marketplaceChannels.has(channel) ? 'marketplace' : 'cash'
-}
 
-const filters = ref({ productId: '', channel: '', paymentStatus: '', dateFrom: '', dateTo: '' })
+const filters = ref({ productId: '', paymentStatus: '', dateFrom: '', dateTo: '' })
 function setThisMonth() {
   filters.value.dateFrom = monthStartStr()
   filters.value.dateTo = todayStr()
 }
 function clearFilters() {
-  filters.value = { productId: '', channel: '', paymentStatus: '', dateFrom: '', dateTo: '' }
+  filters.value = { productId: '', paymentStatus: '', dateFrom: '', dateTo: '' }
 }
 
 const query = computed(() => {
@@ -54,7 +36,7 @@ const query = computed(() => {
   return q
 })
 const { data: sales, refresh } = await useFetch('/api/sales', { query })
-const { data: products } = await useFetch('/api/products')
+const { data: products, refresh: refreshProducts } = await useFetch('/api/products')
 
 const { page, pageSize, paged, total, totalPages, rangeStart, rangeEnd, reset } = usePagination(
   computed(() => sales.value || []),
@@ -65,9 +47,8 @@ watch(query, reset, { deep: true })
 const totals = computed(() => {
   const rows = sales.value || []
   return {
-    units: rows.reduce((a, r) => a + r.quantity, 0),
+    count: rows.length,
     gross: rows.reduce((a, r) => a + r.grossRevenue, 0),
-    fee: rows.reduce((a, r) => a + (r.grossRevenue - r.netRevenue), 0),
     net: rows.reduce((a, r) => a + r.netRevenue, 0),
     unpaid: rows.filter((r) => r.paymentStatus === 'unpaid').reduce((a, r) => a + r.netRevenue, 0)
   }
@@ -79,21 +60,38 @@ const form = ref({})
 const errorMsg = ref('')
 const saving = ref(false)
 
+const sellableProducts = computed(() => (products.value || []).filter((p) => !p.hasSale))
+
+function preferredProduct() {
+  const list = sellableProducts.value
+  return (
+    list.find((p) => normalizeProductStatus(p.status) === 'in_progress') ||
+    list.find((p) => normalizeProductStatus(p.status) === 'waiting') ||
+    list[0] ||
+    null
+  )
+}
+
+function applyProject(p) {
+  form.value.quantity = 1
+  form.value.salePricePerUnit = p?.revenue || 0
+  form.value.customerName = p?.customerName || ''
+}
+
 function openAdd() {
+  const p = preferredProduct()
   form.value = {
     date: todayStr(),
-    productId: products.value?.find((p) => p.status === 'active')?.id || products.value?.[0]?.id || '',
+    productId: p?.id || '',
     quantity: 1,
-    salePricePerUnit: 0,
-    channel: 'direct',
-    marketplaceFeePercent: 0,
-    customerName: '',
+    salePricePerUnit: p?.revenue || 0,
+    customerName: p?.customerName || '',
     notes: '',
     discountAmount: 0,
     discountKind: 'amount',
     discountPercent: 0,
     paymentNotes: '',
-    paymentStatus: defaultPaymentStatus('direct'),
+    paymentStatus: 'paid',
     paymentMethod: 'cash',
     paidAt: todayStr(),
   }
@@ -101,65 +99,50 @@ function openAdd() {
   showForm.value = true
 }
 
-const selectedProduct = computed(() => (products.value || []).find((p) => p.id === form.value.productId))
+const selectedProduct = computed(() =>
+  (products.value || []).find((p) => p.id === Number(form.value.productId))
+)
 
-// Ringkasan hidup: apa yang benar-benar masuk kantong setelah fee & HPP.
 const preview = computed(() => {
-  const qty = Math.max(Number(form.value.quantity) || 0, 0)
   const price = Math.max(Number(form.value.salePricePerUnit) || 0, 0)
-  const feePct = Math.min(Math.max(Number(form.value.marketplaceFeePercent) || 0, 0), 100)
-  const hppPerUnit = selectedProduct.value?.hasRecipe ? selectedProduct.value.hpp : 0
-  const gross = price * qty
-  const fee = Math.round(gross * (feePct / 100))
-  const afterFee = Math.max(gross - fee, 0)
+  const goodsCost = selectedProduct.value?.hasRab ? selectedProduct.value.goodsCost || 0 : 0
+  const gross = price
   const discount =
     form.value.discountKind === 'percent'
-      ? Math.round(afterFee * (Math.min(Math.max(Number(form.value.discountPercent) || 0, 0), 100) / 100))
-      : Math.min(Math.max(Math.round(Number(form.value.discountAmount) || 0), 0), afterFee)
-  const net = afterFee - discount
-  const cogs = hppPerUnit * qty
-  const margin = net - cogs
+      ? Math.round(gross * (Math.min(Math.max(Number(form.value.discountPercent) || 0, 0), 100) / 100))
+      : Math.min(Math.max(Math.round(Number(form.value.discountAmount) || 0), 0), gross)
+  const net = gross - discount
+  const margin = net - goodsCost
   return {
-    qty,
-    hppPerUnit,
-    hasHpp: !!selectedProduct.value?.hasRecipe,
+    goodsCost,
+    hasCost: !!selectedProduct.value?.hasRab,
+    rabRevenue: selectedProduct.value?.revenue || 0,
+    goodsSale: selectedProduct.value?.goodsSale || 0,
+    serviceSale: selectedProduct.value?.serviceSale || 0,
     gross,
-    fee,
     discount,
     net,
-    cogs,
     margin,
-    marginPercent: net ? Math.round((margin / net) * 100) : 0,
-    netPerUnit: qty ? Math.round(net / qty) : 0
+    marginPercent: net ? Math.round((margin / net) * 100) : 0
   }
 })
-const belowCost = computed(() => preview.value.hasHpp && preview.value.qty > 0 && preview.value.margin < 0)
-
-// Isi harga jual dari harga saran (HPP + margin default) untuk mempercepat input.
-const { data: settings } = await useFetch('/api/settings')
-function applySuggestedPrice() {
-  const hpp = selectedProduct.value?.hpp || 0
-  const m = Math.min(Math.max(settings.value?.defaultMarginPercent ?? 40, 0), 95) / 100
-  form.value.salePricePerUnit = Math.ceil(hpp / (1 - m) / 500) * 500
-}
+const belowCost = computed(() => preview.value.hasCost && preview.value.net < preview.value.goodsCost)
 
 watch(
-  () => form.value.channel,
-  (ch) => {
-    if (showForm.value && ch) {
-      form.value.marketplaceFeePercent = defaultFee[ch] ?? 0
-      form.value.paymentStatus = defaultPaymentStatus(ch)
-      form.value.paymentMethod = defaultPaymentMethod(ch, form.value.paymentStatus)
-    }
+  () => form.value.productId,
+  (id) => {
+    if (!showForm.value) return
+    applyProject((products.value || []).find((p) => p.id === Number(id)))
   }
 )
+
 watch(
   () => form.value.paymentStatus,
   (status) => {
     if (!showForm.value) return
     if (status === 'paid') {
       if (!form.value.paidAt) form.value.paidAt = form.value.date || todayStr()
-      if (!form.value.paymentMethod) form.value.paymentMethod = defaultPaymentMethod(form.value.channel, 'paid')
+      if (!form.value.paymentMethod) form.value.paymentMethod = 'cash'
     }
   }
 )
@@ -168,9 +151,10 @@ async function save() {
   errorMsg.value = ''
   saving.value = true
   try {
-    await $fetch('/api/sales', { method: 'POST', body: form.value })
+    await $fetch('/api/sales', { method: 'POST', body: { ...form.value, channel: 'direct', marketplaceFeePercent: 0 } })
     showForm.value = false
     await refresh()
+    await refreshProducts()
     useToast().success('Penjualan tercatat.')
   } catch (e) {
     errorMsg.value = e.data?.statusMessage || 'Gagal menyimpan'
@@ -178,10 +162,8 @@ async function save() {
     saving.value = false
   }
 }
-function afterFeeOfSale(s) {
-  const gross = (s.salePricePerUnit || 0) * (s.quantity || 0)
-  const fee = Math.round(gross * ((s.marketplaceFeePercent || 0) / 100))
-  return { gross, fee, afterFee: Math.max(gross - fee, 0) }
+function saleGross(s) {
+  return (s.salePricePerUnit || 0) * (s.quantity || 0)
 }
 function discountLine(s) {
   if (!s.discountAmount) return ''
@@ -192,7 +174,7 @@ function discountLine(s) {
 async function markPaid(s) {
   payTarget.value = s
   payForm.value = {
-    paymentMethod: defaultPaymentMethod(s.channel, 'paid'),
+    paymentMethod: s.paymentMethod === 'marketplace' ? 'other' : s.paymentMethod || 'cash',
     paidAt: todayStr(),
     discountKind: s.discountKind === 'percent' ? 'percent' : 'amount',
     discountAmount: s.discountAmount || 0,
@@ -208,24 +190,24 @@ const paySaving = ref(false)
 const payPreview = computed(() => {
   const s = payTarget.value
   if (!s) return null
-  const { gross, fee, afterFee } = afterFeeOfSale(s)
+  const gross = saleGross(s)
   const discount =
     payForm.value.discountKind === 'percent'
-      ? Math.round(afterFee * (Math.min(Math.max(Number(payForm.value.discountPercent) || 0, 0), 100) / 100))
-      : Math.min(Math.max(Math.round(Number(payForm.value.discountAmount) || 0), 0), afterFee)
-  return { gross, fee, afterFee, discount, net: afterFee - discount }
+      ? Math.round(gross * (Math.min(Math.max(Number(payForm.value.discountPercent) || 0, 0), 100) / 100))
+      : Math.min(Math.max(Math.round(Number(payForm.value.discountAmount) || 0), 0), gross)
+  return { gross, discount, net: gross - discount }
 })
 function setDiscountKind(target, kind) {
-  const afterFee = target === 'pay' ? payPreview.value?.afterFee || 0 : preview.value ? Math.max(preview.value.gross - preview.value.fee, 0) : 0
+  const cap = target === 'pay' ? payPreview.value?.gross || 0 : preview.value?.gross || 0
   const formRef = target === 'pay' ? payForm : form
   if (formRef.value.discountKind === kind) return
   if (kind === 'percent') {
-    formRef.value.discountPercent = afterFee
-      ? Math.min(100, Math.round(((Number(formRef.value.discountAmount) || 0) / afterFee) * 1000) / 10)
+    formRef.value.discountPercent = cap
+      ? Math.min(100, Math.round(((Number(formRef.value.discountAmount) || 0) / cap) * 1000) / 10)
       : 0
   } else {
     const p = Math.min(Math.max(Number(formRef.value.discountPercent) || 0, 0), 100)
-    formRef.value.discountAmount = Math.round(afterFee * (p / 100))
+    formRef.value.discountAmount = Math.round(cap * (p / 100))
   }
   formRef.value.discountKind = kind
 }
@@ -273,6 +255,7 @@ async function remove(s) {
   if (!(await useConfirm().confirm('Hapus catatan penjualan ini?'))) return
   await $fetch(`/api/sales/${s.id}`, { method: 'DELETE' })
   await refresh()
+  await refreshProducts()
 }
 </script>
 
@@ -289,17 +272,10 @@ async function remove(s) {
     <div class="panel p-3 space-y-2 overflow-hidden">
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-end gap-2 min-w-0">
         <div class="min-w-0 lg:w-44">
-          <label class="label">Produk</label>
+          <label class="label">Proyek</label>
           <select v-model="filters.productId" class="input">
             <option value="">Semua</option>
             <option v-for="p in products" :key="p.id" :value="p.id">{{ p.name }}</option>
-          </select>
-        </div>
-        <div class="min-w-0 lg:w-36">
-          <label class="label">Channel</label>
-          <select v-model="filters.channel" class="input">
-            <option value="">Semua</option>
-            <option v-for="(label, key) in channelLabel" :key="key" :value="key">{{ label }}</option>
           </select>
         </div>
         <div class="min-w-0 lg:w-36">
@@ -332,18 +308,14 @@ async function remove(s) {
     </div>
 
     <!-- Running totals -->
-    <div class="grid grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3">
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
       <div class="panel p-3">
-        <div class="text-xs text-ink-500 uppercase font-semibold">Unit terjual</div>
-        <div class="font-mono text-lg sm:text-xl font-semibold">{{ formatNumber(totals.units) }}</div>
+        <div class="text-xs text-ink-500 uppercase font-semibold">Transaksi</div>
+        <div class="font-mono text-lg sm:text-xl font-semibold">{{ formatNumber(totals.count) }}</div>
       </div>
       <div class="panel p-3">
         <div class="text-xs text-ink-500 uppercase font-semibold">Revenue kotor</div>
         <div class="font-mono text-lg sm:text-xl font-semibold">{{ formatIDR(totals.gross) }}</div>
-      </div>
-      <div class="panel p-3">
-        <div class="text-xs text-ink-500 uppercase font-semibold">Fee marketplace</div>
-        <div class="font-mono text-lg sm:text-xl font-semibold text-red-600">{{ formatIDR(totals.fee) }}</div>
       </div>
       <div class="panel p-3">
         <div class="text-xs text-ink-500 uppercase font-semibold">Revenue bersih</div>
@@ -362,12 +334,11 @@ async function remove(s) {
           <div class="min-w-0">
             <div class="font-medium break-words">
               {{ s.productName }}
-              <span v-if="s.isCustom" class="badge bg-ink-100 text-ink-500 ml-1">custom</span>
+              <span v-if="s.isCustom" class="badge bg-ink-100 text-ink-500 ml-1">RAB</span>
             </div>
             <div class="text-xs font-mono text-ink-500">{{ formatDate(s.date) }}<span v-if="s.invoiceNumber"> · {{ s.invoiceNumber }}</span></div>
             <div v-if="s.customerName" class="text-xs text-ink-500">{{ s.customerName }}</div>
           </div>
-          <span class="badge bg-ink-100 text-ink-600 shrink-0">{{ channelLabel[s.channel] }}</span>
         </div>
         <div class="flex flex-wrap gap-1">
           <span
@@ -384,23 +355,21 @@ async function remove(s) {
         <div v-if="s.paymentStatus === 'paid' && s.discountAmount" class="text-xs text-ink-400">{{ discountLine(s) }}</div>
         <div v-if="s.paymentNotes" class="text-xs text-ink-400 break-words">{{ s.paymentNotes }}</div>
         <dl class="grid grid-cols-2 gap-x-3 gap-y-1 text-sm pt-1">
-          <div class="flex justify-between"><dt class="text-ink-500">Qty</dt><dd class="font-mono">{{ s.quantity }}</dd></div>
-          <div class="flex justify-between"><dt class="text-ink-500">Harga</dt><dd class="font-mono">{{ formatIDR(s.salePricePerUnit) }}</dd></div>
-          <div class="flex justify-between"><dt class="text-ink-500">Fee</dt><dd class="font-mono">{{ s.marketplaceFeePercent ? s.marketplaceFeePercent + '%' : '–' }}</dd></div>
+          <div class="flex justify-between"><dt class="text-ink-500">Nilai</dt><dd class="font-mono">{{ formatIDR(s.salePricePerUnit) }}</dd></div>
           <div class="flex justify-between">
             <dt class="text-ink-500">Bersih</dt>
             <dd class="font-mono">{{ formatIDR(s.netRevenue) }}</dd>
           </div>
         </dl>
-        <div class="pt-1 flex flex-wrap gap-1">
-          <NuxtLink :to="`/sales/${s.id}/invoice`" class="btn-secondary">
+        <div class="pt-1 btn-actions">
+          <NuxtLink :to="`/sales/${s.id}/invoice`" class="btn-action">
             <PrinterIcon class="w-3.5 h-3.5" />Invoice
           </NuxtLink>
-          <button v-if="s.paymentStatus !== 'paid'" class="btn-secondary" @click="markPaid(s)">
+          <button v-if="s.paymentStatus !== 'paid'" class="btn-action" @click="markPaid(s)">
             <BanknotesIcon class="w-3.5 h-3.5" />Lunas
           </button>
-          <button v-else class="btn-secondary" @click="markUnpaid(s)">Belum bayar</button>
-          <button class="btn-danger" @click="remove(s)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+          <button v-else class="btn-action" @click="markUnpaid(s)">Belum bayar</button>
+          <button class="btn-action-danger" @click="remove(s)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
         </div>
       </div>
       <p v-if="!total" class="panel p-6 text-center text-sm text-ink-500">Belum ada penjualan pada filter ini.</p>
@@ -422,12 +391,9 @@ async function remove(s) {
           <thead>
             <tr>
               <th>Tanggal</th>
-              <th>Produk</th>
-              <th>Channel</th>
-              <th class="text-right">Qty</th>
-              <th class="text-right">Harga/unit</th>
-              <th class="text-right">Fee</th>
-              <th class="text-right">Bersih/unit</th>
+              <th>Proyek</th>
+              <th class="text-right">Nilai</th>
+              <th class="text-right">Bersih</th>
               <th>Bayar</th>
               <th></th>
             </tr>
@@ -437,15 +403,12 @@ async function remove(s) {
               <td class="whitespace-nowrap font-mono text-xs">{{ formatDate(s.date) }}</td>
               <td class="font-medium">
                 {{ s.productName }}
-                <span v-if="s.isCustom" class="badge bg-ink-100 text-ink-500 ml-1">custom</span>
+                <span v-if="s.isCustom" class="badge bg-ink-100 text-ink-500 ml-1">RAB</span>
                 <div v-if="s.customerName" class="text-xs text-ink-500">{{ s.customerName }}</div>
                 <div v-if="s.notes" class="text-xs text-ink-400">{{ s.notes }}</div>
               </td>
-              <td><span class="badge bg-ink-100 text-ink-600">{{ channelLabel[s.channel] }}</span></td>
-              <td class="num">{{ s.quantity }}</td>
               <td class="num">{{ formatIDR(s.salePricePerUnit) }}</td>
-              <td class="num text-ink-500">{{ s.marketplaceFeePercent ? s.marketplaceFeePercent + '%' : '-' }}</td>
-              <td class="num">{{ formatIDR(s.netPricePerUnit) }}</td>
+              <td class="num">{{ formatIDR(s.netRevenue) }}</td>
               <td>
                 <span
                   class="badge"
@@ -461,17 +424,19 @@ async function remove(s) {
                 <div v-if="s.paymentNotes" class="text-xs text-ink-400 mt-0.5 break-words">{{ s.paymentNotes }}</div>
               </td>
               <td class="text-right whitespace-nowrap">
-                <NuxtLink :to="`/sales/${s.id}/invoice`" class="btn-secondary">
-                  <PrinterIcon class="w-4 h-4" />Invoice
-                </NuxtLink>
-                <button v-if="s.paymentStatus !== 'paid'" class="btn-secondary ml-1" @click="markPaid(s)">
-                  <BanknotesIcon class="w-4 h-4" />Lunas
-                </button>
-                <button class="btn-danger ml-1" @click="remove(s)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+                <div class="btn-actions justify-end">
+                  <NuxtLink :to="`/sales/${s.id}/invoice`" class="btn-action">
+                    <PrinterIcon class="w-3.5 h-3.5" />Invoice
+                  </NuxtLink>
+                  <button v-if="s.paymentStatus !== 'paid'" class="btn-action" @click="markPaid(s)">
+                    <BanknotesIcon class="w-3.5 h-3.5" />Lunas
+                  </button>
+                  <button class="btn-action-danger" @click="remove(s)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+                </div>
               </td>
             </tr>
             <tr v-if="!total">
-              <td colspan="9" class="text-center text-ink-500 py-6">Belum ada penjualan pada filter ini.</td>
+              <td colspan="6" class="text-center text-ink-500 py-6">Belum ada penjualan pada filter ini.</td>
             </tr>
           </tbody>
         </table>
@@ -490,72 +455,49 @@ async function remove(s) {
     <AppModal v-if="showForm" title="Catat Penjualan" size="lg" @close="showForm = false">
       <form class="grid grid-cols-1 lg:grid-cols-5 gap-4" @submit.prevent="save">
         <div class="lg:col-span-3 space-y-3">
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div class="date-field">
-              <label class="label">Tanggal</label>
-              <input v-model="form.date" type="date" class="input" required />
-            </div>
-            <div class="min-w-0">
-              <label class="label">Channel</label>
-              <select v-model="form.channel" class="input">
-                <option v-for="(label, key) in channelLabel" :key="key" :value="key">{{ label }}</option>
-              </select>
-            </div>
+          <div class="date-field">
+            <label class="label">Tanggal</label>
+            <input v-model="form.date" type="date" class="input" required />
           </div>
 
           <div>
-            <label class="label">Produk</label>
-            <select v-model="form.productId" class="input" required>
-              <option v-for="p in products" :key="p.id" :value="p.id">
-                {{ p.name }}{{ p.hasRecipe ? ` — HPP ${formatIDR(p.hpp)}` : ' — belum ada recipe' }} · stok {{ formatNumber(p.stockQuantity) }}
+            <label class="label">Proyek</label>
+            <select v-model="form.productId" class="input" required :disabled="!sellableProducts.length">
+              <option v-if="!sellableProducts.length" value="">Tidak ada proyek yang belum tercatat</option>
+              <option v-for="p in sellableProducts" :key="p.id" :value="p.id">
+                {{ p.name }}{{ p.customerName ? ` · ${p.customerName}` : '' }}{{ p.hasRab ? ` — ${formatIDR(p.revenue)}` : '' }}
               </option>
             </select>
-            <div v-if="selectedProduct" class="flex items-center gap-2 mt-2">
-              <div class="w-10 h-10 rounded border border-ink-200 bg-ink-50 overflow-hidden flex items-center justify-center shrink-0">
-                <img
-                  v-if="selectedProduct.imageKey"
-                  :src="`/api/products/${selectedProduct.id}/image`"
-                  alt=""
-                  class="w-full h-full object-cover"
-                />
-                <PhotoIcon v-else class="w-4 h-4 text-ink-300" />
+            <div v-if="selectedProduct" class="mt-2 space-y-1">
+              <div class="flex flex-wrap items-center gap-1.5">
+                <span class="badge" :class="productStatusClass(selectedProduct.status)">
+                  {{ productStatusLabel[selectedProduct.status] || selectedProduct.status }}
+                </span>
+                <span v-if="selectedProduct.hasRab" class="badge bg-ink-100 text-ink-600">RAB</span>
               </div>
-              <p v-if="!selectedProduct.hasRecipe" class="text-xs text-amber-600">
-                Produk ini belum punya recipe — harga saran tidak tersedia.
+              <p v-if="selectedProduct.hasRab" class="text-xs text-ink-500">
+                Nilai RAB {{ formatIDR(selectedProduct.revenue) }}
+                <span v-if="selectedProduct.goodsCost"> · modal {{ formatIDR(selectedProduct.goodsCost) }}</span>
               </p>
-              <p v-else class="text-xs text-ink-500">
-                HPP {{ formatIDR(selectedProduct.hpp) }} / unit · stok {{ formatNumber(selectedProduct.stockQuantity) }}
-              </p>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="label">Qty</label>
-              <input v-model.number="form.quantity" type="number" min="1" class="input-num" required />
-              <p
-                v-if="selectedProduct && form.quantity > (selectedProduct.stockQuantity || 0)"
-                class="text-xs text-amber-600 mt-1"
-              >
-                Qty melebihi stok ({{ formatNumber(selectedProduct.stockQuantity) }}). Penjualan tetap tercatat, stok bisa minus sampai produksi selesai.
+              <p v-else class="text-xs text-amber-600">
+                Proyek ini belum tertaut RAB — isi nilai penjualan manual.
               </p>
             </div>
-            <div>
-              <label class="label">Fee marketplace (%)</label>
-              <input v-model.number="form.marketplaceFeePercent" type="number" min="0" max="100" step="0.1" class="input-num" />
-            </div>
+            <p v-else-if="!sellableProducts.length" class="text-xs text-ink-500 mt-2">
+              Semua proyek sudah tercatat, atau belum ada proyek. Deal RAB dulu, lalu catat penjualannya di sini.
+            </p>
           </div>
 
           <div>
             <div class="flex items-end justify-between gap-2 mb-1">
-              <label class="label !mb-0">Harga jual / unit</label>
+              <label class="label !mb-0">Nilai penjualan</label>
               <button
-                v-if="selectedProduct?.hasRecipe"
+                v-if="selectedProduct?.hasRab"
                 type="button"
                 class="text-xs font-medium text-accent-600 hover:text-accent-700"
-                @click="applySuggestedPrice"
+                @click="form.salePricePerUnit = selectedProduct.revenue || 0"
               >
-                Pakai harga saran
+                Pakai nilai RAB
               </button>
             </div>
             <IdrInput v-model="form.salePricePerUnit" required />
@@ -568,7 +510,7 @@ async function remove(s) {
 
           <div>
             <label class="label">Catatan</label>
-            <input v-model="form.notes" class="input" placeholder="opsional — mis. no. pesanan marketplace" />
+            <input v-model="form.notes" class="input" placeholder="opsional" />
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -611,7 +553,7 @@ async function remove(s) {
                   class="input-num flex-1"
                 />
               </div>
-              <p class="text-xs text-ink-400 mt-1">Rp atau % dari nilai setelah fee marketplace.</p>
+              <p class="text-xs text-ink-400 mt-1">Rp atau % dari subtotal.</p>
             </div>
             <div v-if="form.paymentStatus === 'paid'" class="sm:col-span-2">
               <label class="label">Catatan pembayaran</label>
@@ -622,7 +564,6 @@ async function remove(s) {
               <select v-model="form.paymentMethod" class="input">
                 <option value="cash">Tunai</option>
                 <option value="transfer">Transfer</option>
-                <option value="marketplace">Cair marketplace</option>
                 <option value="other">Lainnya</option>
               </select>
             </div>
@@ -638,13 +579,25 @@ async function remove(s) {
           <div class="rounded-panel border border-ink-200 bg-ink-50 p-3 space-y-2 text-sm lg:sticky lg:top-2">
             <div class="panel-title">Ringkasan</div>
             <dl class="space-y-1.5">
+              <div v-if="preview.hasCost && preview.goodsSale" class="flex justify-between gap-2">
+                <dt class="text-ink-500">Barang</dt>
+                <dd class="font-mono">{{ formatIDR(preview.goodsSale) }}</dd>
+              </div>
+              <div v-if="preview.hasCost && preview.serviceSale" class="flex justify-between gap-2">
+                <dt class="text-ink-500">Jasa</dt>
+                <dd class="font-mono">{{ formatIDR(preview.serviceSale) }}</dd>
+              </div>
+              <div v-if="preview.hasCost" class="flex justify-between gap-2">
+                <dt class="text-ink-500">Nilai RAB</dt>
+                <dd class="font-mono">{{ formatIDR(preview.rabRevenue) }}</dd>
+              </div>
+              <div v-if="preview.hasCost && preview.goodsCost" class="flex justify-between gap-2">
+                <dt class="text-ink-500">Modal barang</dt>
+                <dd class="font-mono">{{ formatIDR(preview.goodsCost) }}</dd>
+              </div>
               <div class="flex justify-between gap-2">
                 <dt class="text-ink-500">Revenue kotor</dt>
                 <dd class="font-mono">{{ formatIDR(preview.gross) }}</dd>
-              </div>
-              <div class="flex justify-between gap-2">
-                <dt class="text-ink-500">Fee marketplace</dt>
-                <dd class="font-mono text-red-600">− {{ formatIDR(preview.fee) }}</dd>
               </div>
               <div v-if="preview.discount" class="flex justify-between gap-2">
                 <dt class="text-ink-500">
@@ -660,7 +613,7 @@ async function remove(s) {
             </dl>
             <div v-if="belowCost" class="flex gap-2 rounded bg-red-50 border border-red-200 p-2 text-xs text-red-700">
               <ExclamationTriangleIcon class="w-4 h-4 shrink-0" />
-              <span>Harga jual di bawah HPP + fee — transaksi ini rugi.</span>
+              <span>Nilai penjualan di bawah modal barang — transaksi ini rugi.</span>
             </div>
           </div>
         </div>
@@ -669,7 +622,7 @@ async function remove(s) {
           <p v-if="errorMsg" class="text-sm text-red-600">{{ errorMsg }}</p>
           <div class="flex justify-end gap-2">
             <button type="button" class="btn-secondary" @click="showForm = false"><XMarkIcon class="w-4 h-4" />Batal</button>
-            <button type="submit" class="btn-primary" :disabled="saving">
+            <button type="submit" class="btn-primary" :disabled="saving || !form.productId">
               <CheckIcon class="w-4 h-4" />{{ saving ? 'Menyimpan…' : 'Simpan Penjualan' }}
             </button>
           </div>
@@ -694,7 +647,7 @@ async function remove(s) {
             <div class="min-w-0 flex-1 space-y-0.5">
               <div class="font-medium break-words">
                 {{ payTarget.productName }}
-                <span v-if="payTarget.isCustom" class="badge bg-ink-100 text-ink-500 ml-1">custom</span>
+                <span v-if="payTarget.isCustom" class="badge bg-ink-100 text-ink-500 ml-1">RAB</span>
               </div>
               <div class="text-xs text-ink-500">
                 {{ formatDate(payTarget.date) }}
@@ -702,10 +655,7 @@ async function remove(s) {
               </div>
               <div v-if="payTarget.customerName" class="text-xs text-ink-500">{{ payTarget.customerName }}</div>
               <div class="flex flex-wrap items-center gap-1.5 pt-1">
-                <span class="badge bg-white border border-ink-200 text-ink-600">{{ channelLabel[payTarget.channel] }}</span>
-                <span class="text-xs font-mono text-ink-600">
-                  {{ payTarget.quantity }} × {{ formatIDR(payTarget.salePricePerUnit) }}
-                </span>
+                <span class="text-xs font-mono text-ink-600">{{ formatIDR(payTarget.salePricePerUnit) }}</span>
               </div>
             </div>
             <div class="text-right shrink-0">
@@ -720,7 +670,6 @@ async function remove(s) {
             <select v-model="payForm.paymentMethod" class="input" required>
               <option value="cash">Tunai</option>
               <option value="transfer">Transfer</option>
-              <option value="marketplace">Cair marketplace</option>
               <option value="other">Lainnya</option>
             </select>
           </div>
@@ -760,7 +709,7 @@ async function remove(s) {
                 class="input-num flex-1"
               />
             </div>
-            <p class="text-xs text-ink-400 mt-1">Rp atau % dari nilai setelah fee marketplace.</p>
+            <p class="text-xs text-ink-400 mt-1">Rp atau % dari subtotal.</p>
           </div>
           <div class="sm:col-span-2">
             <label class="label">Catatan pembayaran</label>
@@ -772,10 +721,6 @@ async function remove(s) {
           <div class="flex justify-between gap-2">
             <dt class="text-ink-500">Subtotal</dt>
             <dd class="font-mono">{{ formatIDR(payPreview.gross) }}</dd>
-          </div>
-          <div class="flex justify-between gap-2">
-            <dt class="text-ink-500">Fee marketplace</dt>
-            <dd class="font-mono text-red-600">− {{ formatIDR(payPreview.fee) }}</dd>
           </div>
           <div class="flex justify-between gap-2">
             <dt class="text-ink-500">

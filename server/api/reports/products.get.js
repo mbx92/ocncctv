@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => {
     const agg = perProduct.get(key) || {
       productId: s.productId,
       customOrderId: s.customOrderId || null,
-      productName: s.productName || (s.customOrderId ? 'Custom' : '(produk terhapus)'),
+      productName: s.productName || (s.customOrderId ? 'RAB' : '(proyek terhapus)'),
       hppPerUnit: s.hppPerUnit,
       units: 0,
       orders: 0,

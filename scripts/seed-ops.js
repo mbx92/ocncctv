@@ -5,7 +5,7 @@ import * as schema from '../server/db/schema.js'
 import { seedProductionsAndCustom } from './lib/seedProductions.js'
 
 const pool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL || 'postgres://mbx@localhost:5432/numa3d'
+  connectionString: process.env.DATABASE_URL || 'postgres://mbx@localhost:5432/ocn'
 })
 const db = drizzle(pool, { schema })
 

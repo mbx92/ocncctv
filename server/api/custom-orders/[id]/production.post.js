@@ -8,8 +8,8 @@ export default defineEventHandler(async (event) => {
   const db = useDb()
   const row = await db.transaction(async (tx) => {
     const [order] = await tx.select().from(schema.customOrders).where(eq(schema.customOrders.id, id))
-    if (!order) throw createError({ statusCode: 404, statusMessage: 'Pesanan custom tidak ditemukan' })
-    if (order.status === 'delivered' || order.status === 'cancelled') {
+    if (!order) throw createError({ statusCode: 404, statusMessage: 'RAB tidak ditemukan' })
+    if (order.status === 'delivered' || order.status === 'cancelled' || order.status === 'deal' || order.status === 'lost') {
       throw createError({ statusCode: 400, statusMessage: 'Pesanan ini tidak bisa diproduksi ulang' })
     }
     const [existing] = await tx
@@ -34,7 +34,7 @@ export default defineEventHandler(async (event) => {
     action: 'create',
     entity: 'production',
     entityId: row.id,
-    summary: `Buat ulang produksi custom order id ${id}`
+    summary: `Buat ulang produksi RAB id ${id}`
   })
   return row
 })

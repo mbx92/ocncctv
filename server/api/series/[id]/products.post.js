@@ -12,7 +12,7 @@ export default defineEventHandler(async (event) => {
   const ids = (Array.isArray(body.productIds) ? body.productIds : [body.productId])
     .map((n) => Number(n))
     .filter((n) => Number.isInteger(n) && n > 0)
-  if (!ids.length) throw createError({ statusCode: 400, statusMessage: 'Pilih minimal satu produk' })
+  if (!ids.length) throw createError({ statusCode: 400, statusMessage: 'Pilih minimal satu proyek' })
 
   const db = useDb()
   const seriesRows = await db.select({ id: schema.productSeries.id, name: schema.productSeries.name }).from(schema.productSeries).where(eq(schema.productSeries.id, id))
@@ -24,7 +24,7 @@ export default defineEventHandler(async (event) => {
     .where(inArray(schema.products.id, ids))
     .returning({ id: schema.products.id, name: schema.products.name })
 
-  if (!updated.length) throw createError({ statusCode: 404, statusMessage: 'Produk tidak ditemukan' })
+  if (!updated.length) throw createError({ statusCode: 404, statusMessage: 'Proyek tidak ditemukan' })
   await logAudit(event, {
     action: 'update',
     entity: 'product_series',

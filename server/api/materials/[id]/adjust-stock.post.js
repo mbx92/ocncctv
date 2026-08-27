@@ -1,26 +1,21 @@
-import { eq, sql } from 'drizzle-orm'
 import { useDb, schema } from '../../../db/index.js'
-import { requireAdmin } from '../../../utils/rbac.js'
 import { logAudit } from '../../../utils/audit.js'
+import { applyMaterialStockDelta } from '../../../utils/materialStock.js'
 
-// Penyesuaian stok manual: body { delta } (positif = masuk, negatif = keluar).
+// Pakai / koreksi stok: body { delta } (positif = masuk tanpa kas, negatif = dipakai).
 export default defineEventHandler(async (event) => {
-  requireAdmin(event)
   const id = Number(getRouterParam(event, 'id'))
   const body = await readBody(event)
   const delta = Number(body.delta) || 0
+  if (!delta) throw createError({ statusCode: 400, statusMessage: 'Qty perubahan wajib diisi' })
   const db = useDb()
-  const rows = await db
-    .update(schema.materials)
-    .set({ stockQuantity: sql`GREATEST(${schema.materials.stockQuantity} + ${delta}, 0)` })
-    .where(eq(schema.materials.id, id))
-    .returning()
-  if (!rows.length) throw createError({ statusCode: 404, statusMessage: 'Material tidak ditemukan' })
+  const row = await db.transaction(async (tx) => applyMaterialStockDelta(tx, schema, { id, delta }))
+  if (!row) throw createError({ statusCode: 404, statusMessage: 'Perlengkapan tidak ditemukan' })
   await logAudit(event, {
     action: 'update',
     entity: 'material',
     entityId: id,
-    summary: `Sesuaikan stok "${rows[0].name}": ${delta >= 0 ? '+' : ''}${delta} ${rows[0].unit}`
+    summary: `Stok "${row.name}": ${delta >= 0 ? '+' : ''}${delta} ${row.unit}`
   })
-  return rows[0]
+  return row
 })

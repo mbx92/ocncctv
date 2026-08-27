@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import { formatInvoiceDate, formatInvoiceIDR } from './invoice.js'
+import { formatQuoteQty } from './rabQuote.js'
 
 function logoPngBytes() {
   const candidates = [
@@ -46,7 +47,9 @@ function wrapParagraphs(font, text, size, maxWidth) {
 
 export async function buildInvoicePdf(invoice) {
   const doc = await PDFDocument.create()
-  const page = doc.addPage([595.28, 841.89]) // A4 portrait (210 × 297 mm)
+  const pageWidth = 595.28
+  const pageHeight = 841.89
+  let page = doc.addPage([pageWidth, pageHeight]) // A4 portrait (210 × 297 mm)
   const font = await doc.embedFont(StandardFonts.Helvetica)
   const fontBold = await doc.embedFont(StandardFonts.HelveticaBold)
   const ink = rgb(0.12, 0.14, 0.16)
@@ -68,7 +71,7 @@ export async function buildInvoicePdf(invoice) {
   }
 
   const textLeft = png ? left + 54 : left
-  page.drawText(String(invoice.business.name || 'Numa3D'), {
+  page.drawText(String(invoice.business.name || 'OCN'), {
     x: textLeft,
     y: y + 18,
     size: 14,
@@ -119,19 +122,6 @@ export async function buildInvoicePdf(invoice) {
   y -= 24
 
   page.drawText('KEPADA', { x: left, y, size: 8, font: fontBold, color: muted })
-  page.drawText('CHANNEL', {
-    x: right - font.widthOfTextAtSize('CHANNEL', 8),
-    y,
-    size: 8,
-    font: fontBold,
-    color: muted
-  })
-  y -= 14
-  page.drawText(String(invoice.customerName || '—'), { x: left, y, size: 11, font: fontBold, color: ink })
-  const ch = String(invoice.channelLabel || '')
-  page.drawText(ch, { x: right - font.widthOfTextAtSize(ch, 11), y, size: 11, font, color: ink })
-
-  y -= 20
   page.drawText('PEMBAYARAN', {
     x: right - fontBold.widthOfTextAtSize('PEMBAYARAN', 8),
     y,
@@ -140,6 +130,7 @@ export async function buildInvoicePdf(invoice) {
     color: muted
   })
   y -= 14
+  page.drawText(String(invoice.customerName || '—'), { x: left, y, size: 11, font: fontBold, color: ink })
   const payParts = [invoice.paymentStatusLabel, invoice.paymentMethodLabel].filter(Boolean)
   const payLine = String(payParts.join(' · ') || '—')
   page.drawText(payLine, {
@@ -162,35 +153,68 @@ export async function buildInvoicePdf(invoice) {
   }
 
   y -= 28
-  page.drawLine({ start: { x: left, y }, end: { x: right, y }, thickness: 1, color: line })
-  y -= 18
-  page.drawText('ITEM', { x: left, y, size: 8, font: fontBold, color: muted })
-  page.drawText('QTY', { x: 330, y, size: 8, font: fontBold, color: muted })
-  page.drawText('HARGA', { x: 390, y, size: 8, font: fontBold, color: muted })
-  page.drawText('JUMLAH', {
-    x: right - font.widthOfTextAtSize('JUMLAH', 8),
-    y,
-    size: 8,
-    font: fontBold,
-    color: muted
-  })
-  y -= 10
-  page.drawLine({ start: { x: left, y }, end: { x: right, y }, thickness: 0.5, color: line })
-  y -= 16
+  const bottom = 52
+  let continued = false
 
-  const itemName = invoice.item?.name + (invoice.isCustom ? ' · custom' : '')
-  const nameLines = wrapText(font, itemName, 10, 260)
-  for (const [i, row] of nameLines.entries()) {
-    page.drawText(row, { x: left, y: y - i * 12, size: 10, font, color: ink })
+  function newPage() {
+    page = doc.addPage([pageWidth, pageHeight])
+    y = 780
+    continued = true
   }
-  const qty = String(invoice.item?.quantity ?? '')
-  const price = formatInvoiceIDR(invoice.item?.unitPrice)
-  const amount = formatInvoiceIDR(invoice.item?.amount)
-  page.drawText(qty, { x: 330, y, size: 10, font, color: ink })
-  page.drawText(price, { x: 390, y, size: 10, font, color: ink })
-  page.drawText(amount, { x: right - font.widthOfTextAtSize(amount, 10), y, size: 10, font, color: ink })
 
-  y -= Math.max(nameLines.length, 1) * 12 + 18
+  function drawTableHeader() {
+    if (continued) {
+      const cont = `${invoice.invoiceNumber || 'Invoice'} (lanjutan)`
+      page.drawText(cont, { x: left, y, size: 9, font, color: muted })
+      y -= 18
+    }
+    page.drawLine({ start: { x: left, y }, end: { x: right, y }, thickness: 1, color: line })
+    y -= 18
+    page.drawText('ITEM', { x: left, y, size: 8, font: fontBold, color: muted })
+    page.drawText('QTY', { x: 318, y, size: 8, font: fontBold, color: muted })
+    page.drawText('HARGA', { x: 390, y, size: 8, font: fontBold, color: muted })
+    page.drawText('JUMLAH', {
+      x: right - font.widthOfTextAtSize('JUMLAH', 8),
+      y,
+      size: 8,
+      font: fontBold,
+      color: muted
+    })
+    y -= 10
+    page.drawLine({ start: { x: left, y }, end: { x: right, y }, thickness: 0.5, color: line })
+    y -= 16
+  }
+
+  function ensure(space) {
+    if (y < bottom + space) newPage()
+  }
+
+  drawTableHeader()
+
+  const items = invoice.items?.length ? invoice.items : invoice.item ? [invoice.item] : []
+  for (const item of items) {
+    const nameBits = [item.name]
+    if (item.code) nameBits.push(item.code)
+    if (item.lineType === 'service') nameBits.push('Jasa')
+    const nameLines = wrapText(font, nameBits.filter(Boolean).join(' · '), 10, 250)
+    const rowH = Math.max(nameLines.length, 1) * 12 + 8
+    if (y - rowH < bottom + 80) {
+      newPage()
+      drawTableHeader()
+    }
+    for (const [i, row] of nameLines.entries()) {
+      page.drawText(row, { x: left, y: y - i * 12, size: 10, font, color: ink })
+    }
+    const qty = item.unit ? formatQuoteQty(item) : String(item.quantity ?? '')
+    const price = formatInvoiceIDR(item.unitPrice)
+    const amount = formatInvoiceIDR(item.amount)
+    page.drawText(qty, { x: 318, y, size: 10, font, color: ink })
+    page.drawText(price, { x: 390, y, size: 10, font, color: ink })
+    page.drawText(amount, { x: right - font.widthOfTextAtSize(amount, 10), y, size: 10, font, color: ink })
+    y -= rowH
+  }
+
+  ensure(80)
   page.drawLine({ start: { x: 330, y }, end: { x: right, y }, thickness: 0.5, color: line })
   y -= 16
   const sub = formatInvoiceIDR(invoice.subtotal)

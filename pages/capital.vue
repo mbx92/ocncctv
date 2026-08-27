@@ -71,7 +71,10 @@ async function remove(t) {
 <template>
   <div class="space-y-4">
     <div class="flex items-center justify-between gap-2">
-      <h1 class="text-xl font-bold">Modal</h1>
+      <div>
+        <h1 class="text-xl font-bold">Modal Usaha</h1>
+        <p class="text-xs text-ink-500">Setoran kas dikurangi penarikan. Alat yang sudah dimiliki tampil terpisah sebagai aset, bukan kas.</p>
+      </div>
       <button v-if="isAdmin" class="btn-primary" @click="openAdd">
         <PlusIcon class="w-4 h-4" /><span class="hidden sm:inline">Catat Mutasi</span><span class="sm:hidden">Catat</span>
       </button>
@@ -80,7 +83,7 @@ async function remove(t) {
     <p v-if="!isAdmin" class="text-xs text-ink-500">Read-only — hanya admin yang bisa mengubah modal.</p>
 
     <!-- Ringkasan posisi modal -->
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3">
       <div class="panel p-3 sm:p-4">
         <div class="text-xs font-semibold uppercase tracking-wide text-ink-500">Total setoran</div>
         <div class="mt-1 font-mono text-lg sm:text-xl font-semibold text-teal-600">{{ formatIDR(summary.totalDeposit) }}</div>
@@ -90,13 +93,18 @@ async function remove(t) {
         <div class="mt-1 font-mono text-lg sm:text-xl font-semibold text-red-600">{{ formatIDR(summary.totalWithdrawal) }}</div>
       </div>
       <div class="panel p-3 sm:p-4">
-        <div class="text-xs font-semibold uppercase tracking-wide text-ink-500">Modal bersih</div>
+        <div class="text-xs font-semibold uppercase tracking-wide text-ink-500">Modal kas</div>
         <div
           class="mt-1 font-mono text-lg sm:text-xl font-semibold"
           :class="(summary.netCapital ?? 0) >= 0 ? 'text-ink-900' : 'text-red-600'"
         >
           {{ formatIDR(summary.netCapital) }}
         </div>
+      </div>
+      <div class="panel p-3 sm:p-4">
+        <div class="text-xs font-semibold uppercase tracking-wide text-ink-500">Aset peralatan</div>
+        <div class="mt-1 font-mono text-lg sm:text-xl font-semibold">{{ formatIDR(summary.equipmentAssets) }}</div>
+        <NuxtLink to="/machines" class="text-xs text-accent-600 hover:underline">Kelola</NuxtLink>
       </div>
       <div class="panel p-3 sm:p-4">
         <div class="text-xs font-semibold uppercase tracking-wide text-ink-500">Estimasi kas</div>
@@ -115,20 +123,16 @@ async function remove(t) {
       <table class="table-std">
         <tbody>
           <tr>
-            <td>Modal bersih (setoran − penarikan)</td>
+            <td>Modal kas</td>
             <td class="num">{{ formatIDR(summary.netCapital) }}</td>
           </tr>
           <tr>
-            <td class="pl-6 text-ink-500">+ Revenue bersih kumulatif (setelah fee marketplace)</td>
-            <td class="num text-teal-600">{{ formatIDR(summary.salesNetRevenue) }}</td>
+            <td class="pl-6 text-ink-500">+ Penjualan</td>
+            <td class="num text-teal-600">{{ formatIDR(summary.salesRevenue) }}</td>
           </tr>
           <tr>
-            <td class="pl-6 text-ink-500">− Total pengeluaran (termasuk beli mesin)</td>
+            <td class="pl-6 text-ink-500">− Pengeluaran (termasuk beli alat baru)</td>
             <td class="num text-red-600">{{ formatIDR(summary.totalExpenses) }}</td>
-          </tr>
-          <tr v-if="summary.machinePurchases">
-            <td class="pl-6 text-ink-500">− Pembelian mesin belum tercatat pengeluaran</td>
-            <td class="num text-red-600">{{ formatIDR(summary.machinePurchases) }}</td>
           </tr>
           <tr class="bg-ink-50 font-semibold">
             <td>Estimasi kas</td>
@@ -138,10 +142,11 @@ async function remove(t) {
           </tr>
         </tbody>
       </table>
-      <div class="p-3 text-xs text-ink-500 border-t border-ink-200">
-        Perkiraan kasar posisi kas: modal bersih + penjualan − pengeluaran.
-        Tambah mesin otomatis tercatat di Pengeluaran — jangan catat beli mesin dua kali.
-        Bukan laporan akuntansi penuh.
+      <div class="p-3 text-xs text-ink-500 border-t border-ink-200 space-y-1">
+        <p>Estimasi kas = modal kas + penjualan − pengeluaran. Beli peralatan baru memotong kas.</p>
+        <p>
+          Aset peralatan {{ formatIDR(summary.equipmentAssets) }} adalah alat yang sudah dimiliki — bukan kas, tidak dijumlah ke estimasi kas.
+        </p>
       </div>
     </div>
 
@@ -183,9 +188,9 @@ async function remove(t) {
           <span class="font-mono text-xs text-ink-500">{{ formatDate(t.date) }}</span>
         </div>
         <div v-if="t.notes" class="text-xs text-ink-400 break-words">{{ t.notes }}</div>
-        <div v-if="isAdmin" class="flex flex-wrap gap-1 pt-1">
-          <button class="btn-secondary" @click="openEdit(t)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
-          <button class="btn-danger" @click="remove(t)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+        <div v-if="isAdmin" class="btn-actions pt-1">
+          <button class="btn-action" @click="openEdit(t)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
+          <button class="btn-action-danger" @click="remove(t)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
         </div>
       </div>
       <p v-if="!total" class="panel p-6 text-center text-sm text-ink-500">Belum ada mutasi modal.</p>
@@ -229,8 +234,10 @@ async function remove(t) {
                 {{ t.type === 'deposit' ? '+' : '−' }}{{ formatIDR(t.amount) }}
               </td>
               <td v-if="isAdmin" class="whitespace-nowrap text-right">
-                <button class="btn-secondary" @click="openEdit(t)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
-                <button class="btn-danger ml-1" @click="remove(t)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+                <div class="btn-actions justify-end">
+                  <button class="btn-action" @click="openEdit(t)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
+                  <button class="btn-action-danger" @click="remove(t)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+                </div>
               </td>
               <td v-else></td>
             </tr>

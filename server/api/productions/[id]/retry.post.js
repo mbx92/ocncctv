@@ -34,8 +34,8 @@ export default defineEventHandler(async (event) => {
         .select({ status: schema.customOrders.status })
         .from(schema.customOrders)
         .where(eq(schema.customOrders.id, job.customOrderId))
-      if (order?.status === 'delivered' || order?.status === 'cancelled') {
-        throw createError({ statusCode: 400, statusMessage: 'Pesanan custom ini tidak bisa diproduksi ulang' })
+      if (order?.status === 'delivered' || order?.status === 'cancelled' || order?.status === 'deal' || order?.status === 'lost') {
+        throw createError({ statusCode: 400, statusMessage: 'RAB ini tidak bisa diproduksi ulang' })
       }
     }
     const note = [`Ulang ${failed} unit gagal dari produksi #${job.id}`, job.notes].filter(Boolean).join(' — ')

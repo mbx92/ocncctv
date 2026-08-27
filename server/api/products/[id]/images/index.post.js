@@ -10,7 +10,7 @@ export default defineEventHandler(async (event) => {
   const id = Number(getRouterParam(event, 'id'))
   const db = useDb()
   const [product] = await db.select().from(schema.products).where(eq(schema.products.id, id))
-  if (!product) throw createError({ statusCode: 404, statusMessage: 'Produk tidak ditemukan' })
+  if (!product) throw createError({ statusCode: 404, statusMessage: 'Proyek tidak ditemukan' })
 
   const uploaded = await uploadImages(event, `products/${id}/images`)
   const rows = await db.transaction(async (tx) => {
@@ -35,7 +35,7 @@ export default defineEventHandler(async (event) => {
     action: 'update',
     entity: 'product',
     entityId: id,
-    summary: `Tambah ${rows.length} foto produk "${product.name}"`
+    summary: `Tambah ${rows.length} foto proyek "${product.name}"`
   })
   return rows
 })

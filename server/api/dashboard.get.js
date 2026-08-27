@@ -3,8 +3,9 @@ import { useDb, schema } from '../db/index.js'
 import { loadSalesWithHpp, marginPercent } from '../utils/salesAggregate.js'
 import { localDateStr, monthStartStr } from '../utils/dates.js'
 import { isOperatingExpenseCategory } from '../utils/expensePl.js'
+import { capitalPosition } from '../utils/capitalPosition.js'
+import { normalizeProductStatus } from '../utils/projectStatus.js'
 
-const MATERIAL_LOW_STOCK = 200
 const PACKAGING_LOW_STOCK = 10
 const PRODUCT_LOW_STOCK = 3
 
@@ -28,7 +29,7 @@ function previousPeriod(now) {
 function plFrom(sales, expenses) {
   const grossRevenue = sales.reduce((a, s) => a + s.grossRevenue, 0)
   const netRevenue = sales.reduce((a, s) => a + s.netRevenue, 0)
-  const marketplaceFees = sales.reduce((a, s) => a + s.feeAmount, 0)
+  const discounts = sales.reduce((a, s) => a + (s.discountAmount || 0), 0)
   const cogs = sales.reduce((a, s) => a + s.totalHpp, 0)
   const grossProfit = netRevenue - cogs
   const materialPurchases = expenses.filter((e) => e.category === 'material').reduce((a, e) => a + e.amount, 0)
@@ -38,7 +39,7 @@ function plFrom(sales, expenses) {
     unitsSold: sales.reduce((a, s) => a + s.quantity, 0),
     orderCount: sales.length,
     grossRevenue,
-    marketplaceFees,
+    discounts,
     netRevenue,
     cogs,
     grossProfit,
@@ -101,16 +102,6 @@ export default defineEventHandler(async () => {
   const expensesByCategory = [...catMap.values()].sort((a, b) => b.amount - a.amount)
   const maxCat = Math.max(...expensesByCategory.map((c) => c.amount), 1)
 
-  const channelMap = new Map()
-  for (const s of sales) {
-    const agg = channelMap.get(s.channel) || { channel: s.channel, units: 0, netRevenue: 0, orders: 0 }
-    agg.units += s.quantity
-    agg.netRevenue += s.netRevenue
-    agg.orders += 1
-    channelMap.set(s.channel, agg)
-  }
-  const channels = [...channelMap.values()].sort((a, b) => b.netRevenue - a.netRevenue)
-
   const perProduct = new Map()
   for (const s of sales) {
     const agg = perProduct.get(s.productId) || {
@@ -135,7 +126,6 @@ export default defineEventHandler(async () => {
       date: s.date,
       productName: s.productName,
       quantity: s.quantity,
-      channel: s.channel,
       netRevenue: s.netRevenue
     }))
 
@@ -158,9 +148,18 @@ export default defineEventHandler(async () => {
     .from(schema.supplierPurchases)
     .where(and(gte(schema.supplierPurchases.date, monthStart), lte(schema.supplierPurchases.date, monthEnd)))
 
-  const [lowMaterials, lowPackaging, lowProducts, materialsCount, packagingCount, productCounts, seriesCount, machineCount, productionOpen, capitalRows, allSales, allExpenses, machinePrices] =
+  const [lowMaterials, lowPackaging, lowProducts, materialsCount, packagingCount, productCounts, seriesCount, machineCount, productionOpen, capitalRows, allSales, allExpenses, allMachines] =
     await Promise.all([
-      db.select().from(schema.materials).where(lt(schema.materials.stockQuantity, MATERIAL_LOW_STOCK)),
+      db
+        .select({
+          id: schema.materials.id,
+          name: schema.materials.name,
+          stockStatus: schema.materials.stockStatus,
+          stockQuantity: schema.materials.stockQuantity,
+          unit: schema.materials.unit
+        })
+        .from(schema.materials)
+        .where(inArray(schema.materials.stockStatus, ['low', 'empty'])),
       db.select().from(schema.packaging).where(lt(schema.packaging.stockQuantity, PACKAGING_LOW_STOCK)),
       db
         .select({
@@ -169,7 +168,7 @@ export default defineEventHandler(async () => {
           stockQuantity: schema.products.stockQuantity
         })
         .from(schema.products)
-        .where(and(eq(schema.products.status, 'active'), lt(schema.products.stockQuantity, PRODUCT_LOW_STOCK))),
+        .where(and(eq(schema.products.status, 'in_progress'), lt(schema.products.stockQuantity, PRODUCT_LOW_STOCK))),
       db.select({ c: count() }).from(schema.materials),
       db.select({ c: count() }).from(schema.packaging),
       db
@@ -187,29 +186,32 @@ export default defineEventHandler(async () => {
         .select({
           quantity: schema.sales.quantity,
           salePricePerUnit: schema.sales.salePricePerUnit,
-          marketplaceFeePercent: schema.sales.marketplaceFeePercent
+          discountAmount: schema.sales.discountAmount
         })
         .from(schema.sales),
-      db.select({ amount: schema.expenses.amount }).from(schema.expenses),
-      db.select({ price: schema.machines.purchasePrice, expenseId: schema.machines.expenseId }).from(schema.machines)
+      db.select({ amount: schema.expenses.amount, category: schema.expenses.category }).from(schema.expenses),
+      db
+        .select({
+          purchasePrice: schema.machines.purchasePrice,
+          acquisition: schema.machines.acquisition
+        })
+        .from(schema.machines)
     ])
 
-  const productsByStatus = { draft: 0, active: 0, rnd: 0, discontinued: 0 }
+  const productsByStatus = { waiting: 0, in_progress: 0, done: 0 }
   let productsTotal = 0
   for (const r of productCounts) {
-    productsByStatus[r.status] = r.c
+    const key = normalizeProductStatus(r.status)
+    productsByStatus[key] = (productsByStatus[key] || 0) + r.c
     productsTotal += r.c
   }
 
-  const totalDeposit = capitalRows.filter((r) => r.type === 'deposit').reduce((a, r) => a + r.amount, 0)
-  const totalWithdrawal = capitalRows.filter((r) => r.type === 'withdrawal').reduce((a, r) => a + r.amount, 0)
-  const netCapital = totalDeposit - totalWithdrawal
-  const salesNetAll = allSales.reduce(
-    (a, s) => a + Math.round(s.salePricePerUnit * (1 - (s.marketplaceFeePercent || 0) / 100)) * s.quantity,
-    0
-  )
-  const expensesAll = allExpenses.reduce((a, r) => a + r.amount, 0)
-  const unlinkedMachinePurchases = machinePrices.filter((r) => !r.expenseId).reduce((a, r) => a + r.price, 0)
+  const capital = capitalPosition({ capitalRows, salesRows: allSales, expenseRows: allExpenses, machineRows: allMachines })
+
+  lowMaterials.sort((a, b) => {
+    if (a.stockStatus === b.stockStatus) return String(a.name).localeCompare(String(b.name), 'id')
+    return a.stockStatus === 'empty' ? -1 : 1
+  })
 
   return {
     month: monthStart.slice(0, 7),
@@ -226,7 +228,6 @@ export default defineEventHandler(async () => {
       ...c,
       percent: Math.round((c.amount / maxCat) * 100)
     })),
-    channels,
     topProducts,
     recentSales,
     recentExpenses,
@@ -242,16 +243,19 @@ export default defineEventHandler(async () => {
       materials: materialsCount[0]?.c || 0,
       packaging: packagingCount[0]?.c || 0,
       products: productsTotal,
-      productsActive: productsByStatus.active,
-      productsRnd: productsByStatus.rnd,
-      productsDraft: productsByStatus.draft,
-      productsDiscontinued: productsByStatus.discontinued,
+      productsActive: productsByStatus.in_progress,
+      productsWaiting: productsByStatus.waiting,
+      productsDone: productsByStatus.done,
+      productsRnd: 0,
+      productsDraft: productsByStatus.waiting,
+      productsDiscontinued: productsByStatus.done,
       series: seriesCount[0]?.c || 0,
       machines: machineCount[0]?.c || 0
     },
     capital: {
-      netCapital,
-      estimatedCash: netCapital + salesNetAll - expensesAll - unlinkedMachinePurchases
+      netCapital: capital.netCapital,
+      estimatedCash: capital.estimatedCash,
+      equipmentAssets: capital.equipmentAssets
     }
   }
 })

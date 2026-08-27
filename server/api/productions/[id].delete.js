@@ -14,8 +14,8 @@ export default defineEventHandler(async (event) => {
         .select({ status: schema.customOrders.status })
         .from(schema.customOrders)
         .where(eq(schema.customOrders.id, existing.customOrderId))
-      if (order?.status === 'delivered') {
-        throw createError({ statusCode: 400, statusMessage: 'Produksi custom yang sudah diserahkan tidak bisa dihapus' })
+      if (order?.status === 'delivered' || order?.status === 'deal') {
+        throw createError({ statusCode: 400, statusMessage: 'Produksi RAB yang sudah diserahkan tidak bisa dihapus' })
       }
     }
     if (existing.stockApplied) await reverseProductionCompletion(tx, schema, existing)

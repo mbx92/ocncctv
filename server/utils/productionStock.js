@@ -71,7 +71,7 @@ async function applyCustomCompletion(tx, schema, job, sign) {
   const { good, printed, customOrderId } = ints(job)
   const [order] = await tx.select().from(schema.customOrders).where(eq(schema.customOrders.id, customOrderId))
   if (!order) {
-    throw createError({ statusCode: 400, statusMessage: 'Pesanan custom tidak ditemukan' })
+    throw createError({ statusCode: 400, statusMessage: 'Pesanan RAB tidak ditemukan' })
   }
   const matQty = (Number(order.materialQuantityUsed) || 0) * printed * sign
   await bumpStock(tx, schema.materials, order.materialId, -matQty)
@@ -92,7 +92,7 @@ export async function applyProductionCompletion(tx, schema, job) {
     return
   }
   if (!productId) {
-    throw createError({ statusCode: 400, statusMessage: 'Produk tidak valid' })
+    throw createError({ statusCode: 400, statusMessage: 'Proyek tidak valid' })
   }
   if (good > 0) {
     const [product] = await tx
@@ -101,7 +101,7 @@ export async function applyProductionCompletion(tx, schema, job) {
       .where(eq(schema.products.id, productId))
       .returning({ id: schema.products.id })
     if (!product) {
-      throw createError({ statusCode: 400, statusMessage: 'Produk tidak ditemukan, stok tidak diubah' })
+      throw createError({ statusCode: 400, statusMessage: 'Proyek tidak ditemukan, stok tidak diubah' })
     }
   }
 
@@ -180,10 +180,10 @@ export function parseProductionBody(body) {
     throw createError({ statusCode: 400, statusMessage: 'Tanggal wajib diisi' })
   }
   if (!productId && !customOrderId) {
-    throw createError({ statusCode: 400, statusMessage: 'Produk atau pesanan custom wajib diisi' })
+    throw createError({ statusCode: 400, statusMessage: 'Proyek atau RAB wajib diisi' })
   }
   if (productId && customOrderId) {
-    throw createError({ statusCode: 400, statusMessage: 'Produksi katalog dan custom tidak bisa digabung' })
+    throw createError({ statusCode: 400, statusMessage: 'Produksi proyek dan RAB tidak bisa digabung' })
   }
   const status = statuses.includes(body.status) ? body.status : 'queued'
   const planned = Math.max(Math.round(Number(body.quantityPlanned) || 1), 1)

@@ -12,7 +12,6 @@ const query = computed(() => {
 
 const { data: summary } = await useFetch('/api/reports/summary', { query, watch: [query] })
 const { data: byProduct } = await useFetch('/api/reports/products', { query, watch: [query] })
-const { data: byChannel } = await useFetch('/api/reports/channels', { query, watch: [query] })
 const { data: byExpense, error: expenseError } = await useFetch('/api/reports/expenses', {
   query,
   watch: [query]
@@ -22,8 +21,7 @@ const { data: expenseCategories } = await useFetch('/api/expense-categories')
 
 const tabs = [
   { key: 'summary', label: 'Laba Rugi' },
-  { key: 'products', label: 'Per Produk' },
-  { key: 'channels', label: 'Per Channel' },
+  { key: 'products', label: 'Per Proyek' },
   { key: 'expenses', label: 'Pengeluaran' },
   { key: 'monthly', label: 'Tren Bulanan' }
 ]
@@ -42,16 +40,6 @@ function setLast30() {
 }
 function setThisYear() {
   filters.value = { dateFrom: `${new Date().getFullYear()}-01-01`, dateTo: todayStr() }
-}
-
-const channelLabel = {
-  tokopedia: 'Tokopedia',
-  shopee: 'Shopee',
-  tiktok_shop: 'TikTok Shop',
-  instagram: 'Instagram',
-  whatsapp: 'WhatsApp',
-  direct: 'Langsung',
-  other: 'Lainnya'
 }
 
 function expenseCatName(key) {
@@ -148,16 +136,16 @@ function monthLabel(key) {
               <td>Revenue kotor</td>
               <td class="num">{{ formatIDR(summary?.grossRevenue) }}</td>
             </tr>
-            <tr>
-              <td class="pl-6 text-ink-500">− Fee marketplace</td>
-              <td class="num text-red-600">{{ formatIDR(summary?.marketplaceFees) }}</td>
+            <tr v-if="summary?.discounts">
+              <td class="pl-6 text-ink-500">− Diskon</td>
+              <td class="num text-red-600">{{ formatIDR(summary.discounts) }}</td>
             </tr>
             <tr class="bg-ink-50 font-medium">
               <td>Revenue bersih</td>
               <td class="num text-teal-600">{{ formatIDR(summary?.netRevenue) }}</td>
             </tr>
             <tr>
-              <td class="pl-6 text-ink-500">− HPP unit terjual</td>
+              <td class="pl-6 text-ink-500">− Modal barang</td>
               <td class="num text-red-600">{{ formatIDR(summary?.cogs) }}</td>
             </tr>
             <tr class="bg-ink-50 font-medium">
@@ -178,33 +166,32 @@ function monthLabel(key) {
         </table>
         <div class="p-3 space-y-2 border-t border-ink-200 text-xs text-ink-500">
           <p>
-            Pembelian material periode ini <span class="font-mono">{{ formatIDR(summary?.materialPurchases) }}</span>
-            tidak dikurangkan dari laba karena biaya material sudah termasuk dalam HPP per unit yang terjual —
-            mengurangkan keduanya akan menghitung biaya material dua kali.
+            Pembelian perlengkapan periode ini <span class="font-mono">{{ formatIDR(summary?.materialPurchases) }}</span>
+            dipotong dari laba dan estimasi kas (bukan HPP kamera).
           </p>
           <p>
-            Pembelian mesin <span class="font-mono">{{ formatIDR(summary?.machinePurchases) }}</span>
-            juga tidak dikurangkan dari laba (aset; masuk HPP lewat depresiasi). Tetap terhitung di kas keluar.
+            Pembelian peralatan <span class="font-mono">{{ formatIDR(summary?.machinePurchases) }}</span>
+            tidak dikurangkan dari laba (belanja aset). Tetap memotong estimasi kas.
           </p>
           <p>
-            Total kas keluar periode ini (pembelian material + biaya operasional):
+            Total kas keluar periode ini (perlengkapan + operasional + aset):
             <span class="font-mono font-semibold text-ink-700">{{ formatIDR(summary?.totalCashOut) }}</span>
           </p>
         </div>
       </div>
     </div>
 
-    <!-- Per produk -->
+    <!-- Per proyek -->
     <div v-else-if="tab === 'products'" class="panel">
       <div class="overflow-x-auto">
         <table class="table-std min-w-[52rem]">
           <thead>
             <tr>
-              <th>Produk</th>
-              <th class="text-right">Unit</th>
-              <th class="text-right">Harga rata²</th>
+              <th>Proyek</th>
+              <th class="text-right">Transaksi</th>
+              <th class="text-right">Nilai rata²</th>
               <th class="text-right">Revenue bersih</th>
-              <th class="text-right">Total HPP</th>
+              <th class="text-right">Modal</th>
               <th class="text-right">Margin bersih</th>
               <th class="text-right">Margin %</th>
             </tr>
@@ -212,10 +199,20 @@ function monthLabel(key) {
           <tbody>
             <tr v-for="r in productPager.paged.value" :key="r.productId">
               <td class="font-medium">
-                <NuxtLink :to="`/products/${r.productId}`" class="hover:text-accent-600">{{ r.productName }}</NuxtLink>
-                <div class="text-xs text-ink-400">{{ r.orders }} transaksi · HPP {{ formatIDR(r.hppPerUnit) }}/unit</div>
+                <NuxtLink
+                  v-if="r.customOrderId"
+                  :to="`/rab/${r.customOrderId}`"
+                  class="hover:text-accent-600"
+                >{{ r.productName }}</NuxtLink>
+                <NuxtLink
+                  v-else-if="r.productId"
+                  :to="`/projects/${r.productId}`"
+                  class="hover:text-accent-600"
+                >{{ r.productName }}</NuxtLink>
+                <span v-else>{{ r.productName }}</span>
+                <div class="text-xs text-ink-400">{{ r.orders }} transaksi · modal {{ formatIDR(r.totalHpp) }}</div>
               </td>
-              <td class="num">{{ formatNumber(r.units) }}</td>
+              <td class="num">{{ formatNumber(r.orders) }}</td>
               <td class="num">{{ formatIDR(r.avgSalePrice) }}</td>
               <td class="num">{{ formatIDR(r.netRevenue) }}</td>
               <td class="num">{{ formatIDR(r.totalHpp) }}</td>
@@ -236,37 +233,6 @@ function monthLabel(key) {
         :range-start="productPager.rangeStart.value"
         :range-end="productPager.rangeEnd.value"
       />
-    </div>
-
-    <!-- Per channel -->
-    <div v-else-if="tab === 'channels'" class="panel overflow-x-auto">
-      <table class="table-std min-w-[44rem]">
-        <thead>
-          <tr>
-            <th>Channel</th>
-            <th class="text-right">Transaksi</th>
-            <th class="text-right">Unit</th>
-            <th class="text-right">Nilai rata²</th>
-            <th class="text-right">Fee</th>
-            <th class="text-right">Margin bersih</th>
-            <th class="text-right">Margin %</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="c in byChannel" :key="c.channel">
-            <td class="font-medium">{{ channelLabel[c.channel] || c.channel }}</td>
-            <td class="num">{{ c.orders }}</td>
-            <td class="num">{{ formatNumber(c.units) }}</td>
-            <td class="num">{{ formatIDR(c.avgOrderValue) }}</td>
-            <td class="num text-red-600">{{ formatIDR(c.feeAmount) }}</td>
-            <td class="num" :class="c.netMargin >= 0 ? 'text-green-600' : 'text-red-600'">{{ formatIDR(c.netMargin) }}</td>
-            <td class="num" :class="c.netMargin >= 0 ? 'text-green-600' : 'text-red-600'">{{ c.netMarginPercent }}%</td>
-          </tr>
-          <tr v-if="!byChannel?.length">
-            <td colspan="7" class="text-center text-ink-500 py-6">Tidak ada penjualan pada rentang ini.</td>
-          </tr>
-        </tbody>
-      </table>
     </div>
 
     <!-- Pengeluaran per kategori -->
@@ -371,7 +337,7 @@ function monthLabel(key) {
               <th>Bulan</th>
               <th class="text-right">Unit</th>
               <th class="text-right">Revenue bersih</th>
-              <th class="text-right">HPP</th>
+              <th class="text-right">Modal</th>
               <th class="text-right">Operasional</th>
               <th class="text-right">Laba bersih</th>
             </tr>

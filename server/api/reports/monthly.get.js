@@ -5,8 +5,7 @@ import { isOperatingExpenseCategory } from '../../utils/expensePl.js'
 import { monthKey } from '../../utils/dates.js'
 
 // Tren N bulan terakhir (default 12): revenue bersih, HPP, pengeluaran
-// operasional, dan laba bersih per bulan. Konsisten dengan /reports/summary,
-// pembelian material tidak dikurangkan (sudah terhitung di HPP).
+// operasional (termasuk perlengkapan), dan laba bersih per bulan.
 export default defineEventHandler(async (event) => {
   const months = Math.min(Math.max(Number(getQuery(event).months) || 12, 1), 36)
   const now = new Date()
@@ -51,7 +50,7 @@ export default defineEventHandler(async (event) => {
     if (!b) continue
     const amount = Number(e.amount) || 0
     if (e.category === 'material') b.materialPurchases += amount
-    else if (isOperatingExpenseCategory(e.category)) b.operatingExpenses += amount
+    if (isOperatingExpenseCategory(e.category)) b.operatingExpenses += amount
   }
 
   return [...buckets.values()].map((b) => {

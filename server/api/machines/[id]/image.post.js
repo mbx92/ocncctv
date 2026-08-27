@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
   const id = Number(getRouterParam(event, 'id'))
   const db = useDb()
   const existing = await db.select().from(schema.machines).where(eq(schema.machines.id, id))
-  if (!existing.length) throw createError({ statusCode: 404, statusMessage: 'Mesin tidak ditemukan' })
+  if (!existing.length) throw createError({ statusCode: 404, statusMessage: 'Peralatan tidak ditemukan' })
 
   const { objectKey } = await uploadImage(event, `machines/${id}`)
   await removeImageQuietly(existing[0].imageKey)

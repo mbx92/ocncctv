@@ -19,8 +19,8 @@ export default defineNitroPlugin(async () => {
       passwordHash,
       role: 'admin'
     })
-    console.log(`[numa3d] Akun admin awal dibuat dari .env: ${config.adminUsername}`)
+    console.log(`[OCN] Akun admin awal dibuat dari .env: ${config.adminUsername}`)
   } catch (e) {
-    console.error('[numa3d] Gagal bootstrap akun admin awal:', e.message)
+    console.error('[OCN] Gagal bootstrap akun admin awal:', e.message)
   }
 })

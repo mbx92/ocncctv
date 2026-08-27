@@ -6,7 +6,7 @@ export default defineEventHandler(async (event) => {
   const id = Number(getRouterParam(event, 'id'))
   const db = useDb()
   const [row] = await db.select().from(schema.machines).where(eq(schema.machines.id, id))
-  if (!row) throw createError({ statusCode: 404, statusMessage: 'Mesin tidak ditemukan' })
+  if (!row) throw createError({ statusCode: 404, statusMessage: 'Peralatan tidak ditemukan' })
   if (!row.tuyaIp || !row.tuyaDeviceId || !row.tuyaLocalKey) {
     throw createError({ statusCode: 400, statusMessage: 'Mesin ini belum dikaitkan ke plug Tuya' })
   }

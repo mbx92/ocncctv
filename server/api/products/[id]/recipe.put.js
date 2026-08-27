@@ -44,6 +44,6 @@ export default defineEventHandler(async (event) => {
     }
   })
 
-  await logAudit(event, { action: 'update', entity: 'product_recipe', entityId: id, summary: `Ubah recipe & HPP produk id ${id}` })
+  await logAudit(event, { action: 'update', entity: 'product_recipe', entityId: id, summary: `Ubah recipe & HPP proyek id ${id}` })
   return { ok: true }
 })

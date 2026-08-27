@@ -10,7 +10,7 @@ export default defineEventHandler(async (event) => {
   const db = useDb()
   const row = await db.transaction(async (tx) => {
     const [order] = await tx.select().from(schema.customOrders).where(eq(schema.customOrders.id, id))
-    if (!order) throw createError({ statusCode: 404, statusMessage: 'Pesanan custom tidak ditemukan' })
+    if (!order) throw createError({ statusCode: 404, statusMessage: 'RAB tidak ditemukan' })
     if (order.status === 'delivered') {
       throw createError({ statusCode: 400, statusMessage: 'Pesanan ini sudah diserahkan' })
     }
@@ -49,11 +49,8 @@ export default defineEventHandler(async (event) => {
         quantity: qty,
         salePricePerUnit: price,
         channel: order.channel,
-        marketplaceFeePercent:
-          body.marketplaceFeePercent !== null && body.marketplaceFeePercent !== undefined && body.marketplaceFeePercent !== ''
-            ? Number(body.marketplaceFeePercent)
-            : null,
-        notes: body.notes || `Custom · ${order.customerName} · ${order.title}`,
+        marketplaceFeePercent: 0,
+        notes: body.notes || `RAB · ${order.customerName} · ${order.title}`,
         customerName: order.customerName,
         invoiceNumber,
         ...payment
@@ -66,7 +63,7 @@ export default defineEventHandler(async (event) => {
     action: 'create',
     entity: 'sale',
     entityId: row.id,
-    summary: `Serah terima custom order id ${id}`
+    summary: `Serah terima RAB id ${id}`
   })
   return row
 })

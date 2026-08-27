@@ -3,7 +3,7 @@ import { CheckIcon, ArrowPathIcon } from '@heroicons/vue/24/outline'
 
 const { data: settings, refresh } = await useFetch('/api/settings')
 const form = ref({
-  invoiceBusinessName: 'Numa3D',
+  invoiceBusinessName: 'OCN',
   invoiceAddress: '',
   invoicePhone: '',
   invoiceFooter: '',
@@ -99,7 +99,7 @@ watch(
         <p class="text-xs text-ink-500">Identitas usaha dipakai di invoice dan tampilan internal.</p>
         <div>
           <label class="label">Nama usaha</label>
-          <input v-model="form.invoiceBusinessName" class="input" :disabled="!isAdmin" placeholder="Numa3D" />
+          <input v-model="form.invoiceBusinessName" class="input" :disabled="!isAdmin" placeholder="OCN" />
         </div>
         <div>
           <label class="label">Alamat</label>
@@ -122,9 +122,9 @@ watch(
             class="input min-h-[7rem]"
             rows="5"
             :disabled="!isAdmin"
-            placeholder="Terima kasih telah berbelanja.&#10;BCA 1234567890 a.n. Numa3D"
+            placeholder="Terima kasih telah berbelanja.&#10;BCA 1234567890 a.n. OCN"
           ></textarea>
-          <p class="text-xs text-ink-500 mt-1">Bisa beberapa baris — rekening, QRIS, atau catatan lain. Tampil di bawah total invoice.</p>
+          <p class="text-xs text-ink-500 mt-1">Bisa beberapa baris — rekening, QRIS, atau catatan lain. Tampil di bawah total invoice dan penawaran RAB.</p>
         </div>
         <div>
           <label class="label">Umur tautan bagikan (hari)</label>
@@ -137,11 +137,11 @@ watch(
             :disabled="!isAdmin"
           />
           <p class="text-xs text-ink-500 mt-1">
-            Tautan publik dari tombol Bagikan berlaku selama ini (1–365 hari). Tautan yang sudah dibuat tidak berubah umurnya.
+            Tautan publik invoice dan penawaran RAB dari tombol Bagikan berlaku selama ini (1–365 hari). Tautan yang sudah dibuat tidak berubah umurnya.
           </p>
         </div>
         <div class="rounded-panel border border-ink-200 bg-ink-50 p-3 text-sm space-y-1">
-          <div class="font-semibold">{{ form.invoiceBusinessName || 'Numa3D' }}</div>
+          <div class="font-semibold">{{ form.invoiceBusinessName || 'OCN' }}</div>
           <div v-if="form.invoiceAddress" class="text-ink-600 whitespace-pre-line text-xs">{{ form.invoiceAddress }}</div>
           <div v-if="form.invoicePhone" class="text-ink-600 text-xs">{{ form.invoicePhone }}</div>
           <div class="text-ink-500 text-xs pt-2 whitespace-pre-line">{{ form.invoiceFooter || 'Terima kasih telah berbelanja.' }}</div>

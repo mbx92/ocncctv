@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
   const id = Number(getRouterParam(event, 'id'))
   const db = useDb()
   const existing = await db.select().from(schema.packaging).where(eq(schema.packaging.id, id))
-  if (!existing.length) throw createError({ statusCode: 404, statusMessage: 'Packaging tidak ditemukan' })
+  if (!existing.length) throw createError({ statusCode: 404, statusMessage: 'Produk tidak ditemukan' })
 
   const { objectKey } = await uploadImage(event, `packaging/${id}`)
   await removeImageQuietly(existing[0].imageKey)
@@ -19,6 +19,6 @@ export default defineEventHandler(async (event) => {
     .set({ imageKey: objectKey })
     .where(eq(schema.packaging.id, id))
     .returning()
-  await logAudit(event, { action: 'update', entity: 'packaging', entityId: id, summary: `Ubah gambar packaging "${rows[0].name}"` })
+  await logAudit(event, { action: 'update', entity: 'packaging', entityId: id, summary: `Ubah gambar produk "${rows[0].name}"` })
   return rows[0]
 })

@@ -106,8 +106,10 @@ async function remove(e) {
       </button>
     </div>
     <p class="text-xs text-ink-500">
-      Pembelian material/packaging ke supplier sebaiknya dicatat di menu <NuxtLink to="/purchases" class="text-accent-600 hover:underline">Pembelian</NuxtLink>
-      agar stok ikut bertambah otomatis. Halaman ini untuk pengeluaran lain (listrik, alat, R&amp;D).
+      Pembelian perlengkapan ke toko sebaiknya dicatat lewat tombol <strong>Beli</strong> di
+      <NuxtLink to="/materials" class="text-accent-600 hover:underline">Perlengkapan</NuxtLink>
+      atau menu <NuxtLink to="/purchases" class="text-accent-600 hover:underline">Pembelian</NuxtLink>
+      agar stok dan kas ikut. Halaman ini untuk pengeluaran lain (listrik, bensin, R&amp;D).
     </p>
 
     <!-- Filter -->
@@ -121,7 +123,7 @@ async function remove(e) {
           </select>
         </div>
         <div class="min-w-0">
-          <label class="label">Produk</label>
+          <label class="label">Proyek</label>
           <select v-model="filters.productId" class="input w-full min-w-0">
             <option value="">Semua</option>
             <option v-for="p in products" :key="p.id" :value="p.id">{{ p.name }}</option>
@@ -157,10 +159,10 @@ async function remove(e) {
           <span class="font-mono text-xs text-ink-500">{{ formatDate(e.date) }}</span>
         </div>
         <div v-if="e.productName" class="text-xs text-ink-400">Item: {{ e.productName }}</div>
-        <p v-if="e.fromMachine" class="text-xs text-ink-400">Dari halaman Mesin — ubah di sana.</p>
-        <div v-if="!e.fromMachine" class="flex flex-wrap gap-1 pt-1">
-          <button class="btn-secondary" @click="openEdit(e)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
-          <button class="btn-danger" @click="remove(e)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+        <p v-if="e.fromMachine" class="text-xs text-ink-400">Dari halaman Peralatan — ubah di sana.</p>
+        <div v-if="!e.fromMachine" class="btn-actions pt-1">
+          <button class="btn-action" @click="openEdit(e)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
+          <button class="btn-action-danger" @click="remove(e)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
         </div>
       </div>
       <p v-if="!total" class="panel p-6 text-center text-sm text-ink-500">Tidak ada pengeluaran.</p>
@@ -198,11 +200,13 @@ async function remove(e) {
               <td class="num">{{ formatIDR(e.amount) }}</td>
               <td class="whitespace-nowrap text-right">
                 <template v-if="e.fromMachine">
-                  <span class="text-xs text-ink-400">Dari Mesin</span>
+                  <span class="text-xs text-ink-400">Dari Peralatan</span>
                 </template>
                 <template v-else>
-                  <button class="btn-secondary" @click="openEdit(e)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
-                  <button class="btn-danger ml-1" @click="remove(e)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+                  <div class="btn-actions justify-end">
+                    <button class="btn-action" @click="openEdit(e)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
+                    <button class="btn-action-danger" @click="remove(e)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+                  </div>
                 </template>
               </td>
             </tr>
@@ -258,12 +262,12 @@ async function remove(e) {
             <IdrInput v-model="form.amount" required />
           </div>
           <div>
-            <label class="label">Produk terkait (opsional)</label>
+            <label class="label">Proyek terkait (opsional)</label>
             <select v-model="form.relatedProductId" class="input">
               <option value="">—</option>
               <option v-for="p in products" :key="p.id" :value="p.id">{{ p.name }}</option>
             </select>
-            <p class="text-xs text-ink-400 mt-1">Untuk R&amp;D / alokasi ke SKU katalog. Pembelian supplier menampilkan barang yang dibeli.</p>
+            <p class="text-xs text-ink-400 mt-1">Untuk R&amp;D / alokasi ke proyek. Pembelian supplier menampilkan barang yang dibeli.</p>
           </div>
         </div>
         <p v-if="errorMsg" class="text-sm text-red-600">{{ errorMsg }}</p>
@@ -279,7 +283,7 @@ async function remove(e) {
         <form class="space-y-3" @submit.prevent="saveCategory">
           <div>
             <label class="label">Nama kategori baru</label>
-            <input v-model="categoryForm.name" class="input" required placeholder="Packaging / Iklan / Ongkir" />
+            <input v-model="categoryForm.name" class="input" required placeholder="Produk / Iklan / Ongkir" />
           </div>
           <p v-if="categoryError" class="text-sm text-red-600">{{ categoryError }}</p>
           <div class="flex justify-end">
@@ -297,7 +301,7 @@ async function remove(e) {
               <button
                 v-if="!c.isSystem"
                 type="button"
-                class="btn-danger ml-auto"
+                class="btn-action-danger ml-auto"
                 @click="removeCategory(c)"
               >
                 <TrashIcon class="w-3.5 h-3.5" />

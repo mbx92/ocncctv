@@ -56,7 +56,7 @@ try {
       .filter(Boolean)
     const hash = createHash('sha256').update(query).digest('hex')
 
-    console.log(`[numa3d] Migrasi ${entry.tag}…`)
+    console.log(`[OCN] Migrasi ${entry.tag}…`)
     await client.query('BEGIN')
     try {
       for (const stmt of statements) {
@@ -73,9 +73,9 @@ try {
     }
   }
 
-  console.log('[numa3d] Migrasi database selesai')
+  console.log('[OCN] Migrasi database selesai')
 } catch (e) {
-  console.error('[numa3d] Migrasi gagal:', e.message || e)
+  console.error('[OCN] Migrasi gagal:', e.message || e)
   process.exitCode = 1
 } finally {
   client.release()

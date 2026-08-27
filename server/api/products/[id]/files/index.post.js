@@ -10,7 +10,14 @@ const ALLOWED_EXT = {
   obj: 'model/obj',
   '3mf': 'model/3mf',
   glb: 'model/gltf-binary',
-  gltf: 'model/gltf+json'
+  gltf: 'model/gltf+json',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+  gif: 'image/gif',
+  pdf: 'application/pdf',
+  zip: 'application/zip'
 }
 const MAX_SIZE = 100 * 1024 * 1024 // 100 MB
 
@@ -23,7 +30,7 @@ export default defineEventHandler(async (event) => {
     .from(schema.products)
     .where(eq(schema.products.id, productId))
   if (!products.length) {
-    throw createError({ statusCode: 404, statusMessage: 'Produk tidak ditemukan' })
+    throw createError({ statusCode: 404, statusMessage: 'Proyek tidak ditemukan' })
   }
 
   const parts = await readMultipartFormData(event)
@@ -34,7 +41,7 @@ export default defineEventHandler(async (event) => {
   if (!ALLOWED_EXT[ext]) {
     throw createError({
       statusCode: 400,
-      statusMessage: `Format .${ext} tidak didukung. Gunakan: ${Object.keys(ALLOWED_EXT).map((e) => '.' + e).join(', ')}`
+      statusMessage: `Format .${ext} tidak didukung. Gunakan file 3D, gambar, PDF, atau ZIP.`
     })
   }
   if (file.data.length > MAX_SIZE) {
@@ -63,7 +70,7 @@ export default defineEventHandler(async (event) => {
     action: 'create',
     entity: 'product_file',
     entityId: rows[0].id,
-    summary: `Upload file 3D "${rows[0].filename}" ke produk id ${productId}`
+    summary: `Upload file "${rows[0].filename}" ke proyek id ${productId}`
   })
   return rows[0]
 })

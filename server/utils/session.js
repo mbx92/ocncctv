@@ -1,6 +1,6 @@
 import crypto from 'node:crypto'
 
-export const SESSION_COOKIE = 'numa3d_session'
+export const SESSION_COOKIE = 'ocn_session'
 export const SESSION_MAX_AGE = 60 * 60 * 24 * 30 // 30 hari
 
 function sign(value, secret) {

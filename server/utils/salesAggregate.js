@@ -1,9 +1,37 @@
 import { and, gte, lte, eq, sql } from 'drizzle-orm'
 import { useDb, schema } from '../db/index.js'
-import { getHppForProducts } from './productHpp.js'
 import { loadCustomOrderHppMap } from './customOrders.js'
+import { loadProjectFinanceMap } from './projectRevenue.js'
 import { toDateStr } from './dates.js'
 import { saleMoney } from './salePayment.js'
+
+export async function attachSaleCogs(rows) {
+  const db = useDb()
+  const financeMap = await loadProjectFinanceMap(
+    db,
+    schema,
+    rows.map((r) => r.productId)
+  )
+  const fallbackIds = rows
+    .filter((r) => r.customOrderId && !financeMap.get(r.productId)?.rab)
+    .map((r) => r.customOrderId)
+  const customHpp = await loadCustomOrderHppMap(fallbackIds)
+
+  return rows.map((r) => {
+    const finance = r.productId ? financeMap.get(r.productId) : null
+    let totalHpp = 0
+    if (finance?.rab) totalHpp = finance.summary?.goodsCost ?? 0
+    else if (r.customOrderId) totalHpp = customHpp.get(r.customOrderId)?.total ?? 0
+    const qty = r.quantity || 0
+    const hppPerUnit = qty ? Math.round(totalHpp / qty) : totalHpp
+    return {
+      ...r,
+      hppPerUnit,
+      totalHpp,
+      netMargin: (r.netRevenue ?? 0) - totalHpp
+    }
+  })
+}
 
 export async function loadSalesWithHpp({ dateFrom, dateTo } = {}) {
   const db = useDb()
@@ -19,7 +47,7 @@ export async function loadSalesWithHpp({ dateFrom, dateTo } = {}) {
       date: schema.sales.date,
       productId: schema.sales.productId,
       customOrderId: schema.sales.customOrderId,
-      productName: sql`coalesce(${schema.products.name}, 'Custom · ' || ${schema.customOrders.customerName})`.as(
+      productName: sql`coalesce(${schema.products.name}, 'RAB · ' || ${schema.customOrders.customerName})`.as(
         'productName'
       ),
       quantity: schema.sales.quantity,
@@ -33,30 +61,21 @@ export async function loadSalesWithHpp({ dateFrom, dateTo } = {}) {
     .leftJoin(schema.customOrders, eq(schema.sales.customOrderId, schema.customOrders.id))
     .where(conds.length ? and(...conds) : undefined)
 
-  const hppMap = await getHppForProducts([...new Set(rows.map((r) => r.productId))])
-  const customHpp = await loadCustomOrderHppMap(rows.map((r) => r.customOrderId))
-
-  return rows.map((r) => {
-    const money = saleMoney(r)
-    const hppPerUnit = r.customOrderId
-      ? customHpp.get(r.customOrderId)?.total ?? 0
-      : hppMap.get(r.productId)?.total ?? 0
-    const netPricePerUnit = r.quantity ? Math.round(money.net / r.quantity) : 0
-    const totalHpp = hppPerUnit * r.quantity
-    return {
-      ...r,
-      date: toDateStr(r.date) || r.date,
-      isCustom: !!r.customOrderId,
-      netPricePerUnit,
-      hppPerUnit,
-      grossRevenue: money.gross,
-      netRevenue: money.net,
-      totalHpp,
-      feeAmount: money.fee,
-      discountAmount: money.discount,
-      netMargin: money.net - totalHpp
-    }
-  })
+  return attachSaleCogs(
+    rows.map((r) => {
+      const money = saleMoney(r)
+      return {
+        ...r,
+        date: toDateStr(r.date) || r.date,
+        isCustom: !!r.customOrderId,
+        netPricePerUnit: r.quantity ? Math.round(money.net / r.quantity) : 0,
+        grossRevenue: money.gross,
+        netRevenue: money.net,
+        feeAmount: money.fee,
+        discountAmount: money.discount
+      }
+    })
+  )
 }
 
 export function marginPercent(margin, revenue) {

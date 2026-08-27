@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
     action: 'update',
     entity: 'product',
     entityId: id,
-    summary: `Hapus foto galeri produk id ${id}`
+    summary: `Hapus foto galeri proyek id ${id}`
   })
   return { ok: true }
 })

@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
     .set({ seriesId: null })
     .where(and(eq(schema.products.id, productId), eq(schema.products.seriesId, seriesId)))
     .returning({ id: schema.products.id, name: schema.products.name })
-  if (!rows.length) throw createError({ statusCode: 404, statusMessage: 'Produk tidak ada di series ini' })
+  if (!rows.length) throw createError({ statusCode: 404, statusMessage: 'Proyek tidak ada di series ini' })
   await logAudit(event, {
     action: 'update',
     entity: 'product_series',

@@ -1,5 +1,5 @@
 import { getSettings } from '../../../utils/settings.js'
-import { ensureSaleInvoiceNumber, loadSaleInvoiceRow, toInvoicePayload } from '../../../utils/invoice.js'
+import { ensureSaleInvoiceNumber, loadSaleInvoiceRow, buildInvoicePayload } from '../../../utils/invoice.js'
 import { buildInvoicePdf, invoicePdfFilename } from '../../../utils/invoicePdf.js'
 import { useDb, schema } from '../../../db/index.js'
 
@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
     return { ...row, invoiceNumber: ensured.invoiceNumber }
   })
   const settings = await getSettings()
-  const invoice = toInvoicePayload(payload, settings)
+  const invoice = await buildInvoicePayload(db, schema, payload, settings)
   const bytes = await buildInvoicePdf(invoice)
   setResponseHeaders(event, {
     'Content-Type': 'application/pdf',

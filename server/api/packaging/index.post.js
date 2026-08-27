@@ -17,6 +17,6 @@ export default defineEventHandler(async (event) => {
       supplier: body.supplier || null
     })
     .returning()
-  await logAudit(event, { action: 'create', entity: 'packaging', entityId: rows[0].id, summary: `Tambah packaging "${rows[0].name}"` })
+  await logAudit(event, { action: 'create', entity: 'packaging', entityId: rows[0].id, summary: `Tambah produk "${rows[0].name}"` })
   return rows[0]
 })

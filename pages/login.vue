@@ -26,8 +26,8 @@ async function submit() {
   <div class="min-h-screen flex items-center justify-center bg-ink-900 p-4 pt-safe pb-safe">
     <div class="panel w-full max-w-sm">
       <div class="px-6 pt-6 flex items-center gap-2">
-        <img src="/logo-mark.svg" alt="" class="w-7 h-7" />
-        <span class="font-bold tracking-wide text-lg">NUMA3D</span>
+        <img src="/pwa-192x192.png" alt="" class="w-8 h-8 rounded-md object-contain" />
+        <span class="font-bold tracking-wide text-lg">OCN</span>
         <span class="text-[10px] uppercase tracking-widest text-ink-400 ml-auto">Workshop</span>
       </div>
       <form class="p-6 space-y-4" @submit.prevent="submit">

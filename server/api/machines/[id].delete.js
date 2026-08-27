@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
   const id = Number(getRouterParam(event, 'id'))
   const db = useDb()
   const [existing] = await db.select().from(schema.machines).where(eq(schema.machines.id, id))
-  if (!existing) throw createError({ statusCode: 404, statusMessage: 'Mesin tidak ditemukan' })
+  if (!existing) throw createError({ statusCode: 404, statusMessage: 'Peralatan tidak ditemukan' })
   try {
     await db.transaction(async (tx) => {
       await tx.delete(schema.machines).where(eq(schema.machines.id, id))
@@ -19,9 +19,9 @@ export default defineEventHandler(async (event) => {
     if (e.statusCode) throw e
     throw createError({
       statusCode: 409,
-      statusMessage: 'Mesin dipakai di recipe produk, tidak bisa dihapus'
+      statusMessage: 'Peralatan dipakai di data lain, tidak bisa dihapus'
     })
   }
-  await logAudit(event, { action: 'delete', entity: 'machine', entityId: id, summary: `Hapus mesin "${existing.name}"` })
+  await logAudit(event, { action: 'delete', entity: 'machine', entityId: id, summary: `Hapus peralatan "${existing.name}"` })
   return { ok: true }
 })

@@ -4,16 +4,6 @@ import { categoryBadgeClass } from '~/utils/expenseCategory.js'
 
 const { data, refresh, status } = await useFetch('/api/dashboard')
 
-const channelLabel = {
-  tokopedia: 'Tokopedia',
-  shopee: 'Shopee',
-  tiktok_shop: 'TikTok Shop',
-  instagram: 'Instagram',
-  whatsapp: 'WhatsApp',
-  direct: 'Langsung',
-  other: 'Lainnya'
-}
-
 const monthLabel = computed(() => {
   const key = data.value?.month
   if (!key) return ''
@@ -59,7 +49,7 @@ function signedPct(n) {
           <ArrowTrendingUpIcon v-if="(data?.vsPrev?.netRevenue || 0) >= 0" class="w-3.5 h-3.5" />
           <ArrowTrendingDownIcon v-else class="w-3.5 h-3.5" />
           {{ signedPct(data?.vsPrev?.netRevenue) }}
-          <span class="text-ink-400 font-normal">{{ data?.pl?.orderCount || 0 }} order · {{ data?.pl?.unitsSold || 0 }} unit</span>
+          <span class="text-ink-400 font-normal">{{ data?.pl?.orderCount || 0 }} transaksi</span>
         </div>
       </div>
       <div class="panel p-3 sm:p-4">
@@ -79,28 +69,26 @@ function signedPct(n) {
         <div class="text-xs font-semibold uppercase tracking-wide text-ink-500">Kas keluar</div>
         <div class="mt-1 text-lg sm:text-2xl font-mono font-semibold text-red-600">{{ formatIDR(data?.pl?.totalCashOut) }}</div>
         <div class="mt-1 text-xs text-ink-500">
-          Operasional {{ formatIDR(data?.pl?.operatingExpenses) }}
-          · Material {{ formatIDR(data?.pl?.materialPurchases) }}
+          termasuk perlengkapan {{ formatIDR(data?.pl?.materialPurchases) }}
         </div>
       </div>
       <div class="panel p-3 sm:p-4">
         <div class="text-xs font-semibold uppercase tracking-wide text-ink-500">Estimasi kas</div>
         <div class="mt-1 text-lg sm:text-2xl font-mono font-semibold text-ink-900">{{ formatIDR(data?.capital?.estimatedCash) }}</div>
-        <div class="mt-1 text-xs text-ink-500">Modal bersih {{ formatIDR(data?.capital?.netCapital) }}</div>
+        <div class="mt-1 text-xs text-ink-500">
+          Modal kas {{ formatIDR(data?.capital?.netCapital) }}
+          · Aset alat {{ formatIDR(data?.capital?.equipmentAssets) }}
+        </div>
       </div>
     </div>
 
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
       <div class="panel p-3">
         <div class="text-[10px] uppercase font-semibold text-ink-400">Omzet kotor</div>
         <div class="font-mono font-semibold">{{ formatIDR(data?.pl?.grossRevenue) }}</div>
       </div>
       <div class="panel p-3">
-        <div class="text-[10px] uppercase font-semibold text-ink-400">Fee marketplace</div>
-        <div class="font-mono font-semibold">{{ formatIDR(data?.pl?.marketplaceFees) }}</div>
-      </div>
-      <div class="panel p-3">
-        <div class="text-[10px] uppercase font-semibold text-ink-400">HPP (COGS)</div>
+        <div class="text-[10px] uppercase font-semibold text-ink-400">Modal barang</div>
         <div class="font-mono font-semibold">{{ formatIDR(data?.pl?.cogs) }}</div>
       </div>
       <div class="panel p-3">
@@ -116,63 +104,40 @@ function signedPct(n) {
         <div class="text-xs text-ink-400">{{ data?.purchases?.count || 0 }} transaksi</div>
       </div>
       <div class="panel p-3">
-        <div class="text-[10px] uppercase font-semibold text-ink-400">Katalog</div>
-        <div class="font-mono font-semibold">{{ data?.inventory?.productsActive || 0 }} aktif</div>
+        <div class="text-[10px] uppercase font-semibold text-ink-400">Proyek</div>
+        <div class="font-mono font-semibold">{{ data?.inventory?.productsActive || 0 }} berjalan</div>
         <div class="text-xs text-ink-400">
-          {{ data?.inventory?.productsDraft || 0 }} draft · {{ data?.inventory?.productsRnd || 0 }} R&amp;D · {{ data?.inventory?.series || 0 }} series · {{ data?.productionOpen || 0 }} produksi berjalan
+          {{ data?.inventory?.productsWaiting || 0 }} menunggu · {{ data?.inventory?.productsDone || 0 }} selesai · {{ data?.productionOpen || 0 }} produksi berjalan
         </div>
       </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
-      <div class="panel min-w-0 overflow-hidden">
-        <div class="panel-header">
-          <span class="panel-title">Top produk (margin)</span>
-          <NuxtLink to="/reports" class="text-xs text-accent-600 hover:underline">Semua</NuxtLink>
-        </div>
-        <div v-if="data?.topProducts?.length" class="overflow-x-auto">
-          <table class="table-std">
-            <thead>
-              <tr>
-                <th>Produk</th>
-                <th class="text-right">Unit</th>
-                <th class="text-right">Bersih</th>
-                <th class="text-right">Margin</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="p in data.topProducts" :key="p.productId">
-                <td class="font-medium min-w-0 max-w-[12rem] truncate">{{ p.productName }}</td>
-                <td class="num">{{ p.units }}</td>
-                <td class="num">{{ formatIDR(p.netRevenue) }}</td>
-                <td class="num" :class="p.margin >= 0 ? 'text-green-600' : 'text-red-600'">{{ formatIDR(p.margin) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p v-else class="p-4 text-sm text-ink-500">Belum ada penjualan bulan ini.</p>
+    <div class="panel min-w-0 overflow-hidden">
+      <div class="panel-header">
+        <span class="panel-title">Top proyek (margin)</span>
+        <NuxtLink to="/reports" class="text-xs text-accent-600 hover:underline">Semua</NuxtLink>
       </div>
-
-      <div class="panel min-w-0 overflow-hidden">
-        <div class="panel-header">
-          <span class="panel-title">Penjualan per channel</span>
-        </div>
-        <div v-if="data?.channels?.length" class="p-4 space-y-3">
-          <div v-for="c in data.channels" :key="c.channel" class="space-y-1">
-            <div class="flex items-center justify-between text-sm gap-2">
-              <span class="font-medium">{{ channelLabel[c.channel] || c.channel }}</span>
-              <span class="font-mono text-xs">{{ formatIDR(c.netRevenue) }} · {{ c.units }} unit</span>
-            </div>
-            <div class="h-2 rounded-full bg-ink-100 overflow-hidden">
-              <div
-                class="h-full bg-accent-500 rounded-full"
-                :style="{ width: Math.max(4, Math.round((c.netRevenue / (data.pl?.netRevenue || 1)) * 100)) + '%' }"
-              />
-            </div>
-          </div>
-        </div>
-        <p v-else class="p-4 text-sm text-ink-500">Belum ada penjualan.</p>
+      <div v-if="data?.topProducts?.length" class="overflow-x-auto">
+        <table class="table-std">
+          <thead>
+            <tr>
+              <th>Proyek</th>
+              <th class="text-right">Unit</th>
+              <th class="text-right">Bersih</th>
+              <th class="text-right">Margin</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="p in data.topProducts" :key="p.productId">
+              <td class="font-medium min-w-0 max-w-[12rem] truncate">{{ p.productName }}</td>
+              <td class="num">{{ p.units }}</td>
+              <td class="num">{{ formatIDR(p.netRevenue) }}</td>
+              <td class="num" :class="p.margin >= 0 ? 'text-green-600' : 'text-red-600'">{{ formatIDR(p.margin) }}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
+      <p v-else class="p-4 text-sm text-ink-500">Belum ada penjualan bulan ini.</p>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -197,8 +162,8 @@ function signedPct(n) {
 
       <div class="panel min-w-0 overflow-hidden">
         <div class="panel-header">
-          <span class="panel-title">Stok rendah</span>
-          <NuxtLink to="/production" class="text-xs text-accent-600 hover:underline">Produksi</NuxtLink>
+          <span class="panel-title">Perlu restock</span>
+          <NuxtLink to="/materials" class="text-xs text-accent-600 hover:underline">Perlengkapan</NuxtLink>
         </div>
         <div class="p-4 space-y-2 text-sm">
           <template v-if="data?.lowMaterials?.length || data?.lowPackaging?.length || data?.lowProducts?.length">
@@ -208,7 +173,7 @@ function signedPct(n) {
               to="/production"
               class="flex items-center justify-between hover:bg-ink-50 -mx-1 px-1 rounded"
             >
-              <span>{{ p.name }} <span class="text-ink-400">(produk)</span></span>
+              <span>{{ p.name }} <span class="text-ink-400">(proyek)</span></span>
               <span class="badge bg-amber-100 text-amber-800 font-mono">{{ formatNumber(p.stockQuantity) }} pcs</span>
             </NuxtLink>
             <NuxtLink
@@ -218,15 +183,21 @@ function signedPct(n) {
               class="flex items-center justify-between hover:bg-ink-50 -mx-1 px-1 rounded"
             >
               <span>{{ m.name }}</span>
-              <span class="badge bg-amber-100 text-amber-800 font-mono">{{ formatNumber(m.stockQuantity, 1) }} {{ m.unit }}</span>
+              <span
+                class="badge"
+                :class="m.stockStatus === 'empty' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'"
+              >
+                {{ m.stockStatus === 'empty' ? 'Habis' : 'Menipis' }}
+                · {{ formatNumber(m.stockQuantity, 1) }} {{ m.unit }}
+              </span>
             </NuxtLink>
             <NuxtLink
               v-for="p in data.lowPackaging"
               :key="'p' + p.id"
-              to="/packaging"
+              to="/products"
               class="flex items-center justify-between hover:bg-ink-50 -mx-1 px-1 rounded"
             >
-              <span>{{ p.name }} <span class="text-ink-400">(packaging)</span></span>
+              <span>{{ p.name }} <span class="text-ink-400">(produk)</span></span>
               <span class="badge bg-amber-100 text-amber-800 font-mono">{{ formatNumber(p.stockQuantity, 1) }} {{ p.unit }}</span>
             </NuxtLink>
           </template>
@@ -246,8 +217,7 @@ function signedPct(n) {
             <thead>
               <tr>
                 <th>Tanggal</th>
-                <th>Produk</th>
-                <th>Channel</th>
+                <th>Proyek</th>
                 <th class="text-right">Bersih</th>
               </tr>
             </thead>
@@ -257,7 +227,6 @@ function signedPct(n) {
                 <td class="min-w-0 max-w-[10rem] sm:max-w-[14rem]">
                   <div class="truncate">{{ s.productName }} <span class="text-ink-400">×{{ s.quantity }}</span></div>
                 </td>
-                <td><span class="badge bg-ink-100 text-ink-600 whitespace-nowrap">{{ channelLabel[s.channel] || s.channel }}</span></td>
                 <td class="num">{{ formatIDR(s.netRevenue) }}</td>
               </tr>
             </tbody>

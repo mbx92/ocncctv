@@ -6,6 +6,6 @@ export default defineEventHandler(async (event) => {
   const id = Number(getRouterParam(event, 'id'))
   const db = useDb()
   const [product] = await db.select({ id: schema.products.id }).from(schema.products).where(eq(schema.products.id, id))
-  if (!product) throw createError({ statusCode: 404, statusMessage: 'Produk tidak ditemukan' })
+  if (!product) throw createError({ statusCode: 404, statusMessage: 'Proyek tidak ditemukan' })
   return listProductImages(db, schema, id)
 })

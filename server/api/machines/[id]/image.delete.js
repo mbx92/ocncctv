@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
   const id = Number(getRouterParam(event, 'id'))
   const db = useDb()
   const rows = await db.select().from(schema.machines).where(eq(schema.machines.id, id))
-  if (!rows.length) throw createError({ statusCode: 404, statusMessage: 'Mesin tidak ditemukan' })
+  if (!rows.length) throw createError({ statusCode: 404, statusMessage: 'Peralatan tidak ditemukan' })
 
   await removeImageQuietly(rows[0].imageKey)
   await db.update(schema.machines).set({ imageKey: null }).where(eq(schema.machines.id, id))

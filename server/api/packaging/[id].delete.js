@@ -13,9 +13,9 @@ export default defineEventHandler(async (event) => {
   } catch (e) {
     throw createError({
       statusCode: 409,
-      statusMessage: 'Packaging dipakai di produk, tidak bisa dihapus'
+      statusMessage: 'Produk dipakai di proyek, tidak bisa dihapus'
     })
   }
-  await logAudit(event, { action: 'delete', entity: 'packaging', entityId: id, summary: `Hapus packaging "${existing[0]?.name || id}"` })
+  await logAudit(event, { action: 'delete', entity: 'packaging', entityId: id, summary: `Hapus produk "${existing[0]?.name || id}"` })
   return { ok: true }
 })

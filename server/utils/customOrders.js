@@ -1,27 +1,76 @@
-import { eq } from 'drizzle-orm'
+import { asc, eq, inArray } from 'drizzle-orm'
 import { useDb, schema } from '../db/index.js'
 import { computeHpp } from './hpp.js'
 import { getSettings } from './settings.js'
 
-const CHANNELS = ['tokopedia', 'shopee', 'tiktok_shop', 'instagram', 'whatsapp', 'direct', 'other']
+export const RAB_OPEN_STATUSES = ['draft', 'sent', 'open', 'ready']
+export const RAB_LOCKED_STATUSES = ['deal', 'lost', 'delivered', 'cancelled']
 
-export function parseCustomOrderBody(body) {
+export function rabIsLocked(status) {
+  return RAB_LOCKED_STATUSES.includes(String(status || ''))
+}
+
+export function totalsFromLines(lines) {
+  let totalSale = 0
+  let totalCost = 0
+  for (const line of lines || []) {
+    const qty = Number(line.quantity) || 0
+    totalSale += Math.round(qty * (Number(line.salePrice) || 0))
+    totalCost += Math.round(qty * (Number(line.costPrice) || 0))
+  }
+  return { totalSale, totalCost, margin: totalSale - totalCost }
+}
+
+export function parseRabLines(raw) {
+  const list = Array.isArray(raw) ? raw : []
+  return list.map((line, i) => {
+    const lineType = line.lineType === 'service' ? 'service' : 'catalog'
+    const name = String(line.name || '').trim()
+    if (!name) {
+      throw createError({ statusCode: 400, statusMessage: `Nama baris ${i + 1} wajib diisi` })
+    }
+    const quantity = Math.max(Math.round(Number(line.quantity) || 0), 0)
+    if (quantity <= 0) {
+      throw createError({ statusCode: 400, statusMessage: `Qty baris ${i + 1} wajib lebih dari 0` })
+    }
+    const catalogItemId = Number(line.catalogItemId)
+    const serviceId = Number(line.serviceId)
+    const unit = String(line.unit || '').trim() || null
+    return {
+      lineType,
+      catalogItemId: Number.isInteger(catalogItemId) && catalogItemId > 0 ? catalogItemId : null,
+      serviceId:
+        lineType === 'service' && Number.isInteger(serviceId) && serviceId > 0 ? serviceId : null,
+      name,
+      code: String(line.code || '').trim() || null,
+      unit: lineType === 'service' ? unit : null,
+      quantity,
+      costPrice: lineType === 'service' ? 0 : Math.max(Math.round(Number(line.costPrice) || 0), 0),
+      salePrice: Math.max(Math.round(Number(line.salePrice) || 0), 0),
+      sortOrder: i
+    }
+  })
+}
+
+export function parseCustomOrderBody(body, { allowEmptyLines = false } = {}) {
   if (!body.date || !String(body.customerName || '').trim() || !String(body.title || '').trim()) {
-    throw createError({ statusCode: 400, statusMessage: 'Tanggal, nama pelanggan, dan judul desain wajib diisi' })
+    throw createError({ statusCode: 400, statusMessage: 'Tanggal, nama pelanggan, dan judul wajib diisi' })
   }
-  if (!body.materialId) {
-    throw createError({ statusCode: 400, statusMessage: 'Material wajib dipilih' })
+  const hasLines = Array.isArray(body.lines)
+  const lines = hasLines ? parseRabLines(body.lines) : null
+  if (hasLines && !allowEmptyLines && !lines.length) {
+    throw createError({ statusCode: 400, statusMessage: 'Minimal satu baris produk atau jasa' })
   }
+  const totals = totalsFromLines(lines || [])
   const machineId = body.machineId ? Number(body.machineId) : null
   const packagingId = body.packagingId ? Number(body.packagingId) : null
-  return {
+  const materialId = body.materialId ? Number(body.materialId) : null
+  const header = {
     date: body.date,
     customerName: String(body.customerName).trim(),
     title: String(body.title).trim(),
-    channel: CHANNELS.includes(body.channel) ? body.channel : 'direct',
-    quantity: Math.max(Math.round(Number(body.quantity) || 1), 1),
-    pricePerUnit: Math.max(Math.round(Number(body.pricePerUnit) || 0), 0),
-    materialId: Number(body.materialId),
+    quantity: 1,
+    materialId: Number.isInteger(materialId) && materialId > 0 ? materialId : null,
     materialQuantityUsed: Math.max(Number(body.materialQuantityUsed) || 0, 0),
     packagingId: Number.isInteger(packagingId) && packagingId > 0 ? packagingId : null,
     packagingQuantityUsed: Math.max(Number(body.packagingQuantityUsed) || 0, 0),
@@ -29,6 +78,60 @@ export function parseCustomOrderBody(body) {
     printTimeMinutes: Math.max(Math.round(Number(body.printTimeMinutes) || 0), 0),
     notes: body.notes || null
   }
+  if (hasLines) header.pricePerUnit = totals.totalSale
+  return { header, lines, totals }
+}
+
+export async function replaceRabLines(tx, orderId, lines) {
+  await tx.delete(schema.customOrderLines).where(eq(schema.customOrderLines.customOrderId, orderId))
+  if (!lines.length) return
+  await tx.insert(schema.customOrderLines).values(
+    lines.map((line, i) => ({
+      customOrderId: orderId,
+      lineType: line.lineType,
+      catalogItemId: line.catalogItemId,
+      serviceId: line.serviceId,
+      name: line.name,
+      code: line.code,
+      unit: line.unit || null,
+      quantity: line.quantity,
+      costPrice: line.costPrice,
+      salePrice: line.salePrice,
+      sortOrder: i
+    }))
+  )
+}
+
+export async function loadRabLines(db, orderIds) {
+  const ids = [...new Set((orderIds || []).filter(Boolean))]
+  const map = new Map(ids.map((id) => [id, []]))
+  if (!ids.length) return map
+  const rows = await db
+    .select()
+    .from(schema.customOrderLines)
+    .where(inArray(schema.customOrderLines.customOrderId, ids))
+    .orderBy(asc(schema.customOrderLines.sortOrder), asc(schema.customOrderLines.id))
+  for (const row of rows) {
+    const list = map.get(row.customOrderId) || []
+    list.push(row)
+    map.set(row.customOrderId, list)
+  }
+  return map
+}
+
+export function withRabTotals(order, lines, extra = {}) {
+  const totals = totalsFromLines(lines)
+  if (!lines.length && Number(order.pricePerUnit)) {
+    return {
+      ...order,
+      lines,
+      totalSale: Number(order.pricePerUnit) || 0,
+      totalCost: 0,
+      margin: Number(order.pricePerUnit) || 0,
+      ...extra
+    }
+  }
+  return { ...order, lines, ...totals, ...extra }
 }
 
 export function productionValuesFromOrder(order, extra = {}) {
@@ -48,7 +151,24 @@ export function productionValuesFromOrder(order, extra = {}) {
   }
 }
 
-export async function hppForCustomOrder(order, { material, machine, packaging } = {}) {
+function hppFromLineTotals(totalCost) {
+  return {
+    total: totalCost,
+    breakdown: {
+      materialCost: totalCost,
+      failureBuffer: 0,
+      electricityCost: 0,
+      depreciationCost: 0,
+      laborCost: 0,
+      packagingCost: 0
+    },
+    materialLines: [],
+    packagingLines: []
+  }
+}
+
+export async function hppForCustomOrder(order, { material, machine, packaging, lines } = {}) {
+  if (lines?.length) return hppFromLineTotals(totalsFromLines(lines).totalCost)
   const settings = await getSettings()
   return computeHpp(
     [
@@ -82,8 +202,14 @@ export async function loadCustomOrderHppMap(orderIds) {
   const ids = [...new Set(orderIds.filter(Boolean))]
   if (!ids.length) return map
   const db = useDb()
+  const lineMap = await loadRabLines(db, ids)
   const settings = await getSettings()
   for (const id of ids) {
+    const lines = lineMap.get(id) || []
+    if (lines.length) {
+      map.set(id, hppFromLineTotals(totalsFromLines(lines).totalCost))
+      continue
+    }
     const [row] = await db
       .select({
         order: schema.customOrders,
@@ -97,31 +223,34 @@ export async function loadCustomOrderHppMap(orderIds) {
       .leftJoin(schema.packaging, eq(schema.customOrders.packagingId, schema.packaging.id))
       .where(eq(schema.customOrders.id, id))
     if (!row) continue
-    map.set(id, computeHpp(
-      [
-        {
-          materialId: row.order.materialId,
-          quantityUsed: Number(row.order.materialQuantityUsed) || 0,
-          printTimeMinutes: row.order.printTimeMinutes || 0,
-          machineId: row.order.machineId,
-          failureRatePercent: 0,
-          laborMinutes: 0,
-          laborRatePerHour: 0,
-          material: row.material,
-          machine: row.machine
-        }
-      ],
-      row.order.packagingId
-        ? [
-            {
-              packagingId: row.order.packagingId,
-              quantityUsed: Number(row.order.packagingQuantityUsed) || 0,
-              packaging: row.packaging
-            }
-          ]
-        : [],
-      settings
-    ))
+    map.set(
+      id,
+      computeHpp(
+        [
+          {
+            materialId: row.order.materialId,
+            quantityUsed: Number(row.order.materialQuantityUsed) || 0,
+            printTimeMinutes: row.order.printTimeMinutes || 0,
+            machineId: row.order.machineId,
+            failureRatePercent: 0,
+            laborMinutes: 0,
+            laborRatePerHour: 0,
+            material: row.material,
+            machine: row.machine
+          }
+        ],
+        row.order.packagingId
+          ? [
+              {
+                packagingId: row.order.packagingId,
+                quantityUsed: Number(row.order.packagingQuantityUsed) || 0,
+                packaging: row.packaging
+              }
+            ]
+          : [],
+        settings
+      )
+    )
   }
   return map
 }

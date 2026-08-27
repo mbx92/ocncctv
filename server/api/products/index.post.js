@@ -13,11 +13,11 @@ export default defineEventHandler(async (event) => {
     .values({
       name: body.name,
       description: body.description || null,
-      status: body.status || 'draft',
+      status: 'waiting',
       seriesId: Number.isInteger(seriesId) && seriesId > 0 ? seriesId : null
     })
 
     .returning()
-  await logAudit(event, { action: 'create', entity: 'product', entityId: rows[0].id, summary: `Tambah produk "${rows[0].name}"` })
+  await logAudit(event, { action: 'create', entity: 'product', entityId: rows[0].id, summary: `Tambah proyek "${rows[0].name}"` })
   return rows[0]
 })

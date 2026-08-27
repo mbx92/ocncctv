@@ -1,24 +1,20 @@
 import { sanitizeText } from './sanitizeText.js'
 
-const METHODS = ['cash', 'transfer', 'marketplace', 'other']
-const MARKETPLACE = new Set(['tokopedia', 'shopee', 'tiktok_shop'])
+const METHODS = ['cash', 'transfer', 'other']
 
-export function defaultPaymentStatus(channel) {
-  return MARKETPLACE.has(channel) ? 'unpaid' : 'paid'
+export function defaultPaymentStatus() {
+  return 'paid'
 }
 
-export function defaultPaymentMethod(channel, status) {
+export function defaultPaymentMethod(status) {
   if (status !== 'paid') return null
-  return MARKETPLACE.has(channel) ? 'marketplace' : 'cash'
+  return 'cash'
 }
 
 export function afterFeeOf(row) {
   const qty = Math.max(Math.round(Number(row?.quantity) || 0), 0)
   const price = Math.max(Math.round(Number(row?.salePricePerUnit) || 0), 0)
-  const feePct = Math.min(Math.max(Number(row?.marketplaceFeePercent) || 0, 0), 100)
-  const gross = price * qty
-  const fee = Math.round(gross * (feePct / 100))
-  return Math.max(gross - fee, 0)
+  return price * qty
 }
 
 export function resolveDiscount(body, afterFee) {
@@ -40,13 +36,14 @@ export function resolveDiscount(body, afterFee) {
   }
 }
 
-export function parseSalePayment(body, channel, saleDate, moneySource) {
+export function parseSalePayment(body, _channel, saleDate, moneySource) {
   const status =
     body.paymentStatus === 'paid' || body.paymentStatus === 'unpaid'
       ? body.paymentStatus
-      : defaultPaymentStatus(channel)
+      : defaultPaymentStatus()
   const methodRaw = String(body.paymentMethod || '')
-  const paymentMethod = METHODS.includes(methodRaw) ? methodRaw : defaultPaymentMethod(channel, status)
+  const normalized = methodRaw === 'marketplace' ? 'other' : methodRaw
+  const paymentMethod = METHODS.includes(normalized) ? normalized : defaultPaymentMethod(status)
   const paidAt = status === 'paid' ? String(body.paidAt || saleDate || '').slice(0, 10) || null : null
   const parsed = {
     paymentStatus: status,
@@ -67,13 +64,10 @@ export function parseSalePayment(body, channel, saleDate, moneySource) {
   return parsed
 }
 
-export function saleMoney({ salePricePerUnit, quantity, marketplaceFeePercent, discountAmount }) {
+export function saleMoney({ salePricePerUnit, quantity, discountAmount }) {
   const qty = Math.max(Math.round(Number(quantity) || 0), 0)
   const price = Math.max(Math.round(Number(salePricePerUnit) || 0), 0)
-  const feePct = Math.min(Math.max(Number(marketplaceFeePercent) || 0, 0), 100)
   const gross = price * qty
-  const fee = Math.round(gross * (feePct / 100))
-  const afterFee = Math.max(gross - fee, 0)
-  const discount = Math.min(Math.max(Math.round(Number(discountAmount) || 0), 0), afterFee)
-  return { gross, fee, discount, net: afterFee - discount }
+  const discount = Math.min(Math.max(Math.round(Number(discountAmount) || 0), 0), gross)
+  return { gross, fee: 0, discount, net: gross - discount }
 }

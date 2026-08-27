@@ -9,7 +9,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Industrial neutrals + safety-orange accent + teal secondary
+        // Charcoal brand (logo) + biru CCTV + teal untuk angka positif
         ink: {
           50: '#f6f7f8',
           100: '#e9ebee',
@@ -24,16 +24,16 @@ export default {
           950: '#15181c'
         },
         accent: {
-          50: '#fff6ed',
-          100: '#ffead4',
-          200: '#ffd1a8',
-          300: '#ffb070',
-          400: '#ff8437',
-          500: '#f96311',
-          600: '#ea4a07',
-          700: '#c23608',
-          800: '#9a2c0f',
-          900: '#7c2710'
+          50: '#f1f6fa',
+          100: '#e2eef6',
+          200: '#c5dcea',
+          300: '#9cc4d9',
+          400: '#5a9fc4',
+          500: '#1f7aab',
+          600: '#18628c',
+          700: '#164f71',
+          800: '#16425d',
+          900: '#16384e'
         },
         teal: {
           500: '#0d9488',

@@ -23,7 +23,7 @@ const uploadPercent = ref(0)
 const uploadError = ref('')
 const previewFile = ref(null)
 
-const FILE_VIEW_KEY = 'numa3d-library-files-view'
+const FILE_VIEW_KEY = 'ocn-library-files-view'
 const filesView = ref('grid')
 onMounted(() => {
   const saved = localStorage.getItem(FILE_VIEW_KEY)

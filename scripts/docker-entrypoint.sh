@@ -1,6 +1,6 @@
 #!/bin/sh
 set -e
-echo "[numa3d] Menjalankan migrasi…"
+echo "[OCN] Menjalankan migrasi…"
 node scripts/migrate.js
-echo "[numa3d] Menjalankan server…"
+echo "[OCN] Menjalankan server…"
 exec node .output/server/index.mjs

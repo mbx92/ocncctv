@@ -26,7 +26,7 @@ export default defineEventHandler(async (event) => {
     .select({ id: schema.customOrders.id })
     .from(schema.customOrders)
     .where(eq(schema.customOrders.id, customOrderId))
-  if (!orders.length) throw createError({ statusCode: 404, statusMessage: 'Pesanan custom tidak ditemukan' })
+  if (!orders.length) throw createError({ statusCode: 404, statusMessage: 'RAB tidak ditemukan' })
 
   const parts = await readMultipartFormData(event)
   const file = parts?.find((p) => p.name === 'file' && p.filename)
@@ -64,7 +64,7 @@ export default defineEventHandler(async (event) => {
     action: 'create',
     entity: 'custom_order_file',
     entityId: rows[0].id,
-    summary: `Upload file "${rows[0].filename}" ke pesanan custom id ${customOrderId}`
+    summary: `Upload file "${rows[0].filename}" ke RAB id ${customOrderId}`
   })
   return rows[0]
 })

@@ -6,6 +6,6 @@ export default defineConfig({
   out: './server/db/migrations',
   dialect: 'postgresql',
   dbCredentials: {
-    url: process.env.DATABASE_URL || 'postgres://mbx@localhost:5432/numa3d'
+    url: process.env.DATABASE_URL || 'postgres://mbx@localhost:5432/ocn'
   }
 })

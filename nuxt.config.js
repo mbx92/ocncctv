@@ -8,7 +8,7 @@ export default defineNuxtConfig({
     port: 3000
   },
   runtimeConfig: {
-    databaseUrl: process.env.DATABASE_URL || 'postgres://mbx@localhost:5432/numa3d',
+    databaseUrl: process.env.DATABASE_URL || 'postgres://mbx@localhost:5432/ocn',
     adminUsername: process.env.ADMIN_USERNAME || 'admin',
     adminPassword: process.env.ADMIN_PASSWORD || '',
     sessionSecret: process.env.SESSION_SECRET || 'dev-secret-ganti-di-env',
@@ -18,12 +18,16 @@ export default defineNuxtConfig({
       useSSL: process.env.MINIO_USE_SSL === 'true',
       accessKey: process.env.MINIO_ACCESS_KEY || 'minioadmin',
       secretKey: process.env.MINIO_SECRET_KEY || 'minioadmin',
-      bucket: process.env.MINIO_BUCKET || 'numa3d-files'
+      bucket: process.env.MINIO_BUCKET || 'ocn-files'
     },
     tuya: {
       apiKey: process.env.TUYA_API_KEY || '',
       apiSecret: process.env.TUYA_API_SECRET || '',
       apiRegion: process.env.TUYA_API_REGION || 'in'
+    },
+    supplierCatalog: {
+      spreadsheetId: process.env.SUPPLIER_CATALOG_SPREADSHEET_ID || '1aaKkgM9NVRsdKTFhqE46lvyLZ4rsLtxcq3_ninX6ncg',
+      supplierName: process.env.SUPPLIER_CATALOG_SUPPLIER_NAME || 'PL TUNAS JAYA ELEKTRONIK'
     },
     public: {
       // Global toast UI — posisi default 'top' (aman untuk PWA / keyboard).
@@ -35,7 +39,7 @@ export default defineNuxtConfig({
   },
   app: {
     head: {
-      title: 'Numa3D — Pencatatan Produksi',
+      title: 'OCN — Pencatatan Produksi',
       meta: [
         {
           name: 'viewport',
@@ -47,14 +51,14 @@ export default defineNuxtConfig({
         { name: 'mobile-web-app-capable', content: 'yes' },
         { name: 'apple-mobile-web-app-capable', content: 'yes' },
         { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
-        { name: 'apple-mobile-web-app-title', content: 'Numa3D' }
+        { name: 'apple-mobile-web-app-title', content: 'OCN' }
       ],
       link: [
         // Explicit: @vite-pwa/nuxt kadang gagal inject link manifest (unhead regression)
         { rel: 'manifest', href: '/manifest.webmanifest' },
-        { rel: 'icon', type: 'image/svg+xml', href: '/icon.svg' },
-        { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico', sizes: 'any' },
-        { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' }
+        { rel: 'icon', type: 'image/svg+xml', href: '/icon.svg?v=ocn2' },
+        { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico?v=ocn2', sizes: 'any' },
+        { rel: 'apple-touch-icon', href: '/apple-touch-icon.png?v=ocn2' }
       ]
     }
   },
@@ -62,8 +66,8 @@ export default defineNuxtConfig({
     registerType: 'autoUpdate',
     injectRegister: 'auto',
     manifest: {
-      name: 'Numa3D — Pencatatan Produksi',
-      short_name: 'Numa3D',
+      name: 'OCN — Pencatatan Produksi',
+      short_name: 'OCN',
       description: 'Pencatatan produksi, HPP, dan penjualan workshop 3D printing',
       theme_color: '#1f2429',
       background_color: '#15181c',
@@ -83,7 +87,7 @@ export default defineNuxtConfig({
     workbox: {
       globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}'],
       navigateFallback: '/',
-      navigateFallbackDenylist: [/^\/api\//, /^\/i\//],
+      navigateFallbackDenylist: [/^\/api\//, /^\/i\//, /^\/q\//, /^\/manifest\.webmanifest$/, /^\/sw\.js$/],
       cleanupOutdatedCaches: true,
       clientsClaim: true,
       skipWaiting: true

@@ -1,7 +1,6 @@
 import { and, eq, gte, lte, desc, sql } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
-import { getHppForProducts } from '../../utils/productHpp.js'
-import { loadCustomOrderHppMap } from '../../utils/customOrders.js'
+import { attachSaleCogs } from '../../utils/salesAggregate.js'
 import { saleMoney } from '../../utils/salePayment.js'
 
 export default defineEventHandler(async (event) => {
@@ -22,7 +21,7 @@ export default defineEventHandler(async (event) => {
       date: schema.sales.date,
       productId: schema.sales.productId,
       customOrderId: schema.sales.customOrderId,
-      productName: sql`coalesce(${schema.products.name}, 'Custom · ' || ${schema.customOrders.customerName})`.as(
+      productName: sql`coalesce(${schema.products.name}, 'RAB · ' || ${schema.customOrders.customerName})`.as(
         'productName'
       ),
       quantity: schema.sales.quantity,
@@ -47,23 +46,18 @@ export default defineEventHandler(async (event) => {
     .where(conds.length ? and(...conds) : undefined)
     .orderBy(desc(schema.sales.date), desc(schema.sales.id))
 
-  const hppMap = await getHppForProducts([...new Set(rows.map((r) => r.productId))])
-  const customHpp = await loadCustomOrderHppMap(rows.map((r) => r.customOrderId))
-
-  return rows.map((r) => {
-    const money = saleMoney(r)
-    const hpp = r.customOrderId ? customHpp.get(r.customOrderId)?.total ?? 0 : hppMap.get(r.productId)?.total ?? 0
-    const netPricePerUnit = r.quantity ? Math.round(money.net / r.quantity) : 0
-    return {
-      ...r,
-      isCustom: !!r.customOrderId,
-      netPricePerUnit,
-      grossRevenue: money.gross,
-      feeAmount: money.fee,
-      discountAmount: money.discount,
-      netRevenue: money.net,
-      hppPerUnit: hpp,
-      netMargin: money.net - hpp * r.quantity
-    }
-  })
+  return attachSaleCogs(
+    rows.map((r) => {
+      const money = saleMoney(r)
+      return {
+        ...r,
+        isCustom: !!r.customOrderId,
+        netPricePerUnit: r.quantity ? Math.round(money.net / r.quantity) : 0,
+        grossRevenue: money.gross,
+        feeAmount: money.fee,
+        discountAmount: money.discount,
+        netRevenue: money.net
+      }
+    })
+  )
 })

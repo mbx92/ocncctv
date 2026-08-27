@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { eq, sql } from 'drizzle-orm'
+import { loadRabLines } from './customOrders.js'
 
 const CHANNEL_LABEL = {
   tokopedia: 'Tokopedia',
@@ -14,7 +15,7 @@ const CHANNEL_LABEL = {
 const PAYMENT_METHOD_LABEL = {
   cash: 'Tunai',
   transfer: 'Transfer',
-  marketplace: 'Cair marketplace',
+  marketplace: 'Lainnya',
   other: 'Lainnya'
 }
 
@@ -115,7 +116,25 @@ export async function loadSaleInvoiceRow(tx, schema, id) {
   return row || null
 }
 
-export function toInvoicePayload(row, settings) {
+function itemsFromRabLines(lines) {
+  return (lines || [])
+    .map((line) => {
+      const quantity = Math.max(Math.round(Number(line.quantity) || 0), 0)
+      const unitPrice = Math.max(Math.round(Number(line.salePrice) || 0), 0)
+      return {
+        name: String(line.name || '').trim() || 'Item',
+        code: String(line.code || '').trim(),
+        lineType: line.lineType === 'service' ? 'service' : 'catalog',
+        quantity,
+        unit: String(line.unit || '').trim(),
+        unitPrice,
+        amount: quantity * unitPrice
+      }
+    })
+    .filter((item) => item.quantity > 0)
+}
+
+export function toInvoicePayload(row, settings, lines = []) {
   const qty = row.quantity
   const unitPrice = row.salePricePerUnit
   const amount = qty * unitPrice
@@ -124,9 +143,20 @@ export function toInvoicePayload(row, settings) {
   const discountPercent = Math.min(Math.max(Number(row.discountPercent) || 0, 0), 100)
   const paid = row.paymentStatus === 'paid'
   const methodLabel = PAYMENT_METHOD_LABEL[row.paymentMethod] || row.paymentMethod || null
-  const itemName = row.customOrderId
-    ? `Custom — ${row.customTitle || 'desain pelanggan'}`
-    : row.productName || 'Produk'
+  const fallback = [
+    {
+      name: row.productName || row.customTitle || 'Proyek',
+      code: '',
+      lineType: 'catalog',
+      quantity: qty,
+      unit: '',
+      unitPrice,
+      amount
+    }
+  ]
+  const lineItems = itemsFromRabLines(lines)
+  const lineSum = lineItems.reduce((sum, item) => sum + item.amount, 0)
+  const items = lineItems.length && lineSum === amount ? lineItems : fallback
   const customerName = row.customerName || row.customCustomerName || '—'
   return {
     id: row.id,
@@ -142,12 +172,8 @@ export function toInvoicePayload(row, settings) {
     paidAt: paid ? row.paidAt || null : null,
     notes: row.notes,
     isCustom: !!row.customOrderId,
-    item: {
-      name: itemName,
-      quantity: qty,
-      unitPrice,
-      amount
-    },
+    item: items[0],
+    items,
     subtotal: amount,
     discount,
     discountKind,
@@ -160,12 +186,30 @@ export function toInvoicePayload(row, settings) {
         : null,
     total: amount - discount,
     business: {
-      name: settings.invoiceBusinessName || 'Numa3D',
+      name: settings.invoiceBusinessName || 'OCN',
       address: settings.invoiceAddress || null,
       phone: settings.invoicePhone || null,
       footer: settings.invoiceFooter || 'Terima kasih telah berbelanja.'
     }
   }
+}
+
+export async function buildInvoicePayload(db, schema, row, settings) {
+  let orderId = row.customOrderId || null
+  if (!orderId && row.productId) {
+    const [rab] = await db
+      .select({ id: schema.customOrders.id })
+      .from(schema.customOrders)
+      .where(eq(schema.customOrders.projectId, row.productId))
+      .limit(1)
+    orderId = rab?.id || null
+  }
+  let lines = []
+  if (orderId) {
+    const map = await loadRabLines(db, [orderId])
+    lines = map.get(orderId) || []
+  }
+  return toInvoicePayload(row, settings, lines)
 }
 
 export function newShareToken() {

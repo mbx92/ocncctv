@@ -1,4 +1,4 @@
-# Numa3D — Sistem Pencatatan Biaya & Pricing 3D Printing
+# OCN — Sistem Pencatatan Biaya & Pricing 3D Printing
 
 Aplikasi internal untuk UMKM 3D printing: catat pengeluaran, hitung HPP produk otomatis dari recipe, log penjualan dengan margin bersih, dan laporan per produk. Multi-user dengan 2 role (Admin/Staff).
 
@@ -13,10 +13,10 @@ Aplikasi internal untuk UMKM 3D printing: catat pengeluaran, hitung HPP produk o
 
 ```bash
 # 1. Pastikan PostgreSQL jalan, lalu buat database
-createdb numa3d
+createdb ocn
 
 # 2. Atur .env
-#    DATABASE_URL=postgres://<user>@localhost:5432/numa3d
+#    DATABASE_URL=postgres://<user>@localhost:5432/ocn
 #    ADMIN_USERNAME=admin
 #    ADMIN_PASSWORD=<password login admin awal>
 #    SESSION_SECRET=<string acak, mis. `openssl rand -hex 32`>
@@ -101,7 +101,7 @@ Postgres dan MinIO tidak ikut di-compose — pakai server yang sudah ada. Templa
 | `MINIO_PORT` | internal Docker biasanya `9000`; domain HTTPS publik biasanya `443` |
 | `MINIO_USE_SSL` | `true` jika MinIO HTTPS |
 | `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` | kredensial MinIO |
-| `MINIO_BUCKET` | default `numa3d-files` (dibuat otomatis saat upload) |
+| `MINIO_BUCKET` | default `ocn-files` (dibuat otomatis saat upload) |
 
 Contoh MinIO publik HTTPS:
 
@@ -117,7 +117,7 @@ Salah umum: `MINIO_ENDPOINT=https://s3.example.com` (skema tidak boleh) atau `MI
 5. Deploy. Entry point menjalankan migrasi lalu `node .output/server/index.mjs`.
 6. Login dengan `ADMIN_USERNAME` / `ADMIN_PASSWORD`. Setelah itu kelola user di menu User.
 
-PWA: setelah HTTPS aktif, Chrome/Android menampilkan prompt **Pasang Numa3D**. Safari iOS: Share → Add to Home Screen.
+PWA: setelah HTTPS aktif, Chrome/Android menampilkan prompt **Pasang OCN**. Safari iOS: Share → Add to Home Screen.
 
 ## PWA (lokal)
 

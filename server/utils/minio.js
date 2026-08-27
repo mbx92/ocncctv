@@ -47,7 +47,7 @@ export function resolveMinioConfig(raw = {}) {
     useSSL,
     accessKey: raw.accessKey,
     secretKey: raw.secretKey,
-    bucket: raw.bucket || 'numa3d-files'
+    bucket: raw.bucket || 'ocn-files'
   }
 }
 
