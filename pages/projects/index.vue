@@ -5,8 +5,7 @@ import {
   TrashIcon,
   CheckIcon,
   XMarkIcon,
-  MagnifyingGlassIcon,
-  ArrowPathIcon
+  MagnifyingGlassIcon
 } from '@heroicons/vue/24/outline'
 import { PRODUCT_STATUSES, productStatusLabel, productStatusClass, normalizeProductStatus } from '~/utils/productStatus.js'
 
@@ -78,22 +77,6 @@ const pagedRows = computed(() =>
 const showForm = ref(false)
 const form = ref({})
 const errorMsg = ref('')
-const syncing = ref(false)
-
-async function syncErp() {
-  if (syncing.value) return
-  syncing.value = true
-  try {
-    const data = await $fetch('/api/projects/sync-erp', { method: 'POST', timeout: 120000 })
-    await refresh()
-    useToast().success(data.message || 'Sync ERP selesai.')
-  } catch (e) {
-    useToast().error(e.data?.statusMessage || 'Gagal sync dari ERP')
-  } finally {
-    syncing.value = false
-  }
-}
-
 function openAdd() {
   form.value = { name: '', description: '' }
   errorMsg.value = ''
@@ -125,14 +108,9 @@ async function remove(p) {
     <div class="flex items-center justify-between gap-2">
       <div>
         <h1 class="text-xl font-bold">Proyek</h1>
-        <p class="text-xs text-ink-500">Sync ERP → status Pending (2026 saja). Proses manual sebelum Selesai.</p>
+        <p class="text-xs text-ink-500">Proyek dari ERP masuk sebagai Pending. Sync lewat Pengaturan → Integrasi.</p>
       </div>
       <div class="flex items-center gap-2">
-        <button v-if="isAdmin" type="button" class="btn-secondary" :disabled="syncing" @click="syncErp">
-          <ArrowPathIcon class="w-4 h-4" :class="syncing ? 'animate-spin' : ''" />
-          <span class="hidden sm:inline">{{ syncing ? 'Sync ERP…' : 'Sync ERP' }}</span>
-          <span class="sm:hidden">{{ syncing ? '…' : 'ERP' }}</span>
-        </button>
         <button v-if="isAdmin" class="btn-primary" @click="openAdd">
           <PlusIcon class="w-4 h-4" /><span class="hidden sm:inline">Tambah Proyek</span><span class="sm:hidden">Tambah</span>
         </button>

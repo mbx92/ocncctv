@@ -84,9 +84,13 @@ const erpForm = ref({
 })
 const erpSaving = ref(false)
 const erpSyncing = ref(false)
+const erpPreviewLoading = ref(false)
 const erpTesting = ref(false)
 const erpMsg = ref('')
 const erpTest = ref(null)
+const showErpSyncModal = ref(false)
+const erpPreviewProjects = ref([])
+const erpPreviewCompany = ref('')
 
 watch(
   () => settings.value?.erpSyncBaseUrl,
@@ -145,14 +149,45 @@ async function testErp() {
 }
 
 async function syncErpProjects() {
-  if (erpSyncing.value) return
-  erpSyncing.value = true
+  if (erpSyncing.value || erpPreviewLoading.value) return
+  erpPreviewLoading.value = true
   try {
     if (erpForm.value.erpSyncBaseUrl !== (settings.value?.erpSyncBaseUrl || '') || erpForm.value.erpSyncApiKey) {
       const saved = await saveErp()
       if (!saved) return
     }
-    const data = await $fetch('/api/projects/sync-erp', { method: 'POST', timeout: 120000 })
+    const preview = await $fetch('/api/projects/preview-erp', {
+      method: 'POST',
+      body: {
+        erpSyncBaseUrl: erpForm.value.erpSyncBaseUrl,
+        erpSyncApiKey: erpForm.value.erpSyncApiKey
+      },
+      timeout: 120000
+    })
+    if (!preview.projects?.length) {
+      useToast().info('Tidak ada proyek selesai di ERP untuk di-sync.')
+      return
+    }
+    erpPreviewProjects.value = preview.projects
+    erpPreviewCompany.value = preview.companyName || ''
+    showErpSyncModal.value = true
+  } catch (e) {
+    useToast().error(e.data?.statusMessage || 'Gagal mengambil daftar proyek dari ERP')
+  } finally {
+    erpPreviewLoading.value = false
+  }
+}
+
+async function confirmErpSync(projectIds) {
+  if (erpSyncing.value || !projectIds?.length) return
+  erpSyncing.value = true
+  try {
+    const data = await $fetch('/api/projects/sync-erp', {
+      method: 'POST',
+      body: { projectIds },
+      timeout: 120000
+    })
+    showErpSyncModal.value = false
     await refresh()
     useToast().success(data.message || 'Sync ERP selesai.')
   } catch (e) {
@@ -405,9 +440,9 @@ async function syncErpProjects() {
               <ArrowPathIcon class="w-4 h-4" :class="erpTesting ? 'animate-spin' : ''" />
               {{ erpTesting ? 'Mengecek…' : 'Test koneksi' }}
             </button>
-            <button type="button" class="btn-primary" :disabled="erpSyncing || erpSaving || erpTesting" @click="syncErpProjects">
-              <ArrowPathIcon class="w-4 h-4" :class="erpSyncing ? 'animate-spin' : ''" />
-              {{ erpSyncing ? 'Sync…' : 'Sync sekarang' }}
+            <button type="button" class="btn-primary" :disabled="erpSyncing || erpPreviewLoading || erpSaving || erpTesting" @click="syncErpProjects">
+              <ArrowPathIcon class="w-4 h-4" :class="erpSyncing || erpPreviewLoading ? 'animate-spin' : ''" />
+              {{ erpPreviewLoading ? 'Memuat…' : erpSyncing ? 'Sync…' : 'Sync sekarang' }}
             </button>
             <span v-if="erpMsg" class="text-sm text-green-600">{{ erpMsg }}</span>
           </div>
@@ -415,5 +450,13 @@ async function syncErpProjects() {
         </div>
       </div>
     </div>
+    <ErpSyncProjectPickerModal
+      v-if="showErpSyncModal"
+      :projects="erpPreviewProjects"
+      :company-name="erpPreviewCompany"
+      :syncing="erpSyncing"
+      @close="showErpSyncModal = false"
+      @sync="confirmErpSync"
+    />
   </div>
 </template>
