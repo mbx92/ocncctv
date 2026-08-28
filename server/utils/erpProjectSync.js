@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { eq, inArray } from 'drizzle-orm'
 import { useDb, schema } from '../db/index.js'
 import { replaceProjectExtraLines } from './projectLines.js'
 import { replaceProjectTechnicianWages } from './projectWages.js'
@@ -107,12 +107,72 @@ async function fetchCompletedPage(baseUrl, apiKey, page) {
   return body || { projects: [], meta: { current_page: page, last_page: page } }
 }
 
-export async function testErpConnection({ baseUrl, apiKey }) {
+function requireErpCredentials(baseUrl, apiKey, message = 'Isi URL ERP dan API key di Pengaturan → Integrasi.') {
   if (!baseUrl || !apiKey) {
-    const error = new Error('Isi URL ERP dan API key.')
+    const error = new Error(message)
     error.statusCode = 400
     throw error
   }
+}
+
+export async function fetchAllCompletedErpProjects({ baseUrl, apiKey }) {
+  requireErpCredentials(baseUrl, apiKey)
+  const all = []
+  let page = 1
+  let lastPage = 1
+  let company = null
+  do {
+    const payload = await fetchCompletedPage(baseUrl, apiKey, page)
+    company = payload.company || company
+    all.push(...(payload.projects || []))
+    lastPage = Number(payload.meta?.last_page) || 1
+    page += 1
+  } while (page <= lastPage && page <= 50)
+  return {
+    companyName: company?.name || null,
+    projects: all
+  }
+}
+
+export async function previewErpProjectsForSync({ baseUrl, apiKey }) {
+  const { companyName, projects } = await fetchAllCompletedErpProjects({ baseUrl, apiKey })
+  const db = useDb()
+  const erpIds = projects.map((raw) => String(raw?.id || '').trim()).filter(Boolean)
+  const existing = new Set()
+  if (erpIds.length) {
+    const rows = await db
+      .select({ erpProjectId: schema.products.erpProjectId })
+      .from(schema.products)
+      .where(inArray(schema.products.erpProjectId, erpIds))
+    for (const row of rows) {
+      if (row.erpProjectId) existing.add(row.erpProjectId)
+    }
+  }
+  const list = projects
+    .map((raw) => {
+      const mapped = mapErpProject(raw)
+      if (!mapped) return null
+      return {
+        erpProjectId: mapped.erpProjectId,
+        name: mapped.name,
+        customerName: mapped.customerName,
+        completedAt: mapped.completedAt,
+        erpTotalValue: mapped.erpTotalValue,
+        itemCount: mapped.items.length,
+        wageCount: mapped.wages.length,
+        syncAction: existing.has(mapped.erpProjectId) ? 'update' : 'new'
+      }
+    })
+    .filter(Boolean)
+  return {
+    companyName,
+    projects: list,
+    total: list.length
+  }
+}
+
+export async function testErpConnection({ baseUrl, apiKey }) {
+  requireErpCredentials(baseUrl, apiKey, 'Isi URL ERP dan API key.')
   const started = Date.now()
   const payload = await fetchCompletedPage(baseUrl, apiKey, 1)
   const meta = payload.meta || {}
@@ -126,25 +186,16 @@ export async function testErpConnection({ baseUrl, apiKey }) {
   }
 }
 
-export async function syncCompletedErpProjects({ baseUrl, apiKey }) {
-  if (!baseUrl || !apiKey) {
-    const error = new Error('Isi URL ERP dan API key di Pengaturan → Integrasi.')
-    error.statusCode = 400
-    throw error
-  }
+export async function syncCompletedErpProjects({ baseUrl, apiKey, projectIds }) {
+  requireErpCredentials(baseUrl, apiKey)
 
   const db = useDb()
-  const all = []
-  let page = 1
-  let lastPage = 1
-  let company = null
-  do {
-    const payload = await fetchCompletedPage(baseUrl, apiKey, page)
-    company = payload.company || company
-    all.push(...(payload.projects || []))
-    lastPage = Number(payload.meta?.last_page) || 1
-    page += 1
-  } while (page <= lastPage && page <= 50)
+  const { companyName, projects: all } = await fetchAllCompletedErpProjects({ baseUrl, apiKey })
+  const idSet =
+    Array.isArray(projectIds) && projectIds.length
+      ? new Set(projectIds.map((id) => String(id || '').trim()).filter(Boolean))
+      : null
+  const toSync = idSet ? all.filter((raw) => idSet.has(String(raw?.id || '').trim())) : all
 
   let created = 0
   let updated = 0
@@ -152,7 +203,7 @@ export async function syncCompletedErpProjects({ baseUrl, apiKey }) {
   let itemLines = 0
   let wageRows = 0
 
-  for (const raw of all) {
+  for (const raw of toSync) {
     const mapped = mapErpProject(raw)
     if (!mapped) {
       skipped += 1
@@ -206,8 +257,8 @@ export async function syncCompletedErpProjects({ baseUrl, apiKey }) {
   }
 
   return {
-    companyName: company?.name || null,
-    fetched: all.length,
+    companyName,
+    fetched: toSync.length,
     created,
     updated,
     skipped,

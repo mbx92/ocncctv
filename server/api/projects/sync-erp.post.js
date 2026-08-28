@@ -5,11 +5,18 @@ import { syncCompletedErpProjects } from '../../utils/erpProjectSync.js'
 
 export default defineEventHandler(async (event) => {
   requireAdmin(event)
+  const body = (await readBody(event).catch(() => null)) || {}
   const settings = await getSettings()
   const runtime = useRuntimeConfig().erpSync || {}
   const { baseUrl, apiKey } = erpSyncConfig(settings, runtime)
+  const projectIds = Array.isArray(body.projectIds)
+    ? body.projectIds.map((id) => String(id || '').trim()).filter(Boolean)
+    : null
+  if (projectIds && !projectIds.length) {
+    throw createError({ statusCode: 400, statusMessage: 'Pilih minimal satu proyek untuk sync.' })
+  }
   try {
-    const summary = await syncCompletedErpProjects({ baseUrl, apiKey })
+    const summary = await syncCompletedErpProjects({ baseUrl, apiKey, projectIds })
     const message = `Sync ERP: ${summary.created} baru, ${summary.updated} diperbarui, ${summary.itemLines} baris item, ${summary.wageRows} upah teknisi${summary.companyName ? ` (${summary.companyName})` : ''}.`
     await logAudit(event, {
       action: 'update',
