@@ -264,7 +264,7 @@ const totals = computed(() => {
             <div class="font-medium break-words text-sm">{{ line.name }}</div>
             <div v-if="line.code" class="text-xs font-mono text-ink-400">{{ line.code }}</div>
             <div v-if="line.lineType === 'product'" class="text-xs text-emerald-700">
-              Stok {{ formatNumber(line.stockQuantity ?? 0, 1) }} {{ line.unit || 'pcs' }}
+              Stok {{ formatNumber(line.stockQuantity ?? 0) }} {{ line.unit || 'pcs' }}
             </div>
           </div>
           <button

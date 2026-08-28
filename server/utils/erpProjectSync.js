@@ -1,29 +1,70 @@
 import { eq } from 'drizzle-orm'
 import { useDb, schema } from '../db/index.js'
-import { parseYmd } from './projectStatus.js'
+import { replaceProjectExtraLines } from './projectLines.js'
+import { replaceProjectTechnicianWages } from './projectWages.js'
 
-function ymdFromApi(value) {
-  return parseYmd(value)
+function parseErpDate(value) {
+  const raw = String(value || '').slice(0, 10)
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null
 }
 
 export function mapErpProject(item) {
   const name = String(item?.name || '').trim()
   const erpProjectId = String(item?.id || '').trim()
   if (!name || !erpProjectId) return null
-  const customerName = String(item.client_name || '').trim() || null
-  const contact = String(item.client_contact || '').trim()
-  const startedAt = ymdFromApi(item.started_at)
-  const completedAt = ymdFromApi(item.finished_at) || startedAt
+  const erpTotalValue = Math.max(Math.round(Number(item?.total_value) || 0), 0)
+  const startedAt = parseErpDate(item?.started_at)
+  const completedAt = parseErpDate(item?.finished_at)
+  const customerName = String(item?.customer_name || '').trim() || null
   return {
     erpProjectId,
     name,
     customerName,
-    description: contact || customerName,
-    status: 'done',
+    status: 'pending',
+    erpTotalValue,
     startedAt,
     completedAt,
-    plannedStartDate: startedAt
+    plannedStartDate: startedAt,
+    items: mapErpItems(item?.items),
+    wages: mapErpWages(item?.wages)
   }
+}
+
+export function mapErpItems(items) {
+  return (items || [])
+    .map((item) => {
+      const name = String(item?.name || '').trim()
+      const quantity = Math.max(Math.round(Number(item?.qty) || 0), 0)
+      if (!name || quantity <= 0) return null
+      const lineType = item?.line_type === 'service' ? 'service' : 'catalog'
+      const unit = String(item?.unit || '').trim() || (lineType === 'service' ? 'titik' : 'pcs')
+      const salePrice = Math.max(Math.round(Number(item?.unit_price) || 0), 0)
+      const costPrice = lineType === 'service' ? 0 : Math.max(Math.round(Number(item?.unit_cost) || 0), 0)
+      return {
+        lineType,
+        catalogItemId: null,
+        serviceId: null,
+        packagingId: null,
+        name,
+        code: null,
+        unit,
+        quantity,
+        costPrice,
+        salePrice
+      }
+    })
+    .filter(Boolean)
+}
+
+export function mapErpWages(wages) {
+  return (wages || [])
+    .map((row) => {
+      const name = String(row?.name || '').trim()
+      const amount = Math.max(Math.round(Number(row?.amount) || 0), 0)
+      if (!name || amount <= 0) return null
+      return { name, amount }
+    })
+    .filter(Boolean)
 }
 
 async function fetchCompletedPage(baseUrl, apiKey, page) {
@@ -89,6 +130,8 @@ export async function syncCompletedErpProjects({ baseUrl, apiKey }) {
   let created = 0
   let updated = 0
   let skipped = 0
+  let itemLines = 0
+  let wageRows = 0
 
   for (const raw of all) {
     const mapped = mapErpProject(raw)
@@ -101,24 +144,38 @@ export async function syncCompletedErpProjects({ baseUrl, apiKey }) {
       .from(schema.products)
       .where(eq(schema.products.erpProjectId, mapped.erpProjectId))
       .limit(1)
-    if (existing) {
-      await db
-        .update(schema.products)
-        .set({
-          name: mapped.name,
-          customerName: mapped.customerName,
-          description: mapped.description,
-          status: 'done',
-          startedAt: mapped.startedAt,
-          completedAt: mapped.completedAt,
-          plannedStartDate: mapped.plannedStartDate
-        })
-        .where(eq(schema.products.id, existing.id))
+
+    let productId = existing?.id
+    const productValues = {
+      name: mapped.name,
+      customerName: mapped.customerName,
+      erpTotalValue: mapped.erpTotalValue || null,
+      startedAt: mapped.startedAt,
+      completedAt: mapped.completedAt,
+      plannedStartDate: mapped.plannedStartDate
+    }
+    if (productId) {
+      await db.update(schema.products).set(productValues).where(eq(schema.products.id, productId))
       updated += 1
     } else {
-      await db.insert(schema.products).values(mapped)
+      const [row] = await db
+        .insert(schema.products)
+        .values({
+          erpProjectId: mapped.erpProjectId,
+          status: 'pending',
+          ...productValues
+        })
+        .returning({ id: schema.products.id })
+      productId = row.id
       created += 1
     }
+
+    await db.transaction(async (tx) => {
+      await replaceProjectExtraLines(tx, schema, productId, mapped.items)
+      await replaceProjectTechnicianWages(tx, schema, productId, mapped.wages)
+    })
+    itemLines += mapped.items.length
+    wageRows += mapped.wages.length
   }
 
   const settings = await db.select({ id: schema.appSettings.id }).from(schema.appSettings).limit(1)
@@ -134,6 +191,8 @@ export async function syncCompletedErpProjects({ baseUrl, apiKey }) {
     fetched: all.length,
     created,
     updated,
-    skipped
+    skipped,
+    itemLines,
+    wageRows
   }
 }

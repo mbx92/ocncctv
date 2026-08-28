@@ -193,6 +193,7 @@ export default defineEventHandler(async () => {
       db
         .select({
           purchasePrice: schema.machines.purchasePrice,
+          quantity: schema.machines.quantity,
           acquisition: schema.machines.acquisition
         })
         .from(schema.machines)

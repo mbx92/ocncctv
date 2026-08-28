@@ -11,7 +11,14 @@ export function parseStockStatus(value, fallback = 'ok') {
 
 export function parseLowStockQuantity(value, fallback = 2) {
   const n = Number(value)
-  return Number.isFinite(n) && n >= 0 ? n : fallback
+  if (!Number.isFinite(n) || n < 0) return fallback
+  return Math.max(Math.round(n), 0)
+}
+
+export function parseMaterialStockQuantity(value, fallback = 0) {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n < 0) return fallback
+  return Math.max(Math.round(n), 0)
 }
 
 export function stockStatusFromQuantity(qty, lowAt = 2) {

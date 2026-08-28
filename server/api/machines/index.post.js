@@ -2,6 +2,7 @@ import { useDb, schema } from '../../db/index.js'
 import { requireAdmin } from '../../utils/rbac.js'
 import { logAudit } from '../../utils/audit.js'
 import { normalizeAcquisition, syncMachinePurchaseExpense } from '../../utils/machineExpense.js'
+import { parseMachineQuantity, machineUnitPrice } from '../../utils/machines.js'
 
 export default defineEventHandler(async (event) => {
   requireAdmin(event)
@@ -14,7 +15,8 @@ export default defineEventHandler(async (event) => {
       .values({
         name: body.name,
         powerWatt: Math.round(Number(body.powerWatt) || 0),
-        purchasePrice: Math.round(Number(body.purchasePrice) || 0),
+        purchasePrice: machineUnitPrice(body.purchasePrice),
+        quantity: parseMachineQuantity(body.quantity),
         purchaseDate: body.purchaseDate || null,
         depreciationMonths: Math.round(Number(body.depreciationMonths) || 36),
         notes: body.notes || null,

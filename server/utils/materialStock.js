@@ -4,7 +4,10 @@ import { stockStatusFromQuantity } from './materialType.js'
 export async function applyMaterialStockDelta(tx, schema, { id, delta, pricePerUnit }) {
   const [row] = await tx.select().from(schema.materials).where(eq(schema.materials.id, id))
   if (!row) return null
-  const stockQuantity = Math.max((Number(row.stockQuantity) || 0) + (Number(delta) || 0), 0)
+  const stockQuantity = Math.max(
+    Math.round((Number(row.stockQuantity) || 0) + (Number(delta) || 0)),
+    0
+  )
   const patch = {
     stockQuantity,
     stockStatus: stockStatusFromQuantity(stockQuantity, row.lowStockQuantity)

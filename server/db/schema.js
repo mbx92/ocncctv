@@ -20,6 +20,7 @@ export const productStatusEnum = pgEnum('product_status', [
   'active',
   'discontinued',
   'waiting',
+  'pending',
   'in_progress',
   'done'
 ])
@@ -136,10 +137,10 @@ export const materials = pgTable('materials', {
   type: materialTypeEnum('type').notNull().default('consumable'),
   unit: text('unit').notNull().default('pcs'),
   pricePerUnit: integer('price_per_unit').notNull().default(0),
-  stockQuantity: real('stock_quantity').notNull().default(0),
+  stockQuantity: integer('stock_quantity').notNull().default(0),
   // ok = ada, low = menipis, empty = habis. Dihitung dari stockQuantity vs lowStockQuantity.
   stockStatus: text('stock_status').notNull().default('ok'),
-  lowStockQuantity: real('low_stock_quantity').notNull().default(2),
+  lowStockQuantity: integer('low_stock_quantity').notNull().default(2),
   supplier: text('supplier'),
   // Object key gambar di MinIO (bucket sama dengan file 3D). null = tanpa gambar.
   imageKey: text('image_key'),
@@ -151,6 +152,7 @@ export const machines = pgTable('machines', {
   name: text('name').notNull(),
   powerWatt: integer('power_watt').notNull().default(0),
   purchasePrice: integer('purchase_price').notNull().default(0),
+  quantity: integer('quantity').notNull().default(1),
   purchaseDate: date('purchase_date'),
   depreciationMonths: integer('depreciation_months').notNull().default(36),
   notes: text('notes'),
@@ -181,6 +183,7 @@ export const products = pgTable('products', {
   completedAt: date('completed_at'),
   customerName: text('customer_name'),
   erpProjectId: text('erp_project_id'),
+  erpTotalValue: integer('erp_total_value'),
   createdAt: timestamp('created_at').notNull().defaultNow()
 }, (t) => ({
   erpProjectUniq: uniqueIndex('products_erp_project_id_uidx').on(t.erpProjectId)
@@ -263,7 +266,7 @@ export const packaging = pgTable('packaging', {
   name: text('name').notNull(),
   unit: text('unit').notNull().default('pcs'),
   pricePerUnit: integer('price_per_unit').notNull().default(0),
-  stockQuantity: real('stock_quantity').notNull().default(0),
+  stockQuantity: integer('stock_quantity').notNull().default(0),
   supplier: text('supplier'),
   // Object key gambar di MinIO (bucket sama dengan file 3D). null = tanpa gambar.
   imageKey: text('image_key'),
@@ -652,8 +655,8 @@ export const supplierPurchaseLines = pgTable('supplier_purchase_lines', {
   itemType: purchaseItemTypeEnum('item_type').notNull(),
   materialId: integer('material_id').references(() => materials.id),
   packagingId: integer('packaging_id').references(() => packaging.id),
-  quantity: real('quantity').notNull().default(0),
-  stockQuantity: real('stock_quantity').notNull().default(0),
+  quantity: integer('quantity').notNull().default(0),
+  stockQuantity: integer('stock_quantity').notNull().default(0),
   unitPrice: integer('unit_price').notNull().default(0),
   amount: integer('amount').notNull().default(0)
 })

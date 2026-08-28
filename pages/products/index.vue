@@ -115,7 +115,7 @@ async function remove(p) {
           <div class="font-medium break-words">{{ p.name }}</div>
           <div class="text-sm font-mono">{{ formatIDR(p.pricePerUnit) }}/{{ p.unit }}</div>
           <div class="text-sm font-mono" :class="p.stockQuantity < 10 ? 'text-amber-600 font-semibold' : 'text-ink-500'">
-            Stok {{ formatNumber(p.stockQuantity, 1) }} {{ p.unit }}
+            Stok {{ formatNumber(p.stockQuantity) }} {{ p.unit }}
           </div>
           <div class="text-xs text-ink-400">{{ p.supplier || 'tanpa supplier' }}</div>
           <div v-if="isAdmin" class="btn-actions pt-1">
@@ -163,7 +163,7 @@ async function remove(p) {
             <td class="font-medium">{{ p.name }}</td>
               <td class="num">{{ formatIDR(p.pricePerUnit) }}/{{ p.unit }}</td>
               <td class="num" :class="p.stockQuantity < 10 ? 'text-amber-600 font-semibold' : ''">
-                {{ formatNumber(p.stockQuantity, 1) }} {{ p.unit }}
+                {{ formatNumber(p.stockQuantity) }} {{ p.unit }}
               </td>
               <td class="text-ink-500">{{ p.supplier || '-' }}</td>
               <td class="whitespace-nowrap text-right">
@@ -220,7 +220,7 @@ async function remove(p) {
           </div>
           <div>
             <label class="label">Stok</label>
-            <input v-model.number="form.stockQuantity" type="number" min="0" step="0.1" class="input-num" />
+            <input v-model.number="form.stockQuantity" type="number" min="0" step="1" class="input-num" />
           </div>
         </div>
         <div>

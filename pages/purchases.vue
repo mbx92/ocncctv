@@ -66,16 +66,22 @@ function openAdd() {
 
 function onProjectChange() {
   for (const line of form.value.lines || []) {
-    line.stockQuantity = form.value.projectId ? 0 : Number(line.quantity) || 0
+    line.stockQuantity = form.value.projectId ? 0 : purchaseQty(line.quantity)
   }
 }
 
+function purchaseQty(value) {
+  const n = Math.round(Number(value) || 0)
+  return n > 0 ? n : 0
+}
+
 function onQtyInput(line) {
-  if (!form.value.projectId) line.stockQuantity = Number(line.quantity) || 0
+  line.quantity = purchaseQty(line.quantity)
+  if (!form.value.projectId) line.stockQuantity = line.quantity
 }
 
 function usedQty(line) {
-  return Math.max((Number(line.quantity) || 0) - (Number(line.stockQuantity) || 0), 0)
+  return Math.max(purchaseQty(line.quantity) - purchaseQty(line.stockQuantity), 0)
 }
 function openSuppliers() {
   supplierForm.value = { name: '', notes: '' }
@@ -164,7 +170,7 @@ function onItemChange(line) {
   }
 }
 function lineTotal(line) {
-  return Math.round((Number(line.quantity) || 0) * (Number(line.unitPrice) || 0))
+  return Math.round(purchaseQty(line.quantity) * (Number(line.unitPrice) || 0))
 }
 const goodsTotal = computed(() => (form.value.lines || []).reduce((a, l) => a + lineTotal(l), 0))
 const shippingFee = computed(() => Math.max(Math.round(Number(form.value.shippingFee) || 0), 0))
@@ -231,9 +237,9 @@ async function remove(p) {
               </td>
               <td class="text-sm text-ink-600">
                 <div v-for="l in p.lines" :key="l.id">
-                  {{ l.itemName }} — {{ formatNumber(l.quantity, 1) }} {{ l.unit }}
+                  {{ l.itemName }} — {{ formatNumber(l.quantity) }} {{ l.unit }}
                   <span v-if="Number(l.stockQuantity) > 0" class="text-ink-400">
-                    · stok +{{ formatNumber(l.stockQuantity, 1) }}
+                    · stok +{{ formatNumber(l.stockQuantity) }}
                   </span>
                 </div>
               </td>
@@ -285,8 +291,8 @@ async function remove(p) {
         </div>
         <div class="text-xs text-ink-500">
           <div v-for="l in p.lines" :key="l.id">
-            {{ l.itemName }} — {{ formatNumber(l.quantity, 1) }} {{ l.unit }}
-            <span v-if="Number(l.stockQuantity) > 0"> · stok +{{ formatNumber(l.stockQuantity, 1) }}</span>
+            {{ l.itemName }} — {{ formatNumber(l.quantity) }} {{ l.unit }}
+            <span v-if="Number(l.stockQuantity) > 0"> · stok +{{ formatNumber(l.stockQuantity) }}</span>
           </div>
         </div>
         <button type="button" class="btn-action-danger" @click="remove(p)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
@@ -393,8 +399,8 @@ async function remove(p) {
                 <input
                   v-model.number="line.quantity"
                   type="number"
-                  min="0"
-                  step="0.1"
+                  min="1"
+                  step="1"
                   class="input-num w-full"
                   required
                   @input="onQtyInput(line)"
@@ -406,15 +412,16 @@ async function remove(p) {
                   v-model.number="line.stockQuantity"
                   type="number"
                   min="0"
-                  step="0.1"
+                  step="1"
                   class="input-num w-full"
+                  @input="line.stockQuantity = purchaseQty(line.stockQuantity)"
                 />
                 <p class="text-[11px] text-ink-400 mt-0.5">
                   {{
                     line.itemType === 'packaging'
                       ? 'Sisa ke Produk'
                       : 'Sisa ke Perlengkapan'
-                  }}{{ usedQty(line) ? ` · terpakai ${formatNumber(usedQty(line), 1)}` : '' }}
+                  }}{{ usedQty(line) ? ` · terpakai ${formatNumber(usedQty(line))}` : '' }}
                 </p>
               </div>
               <div class="col-span-6 sm:col-span-3 min-w-0">

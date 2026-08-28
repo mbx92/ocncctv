@@ -8,7 +8,7 @@ import {
   MagnifyingGlassIcon,
   ArrowPathIcon
 } from '@heroicons/vue/24/outline'
-import { PRODUCT_STATUSES, productStatusLabel, productStatusClass } from '~/utils/productStatus.js'
+import { PRODUCT_STATUSES, productStatusLabel, productStatusClass, normalizeProductStatus } from '~/utils/productStatus.js'
 
 const { data: products, refresh } = await useFetch('/api/products')
 const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
@@ -17,9 +17,35 @@ const statusLabel = productStatusLabel
 
 const search = ref('')
 const statusFilter = ref('')
+
+function ymd(value) {
+  const raw = String(value || '').slice(0, 10)
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : ''
+}
+
+function projectDate(p) {
+  const status = normalizeProductStatus(p.status)
+  const planned = ymd(p.plannedStartDate)
+  const started = ymd(p.startedAt)
+  const done = ymd(p.completedAt)
+  if (status === 'done' && (done || started || planned)) {
+    return { date: done || started || planned, kind: done ? 'Selesai' : started ? 'Mulai' : 'Rencana' }
+  }
+  if (status === 'pending' && (done || started || planned)) {
+    return { date: done || started || planned, kind: done ? 'Selesai' : started ? 'Mulai' : 'Rencana' }
+  }
+  if (status === 'in_progress' && (started || planned)) {
+    return { date: started || planned, kind: started ? 'Mulai' : 'Rencana' }
+  }
+  if (planned) return { date: planned, kind: 'Rencana' }
+  if (started) return { date: started, kind: 'Mulai' }
+  const created = ymd(p.createdAt)
+  return { date: created, kind: created ? 'Dibuat' : '' }
+}
+
 const filteredProducts = computed(() => {
   const q = search.value.trim().toLowerCase()
-  return (products.value || []).filter((p) => {
+  const list = (products.value || []).filter((p) => {
     if (statusFilter.value && p.status !== statusFilter.value) return false
     if (!q) return true
     return (
@@ -28,12 +54,26 @@ const filteredProducts = computed(() => {
       (p.customerName || '').toLowerCase().includes(q)
     )
   })
+  return [...list].sort((a, b) => {
+    const da = projectDate(a).date
+    const db = projectDate(b).date
+    if (da && db) {
+      const byDate = db.localeCompare(da)
+      if (byDate) return byDate
+    } else if (da) return -1
+    else if (db) return 1
+    return a.name.localeCompare(b.name, 'id')
+  })
 })
 const { page, pageSize, paged, total, totalPages, rangeStart, rangeEnd, reset } = usePagination(
   filteredProducts,
   10
 )
 watch([search, statusFilter], reset)
+
+const pagedRows = computed(() =>
+  (paged.value || []).map((p) => ({ ...p, schedule: projectDate(p) }))
+)
 
 const showForm = ref(false)
 const form = ref({})
@@ -85,7 +125,7 @@ async function remove(p) {
     <div class="flex items-center justify-between gap-2">
       <div>
         <h1 class="text-xl font-bold">Proyek</h1>
-        <p class="text-xs text-ink-500">Pekerjaan pemasangan dari RAB Deal atau sync proyek selesai dari ERP.</p>
+        <p class="text-xs text-ink-500">Sync ERP → status Pending (2026 saja). Proses manual sebelum Selesai.</p>
       </div>
       <div class="flex items-center gap-2">
         <button v-if="isAdmin" type="button" class="btn-secondary" :disabled="syncing" @click="syncErp">
@@ -124,6 +164,7 @@ async function remove(p) {
           <thead>
             <tr>
               <th>Proyek</th>
+              <th>Tanggal</th>
               <th>Status</th>
               <th class="text-right">Pendapatan</th>
               <th class="text-right">Laba</th>
@@ -131,7 +172,7 @@ async function remove(p) {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="p in paged" :key="p.id">
+            <tr v-for="p in pagedRows" :key="p.id">
               <td>
                 <NuxtLink :to="`/projects/${p.id}`" class="font-medium text-ink-900 hover:text-accent-600">
                   {{ p.name }}
@@ -141,13 +182,17 @@ async function remove(p) {
                 </div>
                 <div v-if="p.erpProjectId" class="text-[10px] uppercase tracking-wide text-ink-400 mt-0.5">Dari ERP</div>
               </td>
+              <td class="whitespace-nowrap">
+                <div class="font-mono text-xs">{{ p.schedule.date ? formatDate(p.schedule.date) : '—' }}</div>
+                <div v-if="p.schedule.kind" class="text-[10px] uppercase tracking-wide text-ink-400">{{ p.schedule.kind }}</div>
+              </td>
               <td><span class="badge" :class="productStatusClass(p.status)">{{ statusLabel[p.status] }}</span></td>
               <td class="num">
-                <span v-if="p.hasRab">{{ formatIDR(p.revenue) }}</span>
-                <span v-else class="text-ink-400 text-xs">tanpa RAB</span>
+                <span v-if="p.hasScope">{{ formatIDR(p.revenue) }}</span>
+                <span v-else class="text-ink-400 text-xs">belum ada data</span>
               </td>
               <td class="num">
-                <span v-if="p.hasRab" :class="(p.profit || 0) >= 0 ? '' : 'text-red-600'">{{ formatIDR(p.profit) }}</span>
+                <span v-if="p.hasScope" :class="(p.profit || 0) >= 0 ? '' : 'text-red-600'">{{ formatIDR(p.profit) }}</span>
                 <span v-else class="text-ink-400 text-xs">—</span>
               </td>
               <td class="whitespace-nowrap text-right">
@@ -162,7 +207,7 @@ async function remove(p) {
               </td>
             </tr>
             <tr v-if="!total">
-              <td colspan="5" class="text-center text-ink-500 py-6">
+              <td colspan="6" class="text-center text-ink-500 py-6">
                 {{ search || statusFilter ? 'Tidak ada proyek yang cocok.' : 'Belum ada proyek.' }}
               </td>
             </tr>
@@ -181,15 +226,18 @@ async function remove(p) {
 
     <!-- Kartu (mobile) -->
     <div class="md:hidden space-y-2">
-      <div v-for="p in paged" :key="p.id" class="panel p-3 space-y-1">
+      <div v-for="p in pagedRows" :key="p.id" class="panel p-3 space-y-1">
         <div class="flex items-start justify-between gap-2">
           <NuxtLink :to="`/projects/${p.id}`" class="font-medium break-words hover:text-accent-600">{{ p.name }}</NuxtLink>
           <span class="badge shrink-0" :class="productStatusClass(p.status)">{{ statusLabel[p.status] }}</span>
         </div>
+        <div v-if="p.schedule.date" class="text-xs text-ink-500">
+          <span class="font-mono">{{ formatDate(p.schedule.date) }}</span>
+          <span v-if="p.schedule.kind" class="text-ink-400"> · {{ p.schedule.kind }}</span>
+        </div>
         <div class="text-sm font-mono">
-          <span v-if="p.hasRab">Pendapatan {{ formatIDR(p.revenue) }} · Laba {{ formatIDR(p.profit) }}</span>
-          <span v-else-if="p.erpProjectId" class="text-ink-400 text-xs">Dari ERP{{ p.customerName ? ` · ${p.customerName}` : '' }}</span>
-          <span v-else class="text-ink-400 text-xs">Belum terkait RAB</span>
+          <span v-if="p.hasScope">Pendapatan {{ formatIDR(p.revenue) }} · Laba {{ formatIDR(p.profit) }}</span>
+          <span v-else class="text-ink-400 text-xs">Belum ada data pendapatan</span>
         </div>
         <div class="btn-actions pt-1">
           <NuxtLink :to="`/projects/${p.id}?tab=items`" class="btn-action">

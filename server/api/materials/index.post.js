@@ -1,13 +1,13 @@
 import { useDb, schema } from '../../db/index.js'
 import { requireAdmin } from '../../utils/rbac.js'
 import { logAudit } from '../../utils/audit.js'
-import { parseMaterialType, parseLowStockQuantity, stockStatusFromQuantity } from '../../utils/materialType.js'
+import { parseMaterialType, parseLowStockQuantity, parseMaterialStockQuantity, stockStatusFromQuantity } from '../../utils/materialType.js'
 
 export default defineEventHandler(async (event) => {
   requireAdmin(event)
   const body = await readBody(event)
   if (!body.name) throw createError({ statusCode: 400, statusMessage: 'Nama wajib diisi' })
-  const stockQuantity = Number(body.stockQuantity) || 0
+  const stockQuantity = parseMaterialStockQuantity(body.stockQuantity)
   const lowStockQuantity = parseLowStockQuantity(body.lowStockQuantity)
   const db = useDb()
   const rows = await db

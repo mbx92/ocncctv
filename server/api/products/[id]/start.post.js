@@ -12,8 +12,9 @@ export default defineEventHandler(async (event) => {
   const db = useDb()
   const [existing] = await db.select().from(schema.products).where(eq(schema.products.id, id))
   if (!existing) throw createError({ statusCode: 404, statusMessage: 'Proyek tidak ditemukan' })
-  if (normalizeProductStatus(existing.status) !== 'waiting') {
-    throw createError({ statusCode: 400, statusMessage: 'Hanya proyek Menunggu yang bisa dimulai' })
+  const phase = normalizeProductStatus(existing.status)
+  if (phase !== 'waiting' && phase !== 'pending') {
+    throw createError({ statusCode: 400, statusMessage: 'Hanya proyek Menunggu atau Pending yang bisa dimulai' })
   }
   const patch = { status: 'in_progress', startedAt }
   if (plannedStartDate || existing.plannedStartDate) {

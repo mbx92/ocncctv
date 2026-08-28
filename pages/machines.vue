@@ -18,11 +18,20 @@ const { page, pageSize, paged, total, totalPages, rangeStart, rangeEnd, reset } 
 )
 watch(search, reset)
 
+function machineQty(m) {
+  const n = Math.round(Number(m?.quantity) || 0)
+  return n > 0 ? n : 1
+}
+
+function machineTotal(m) {
+  return Math.round((Number(m?.purchasePrice) || 0) * machineQty(m))
+}
+
 const ownedTotal = computed(() =>
-  (machines.value || []).filter((m) => m.acquisition !== 'purchased').reduce((a, m) => a + (Number(m.purchasePrice) || 0), 0)
+  (machines.value || []).filter((m) => m.acquisition !== 'purchased').reduce((a, m) => a + machineTotal(m), 0)
 )
 const purchasedTotal = computed(() =>
-  (machines.value || []).filter((m) => m.acquisition === 'purchased').reduce((a, m) => a + (Number(m.purchasePrice) || 0), 0)
+  (machines.value || []).filter((m) => m.acquisition === 'purchased').reduce((a, m) => a + machineTotal(m), 0)
 )
 
 const showForm = ref(false)
@@ -30,11 +39,16 @@ const editing = ref(null)
 const form = ref({})
 const errorMsg = ref('')
 
+const formTotal = computed(() =>
+  Math.round((Number(form.value.purchasePrice) || 0) * Math.max(Math.round(Number(form.value.quantity) || 0), 1))
+)
+
 function openAdd() {
   editing.value = null
   form.value = {
     name: '',
     purchasePrice: 0,
+    quantity: 1,
     purchaseDate: '',
     depreciationMonths: 36,
     notes: '',
@@ -48,6 +62,7 @@ function openEdit(m) {
   form.value = {
     name: m.name,
     purchasePrice: m.purchasePrice,
+    quantity: machineQty(m),
     purchaseDate: m.purchaseDate || '',
     depreciationMonths: m.depreciationMonths || 36,
     notes: m.notes || '',
@@ -148,10 +163,18 @@ function acquisitionLabel(m) {
         </div>
         <dl class="grid grid-cols-2 gap-2 text-sm">
           <div class="rounded-panel bg-ink-50 px-2.5 py-2">
-            <dt class="text-[10px] uppercase tracking-wide text-ink-500">Nilai</dt>
-            <dd class="font-mono font-medium mt-0.5">{{ formatIDR(m.purchasePrice) }}</dd>
+            <dt class="text-[10px] uppercase tracking-wide text-ink-500">Qty</dt>
+            <dd class="font-mono font-medium mt-0.5">{{ machineQty(m) }}</dd>
           </div>
           <div class="rounded-panel bg-ink-50 px-2.5 py-2">
+            <dt class="text-[10px] uppercase tracking-wide text-ink-500">Harga satuan</dt>
+            <dd class="font-mono font-medium mt-0.5">{{ formatIDR(m.purchasePrice) }}</dd>
+          </div>
+          <div class="rounded-panel bg-ink-50 px-2.5 py-2 col-span-2">
+            <dt class="text-[10px] uppercase tracking-wide text-ink-500">Nilai tercatat</dt>
+            <dd class="font-mono font-medium mt-0.5">{{ formatIDR(machineTotal(m)) }}</dd>
+          </div>
+          <div class="rounded-panel bg-ink-50 px-2.5 py-2 col-span-2">
             <dt class="text-[10px] uppercase tracking-wide text-ink-500">Tanggal</dt>
             <dd class="font-mono font-medium mt-0.5">{{ m.purchaseDate ? formatDate(m.purchaseDate) : '—' }}</dd>
           </div>
@@ -188,6 +211,8 @@ function acquisitionLabel(m) {
               <th class="w-14"></th>
               <th>Nama</th>
               <th>Status</th>
+              <th class="text-right">Qty</th>
+              <th class="text-right">Harga satuan</th>
               <th class="text-right">Nilai</th>
               <th>Tanggal</th>
               <th></th>
@@ -213,7 +238,9 @@ function acquisitionLabel(m) {
                   {{ acquisitionLabel(m) }}
                 </span>
               </td>
+              <td class="num">{{ machineQty(m) }}</td>
               <td class="num">{{ formatIDR(m.purchasePrice) }}</td>
+              <td class="num font-medium">{{ formatIDR(machineTotal(m)) }}</td>
               <td class="whitespace-nowrap font-mono text-xs">{{ m.purchaseDate ? formatDate(m.purchaseDate) : '—' }}</td>
               <td class="whitespace-nowrap text-right">
                 <div v-if="isAdmin" class="btn-actions justify-end">
@@ -224,7 +251,7 @@ function acquisitionLabel(m) {
               </td>
             </tr>
             <tr v-if="!total">
-              <td colspan="6" class="text-center text-ink-500 py-6">
+              <td colspan="8" class="text-center text-ink-500 py-6">
                 {{ search ? 'Tidak ada peralatan yang cocok.' : 'Belum ada peralatan.' }}
               </td>
             </tr>
@@ -273,9 +300,19 @@ function acquisitionLabel(m) {
             </span>
           </label>
         </fieldset>
-        <div>
-          <label class="label">Nilai / harga</label>
-          <IdrInput v-model="form.purchasePrice" required />
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="label">Harga satuan</label>
+            <IdrInput v-model="form.purchasePrice" required />
+          </div>
+          <div>
+            <label class="label">Qty</label>
+            <input v-model.number="form.quantity" type="number" min="1" step="1" class="input-num" required />
+          </div>
+        </div>
+        <div class="rounded-panel border border-ink-200 bg-ink-50 p-3 text-sm flex justify-between gap-2">
+          <span class="text-ink-500">Nilai tercatat</span>
+          <span class="font-mono font-semibold">{{ formatIDR(formTotal) }}</span>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div class="date-field">

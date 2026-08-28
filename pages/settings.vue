@@ -326,7 +326,7 @@ async function syncErpProjects() {
         </div>
         <div class="p-4 space-y-3">
           <p class="text-xs text-ink-500">
-            Ambil proyek status selesai dari usaha OC Networks di paymentSystemOCN. RAB tidak ikut.
+            Ambil proyek selesai tahun 2026 dari OC Networks (item, upah, nilai). Status di sini: <strong>Pending</strong> — diproses manual.
           </p>
           <div>
             <label class="label">URL ERP</label>

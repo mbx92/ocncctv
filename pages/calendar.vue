@@ -39,7 +39,7 @@ function projectEvent(p) {
   const planned = toYmd(p.plannedStartDate)
   const started = toYmd(p.startedAt)
   const done = toYmd(p.completedAt)
-  if (status === 'done') {
+  if (status === 'done' || status === 'pending') {
     if (done) return { date: done, kind: 'Selesai' }
     if (started) return { date: started, kind: 'Mulai' }
     if (planned) return { date: planned, kind: 'Rencana' }
@@ -54,6 +54,7 @@ function statusTone(status) {
   const s = normalizeProductStatus(status)
   if (s === 'done') return 'bg-green-100 text-green-800'
   if (s === 'in_progress') return 'bg-sky-100 text-sky-800'
+  if (s === 'pending') return 'bg-violet-100 text-violet-800'
   return 'bg-amber-100 text-amber-800'
 }
 
@@ -61,6 +62,7 @@ function statusDot(status) {
   const s = normalizeProductStatus(status)
   if (s === 'done') return 'bg-green-500'
   if (s === 'in_progress') return 'bg-sky-500'
+  if (s === 'pending') return 'bg-violet-500'
   return 'bg-amber-400'
 }
 
@@ -169,6 +171,14 @@ function selectDay(date) {
           @click="statusFilter = 'waiting'"
         >
           Menunggu
+        </button>
+        <button
+          type="button"
+          class="shrink-0 h-9 px-3 rounded-full text-xs font-semibold border"
+          :class="statusFilter === 'pending' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-ink-600 border-ink-200'"
+          @click="statusFilter = 'pending'"
+        >
+          Pending
         </button>
         <button
           type="button"

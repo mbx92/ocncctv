@@ -1,6 +1,7 @@
 <script setup>
 import { CalendarDaysIcon, ArrowPathIcon } from '@heroicons/vue/24/outline'
 import { categoryBadgeClass, categoryNameOf } from '~/utils/expenseCategory.js'
+import { categoryChartColor, chartPalette } from '~/utils/chartColors.js'
 
 const filters = ref({ dateFrom: monthStartStr(), dateTo: todayStr() })
 const query = computed(() => {
@@ -21,6 +22,7 @@ const { data: expenseCategories } = await useFetch('/api/expense-categories')
 
 const tabs = [
   { key: 'summary', label: 'Laba Rugi' },
+  { key: 'charts', label: 'Grafik' },
   { key: 'products', label: 'Per Proyek' },
   { key: 'expenses', label: 'Pengeluaran' },
   { key: 'monthly', label: 'Tren Bulanan' }
@@ -53,13 +55,57 @@ watch(query, expensePager.reset, { deep: true })
 const productPager = usePagination(computed(() => byProduct.value || []), 10)
 watch(query, productPager.reset, { deep: true })
 
-const maxMonthly = computed(() =>
-  Math.max(...(monthly.value || []).map((m) => Math.abs(m.netRevenue)), 1)
-)
 function monthLabel(key) {
   const [y, m] = key.split('-')
   return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('id-ID', { month: 'short', year: '2-digit' })
 }
+
+const monthlyChartLabels = computed(() => (monthly.value || []).map((m) => monthLabel(m.month)))
+
+const monthlyRevenueSeries = computed(() => [
+  {
+    label: 'Revenue bersih',
+    color: chartPalette.revenue,
+    data: (monthly.value || []).map((m) => m.netRevenue)
+  },
+  {
+    label: 'Laba kotor',
+    color: chartPalette.grossProfit,
+    data: (monthly.value || []).map((m) => m.grossProfit)
+  }
+])
+
+const monthlyProfitSeries = computed(() => [
+  {
+    label: 'Laba bersih',
+    color: (v) => (Number(v) >= 0 ? chartPalette.netProfit : chartPalette.netLoss),
+    data: (monthly.value || []).map((m) => m.netProfit)
+  }
+])
+
+const expenseDonutSegments = computed(() =>
+  (byExpense.value?.categories || []).map((c, i) => ({
+    label: c.name || expenseCatName(c.category),
+    value: c.amount,
+    color: categoryChartColor(c.category, i)
+  }))
+)
+
+const topProjectBars = computed(() =>
+  (byProduct.value || []).slice(0, 8).map((r) => ({
+    label: r.productName,
+    value: r.netMargin,
+    color: r.netMargin >= 0 ? chartPalette.netProfit : chartPalette.netLoss
+  }))
+)
+
+const expenseCategoryBars = computed(() =>
+  (byExpense.value?.categories || []).slice(0, 8).map((c, i) => ({
+    label: c.name || expenseCatName(c.category),
+    value: c.amount,
+    color: categoryChartColor(c.category, i)
+  }))
+)
 </script>
 
 <template>
@@ -179,6 +225,78 @@ function monthLabel(key) {
           </p>
         </div>
       </div>
+
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title">Grafik laba rugi</span></div>
+        <div class="p-4">
+          <ReportPlChart
+            :net-revenue="summary?.netRevenue"
+            :cogs="summary?.cogs"
+            :operating-expenses="summary?.operatingExpenses"
+            :net-profit="summary?.netProfit"
+          />
+        </div>
+      </div>
+    </div>
+
+    <!-- Grafik -->
+    <div v-else-if="tab === 'charts'" class="space-y-3">
+      <p class="text-xs text-ink-500">
+        Grafik pengeluaran & proyek mengikuti rentang tanggal di atas. Tren bulanan = 12 bulan terakhir.
+      </p>
+
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title">Tren revenue & laba kotor</span></div>
+        <div class="p-4">
+          <ReportBarChart
+            :labels="monthlyChartLabels"
+            :series="monthlyRevenueSeries"
+            :height="240"
+          />
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title">Tren laba bersih</span></div>
+        <div class="p-4">
+          <ReportBarChart
+            :labels="monthlyChartLabels"
+            :series="monthlyProfitSeries"
+            :height="220"
+            allow-negative
+          />
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Pengeluaran per kategori</span>
+            <span class="font-mono text-sm text-red-600">{{ formatIDR(byExpense?.total) }}</span>
+          </div>
+          <div class="p-4">
+            <ReportDonutChart :segments="expenseDonutSegments" />
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Top proyek (margin bersih)</span></div>
+          <div class="p-4">
+            <ReportHBarChart :items="topProjectBars" signed />
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title">Komposisi laba rugi periode</span></div>
+        <div class="p-4">
+          <ReportPlChart
+            :net-revenue="summary?.netRevenue"
+            :cogs="summary?.cogs"
+            :operating-expenses="summary?.operatingExpenses"
+            :net-profit="summary?.netProfit"
+          />
+        </div>
+      </div>
     </div>
 
     <!-- Per proyek -->
@@ -239,28 +357,17 @@ function monthLabel(key) {
     <div v-else-if="tab === 'expenses'" class="space-y-3">
       <div class="panel min-w-0 overflow-hidden">
         <div class="panel-header">
-          <span class="panel-title">Pengeluaran per Kategori</span>
+          <span class="panel-title">Grafik pengeluaran</span>
           <span class="font-mono font-semibold text-red-600">{{ formatIDR(byExpense?.total) }}</span>
         </div>
-        <div class="p-4 space-y-3">
-          <p v-if="expenseError" class="text-center text-red-600 py-4 text-sm">
+        <div class="p-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <p v-if="expenseError" class="col-span-full text-center text-red-600 py-4 text-sm">
             Gagal memuat laporan pengeluaran. Coba ubah rentang tanggal atau muat ulang.
           </p>
-          <template v-else-if="byExpense?.categories?.length">
-            <div v-for="c in byExpense.categories" :key="c.category" class="space-y-1">
-              <div class="flex items-center justify-between text-sm gap-2 min-w-0">
-                <span class="font-medium min-w-0 truncate">{{ c.name || expenseCatName(c.category) }}</span>
-                <span class="font-mono shrink-0">{{ formatIDR(c.amount) }} <span class="text-ink-400">({{ c.percent }}%)</span></span>
-              </div>
-              <div class="h-2 rounded-full bg-ink-100 overflow-hidden">
-                <div class="h-full bg-red-400/80 rounded-full" :style="{ width: Math.max(c.percent, 0) + '%' }"></div>
-              </div>
-              <div class="text-xs text-ink-400">{{ c.count }} entri</div>
-            </div>
+          <template v-else>
+            <ReportDonutChart :segments="expenseDonutSegments" />
+            <ReportHBarChart :items="expenseCategoryBars" />
           </template>
-          <p v-else class="text-center text-ink-500 py-6 text-sm">
-            Tidak ada pengeluaran pada rentang ini.
-          </p>
         </div>
       </div>
 
@@ -310,26 +417,24 @@ function monthLabel(key) {
     <!-- Tren bulanan -->
     <div v-else-if="tab === 'monthly'" class="space-y-3">
       <p class="text-xs text-ink-500">12 bulan terakhir (tidak mengikuti filter tanggal di atas).</p>
-      <div class="panel p-4 space-y-2">
-        <div v-for="m in monthly" :key="m.month" class="space-y-1">
-          <div class="flex items-center justify-between text-sm gap-2">
-            <span class="font-medium w-16 shrink-0">{{ monthLabel(m.month) }}</span>
-            <span class="font-mono text-xs text-ink-500 flex-1 text-right">{{ formatIDR(m.netRevenue) }}</span>
-            <span
-              class="font-mono text-xs w-28 text-right shrink-0"
-              :class="m.netProfit >= 0 ? 'text-green-600' : 'text-red-600'"
-            >
-              {{ formatIDR(m.netProfit) }}
-            </span>
-          </div>
-          <div class="h-2 rounded-full bg-ink-100 overflow-hidden">
-            <div
-              class="h-full bg-teal-500 rounded-full"
-              :style="{ width: Math.round((Math.abs(m.netRevenue) / maxMonthly) * 100) + '%' }"
-            ></div>
-          </div>
+
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title">Grafik bulanan</span></div>
+        <div class="p-4 space-y-6">
+          <ReportBarChart
+            :labels="monthlyChartLabels"
+            :series="monthlyRevenueSeries"
+            :height="240"
+          />
+          <ReportBarChart
+            :labels="monthlyChartLabels"
+            :series="monthlyProfitSeries"
+            :height="200"
+            allow-negative
+          />
         </div>
       </div>
+
       <div class="panel overflow-x-auto">
         <table class="table-std min-w-[40rem]">
           <thead>

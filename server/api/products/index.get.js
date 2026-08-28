@@ -3,6 +3,31 @@ import { useDb, schema } from '../../db/index.js'
 import { getHppForProducts } from '../../utils/productHpp.js'
 import { loadProjectFinanceMap } from '../../utils/projectRevenue.js'
 
+function presentProjectFinance(p, finance) {
+  const summary = finance?.summary
+  const scopeRevenue = summary?.revenue ?? 0
+  const fallbackRevenue = Math.max(Math.round(Number(p.erpTotalValue) || 0), 0)
+  const hasRab = !!finance?.rab
+  const hasScope = hasRab || (finance?.extraLines?.length > 0) || fallbackRevenue > 0
+  const revenue = scopeRevenue > 0 ? scopeRevenue : fallbackRevenue
+  const wageTotal = summary?.wageTotal ?? 0
+  const goodsCost = summary?.goodsCost ?? 0
+  const profit = scopeRevenue > 0 ? (summary?.profit ?? 0) : fallbackRevenue - goodsCost - wageTotal
+
+  return {
+    hasRab,
+    hasScope,
+    rabId: finance?.rab?.id || null,
+    customerName: finance?.rab?.customerName || p.customerName || null,
+    goodsSale: summary?.goodsSale ?? 0,
+    goodsCost,
+    serviceSale: summary?.serviceSale ?? 0,
+    revenue,
+    profit,
+    wageTotal
+  }
+}
+
 export default defineEventHandler(async () => {
   const db = useDb()
   const products = await db.select().from(schema.products).orderBy(asc(schema.products.name))
@@ -20,7 +45,7 @@ export default defineEventHandler(async () => {
   return products.map((p) => {
     const hpp = hppMap.get(p.id)
     const finance = financeMap.get(p.id)
-    const summary = finance?.summary
+    const financeView = presentProjectFinance(p, finance)
     const printMinutesPerUnit = (hpp?.recipeRows || []).reduce(
       (max, r) => Math.max(max, r.printTimeMinutes || 0),
       0
@@ -30,14 +55,7 @@ export default defineEventHandler(async () => {
       hpp: hpp?.total ?? 0,
       hasRecipe: (hpp?.recipeRows?.length ?? 0) > 0,
       printMinutesPerUnit,
-      hasRab: !!finance?.rab,
-      rabId: finance?.rab?.id || null,
-      customerName: finance?.rab?.customerName || p.customerName || null,
-      goodsSale: summary?.goodsSale ?? 0,
-      goodsCost: summary?.goodsCost ?? 0,
-      serviceSale: summary?.serviceSale ?? 0,
-      revenue: summary?.revenue ?? 0,
-      profit: summary?.profit ?? 0,
+      ...financeView,
       hasSale: soldIds.has(p.id)
     }
   })

@@ -260,7 +260,7 @@ async function saveUse() {
         <dl class="grid grid-cols-2 gap-2 text-sm">
           <div class="rounded-panel bg-ink-50 px-2.5 py-2">
             <dt class="text-[10px] uppercase tracking-wide text-ink-500">Stok</dt>
-            <dd class="font-mono font-medium mt-0.5">{{ formatNumber(m.stockQuantity, 1) }} {{ m.unit }}</dd>
+            <dd class="font-mono font-medium mt-0.5">{{ formatNumber(m.stockQuantity) }} {{ m.unit }}</dd>
           </div>
           <div class="rounded-panel bg-ink-50 px-2.5 py-2">
             <dt class="text-[10px] uppercase tracking-wide text-ink-500">Harga terakhir</dt>
@@ -320,7 +320,7 @@ async function saveUse() {
               <td>
                 <span class="badge" :class="materialTypeBadge(m.type)">{{ materialTypeLabel(m.type) }}</span>
               </td>
-              <td class="num">{{ formatNumber(m.stockQuantity, 1) }} {{ m.unit }}</td>
+              <td class="num">{{ formatNumber(m.stockQuantity) }} {{ m.unit }}</td>
               <td>
                 <span class="badge" :class="stockStatusBadge(m.stockStatus)">{{ stockStatusLabel(m.stockStatus) }}</span>
               </td>
@@ -376,12 +376,12 @@ async function saveUse() {
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="label">Stok awal</label>
-            <input v-model.number="form.stockQuantity" type="number" min="0" step="0.1" class="input-num" />
+            <input v-model.number="form.stockQuantity" type="number" min="0" step="1" class="input-num" />
             <p class="text-xs text-ink-400 mt-1">Yang sudah ada di gudang. Tidak potong kas.</p>
           </div>
           <div>
             <label class="label">Menipis jika sisa ≤</label>
-            <input v-model.number="form.lowStockQuantity" type="number" min="0" step="0.1" class="input-num" />
+            <input v-model.number="form.lowStockQuantity" type="number" min="0" step="1" class="input-num" />
           </div>
         </div>
         <p v-if="errorMsg" class="text-sm text-red-600">{{ errorMsg }}</p>
@@ -397,7 +397,7 @@ async function saveUse() {
     <AppModal v-if="buyTarget" :title="`Beli ${buyTarget.name}`" @close="buyTarget = null">
       <form class="space-y-3" @submit.prevent="saveBuy">
         <p class="text-xs text-ink-500">
-          Stok sekarang {{ formatNumber(buyTarget.stockQuantity, 1) }} {{ buyTarget.unit }}. Total beli masuk pengeluaran dan memotong estimasi kas.
+          Stok sekarang {{ formatNumber(buyTarget.stockQuantity) }} {{ buyTarget.unit }}. Total beli masuk pengeluaran dan memotong estimasi kas.
         </p>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div class="date-field">
@@ -421,7 +421,7 @@ async function saveUse() {
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="label">Qty ({{ buyTarget.unit }})</label>
-            <input v-model.number="buyForm.quantity" type="number" min="0.1" step="0.1" class="input-num" required />
+            <input v-model.number="buyForm.quantity" type="number" min="1" step="1" class="input-num" required />
           </div>
           <div>
             <label class="label">Harga / {{ buyTarget.unit }}</label>
@@ -456,7 +456,7 @@ async function saveUse() {
       <form class="space-y-3" @submit.prevent="saveUse">
         <p class="text-sm text-ink-600">
           Stok sekarang
-          <span class="font-mono font-semibold">{{ formatNumber(useTarget.stockQuantity, 1) }} {{ useTarget.unit }}</span>.
+          <span class="font-mono font-semibold">{{ formatNumber(useTarget.stockQuantity) }} {{ useTarget.unit }}</span>.
           Tidak memotong kas — sudah dibayar saat beli.
         </p>
         <div>

@@ -88,7 +88,7 @@ function confirmAdd() {
 
 function stockLabel(p) {
   const qty = Number(p.stockQuantity) || 0
-  return qty > 0 ? `Stok ${formatNumber(qty, 1)} ${p.unit}` : 'Stok 0'
+  return qty > 0 ? `Stok ${formatNumber(qty)} ${p.unit}` : 'Stok 0'
 }
 </script>
 

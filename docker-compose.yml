@@ -14,7 +14,7 @@ services:
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
       MINIO_BUCKET: ${MINIO_BUCKET:-ocn-files}
     ports:
-      - "3017:3000"
+      - "3018:3000"
     networks:
       - default
       - coolify

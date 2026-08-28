@@ -38,6 +38,10 @@ function landedUnitPrices(lines, extras) {
   })
 }
 
+function parsePurchaseQty(value) {
+  return Math.max(Math.round(Number(value) || 0), 0)
+}
+
 function parseStockQuantity(line, quantity) {
   if (line.stockQuantity === undefined || line.stockQuantity === null || line.stockQuantity === '') {
     return quantity
@@ -49,7 +53,7 @@ function parseStockQuantity(line, quantity) {
   if (stock > quantity) {
     throw createError({ statusCode: 400, statusMessage: 'Qty masuk stok tidak boleh lebih dari qty beli' })
   }
-  return stock
+  return Math.max(Math.round(stock), 0)
 }
 
 export default defineEventHandler(async (event) => {
@@ -62,13 +66,13 @@ export default defineEventHandler(async (event) => {
   const rawLines = Array.isArray(body.lines) ? body.lines : []
   const lines = rawLines
     .map((l) => {
-      const quantity = Number(l.quantity) || 0
+      const quantity = parsePurchaseQty(l.quantity)
       return {
         itemType: l.itemType === 'packaging' ? 'packaging' : 'material',
         materialId: l.itemType === 'packaging' ? null : Number(l.materialId) || null,
         packagingId: l.itemType === 'packaging' ? Number(l.packagingId) || null : null,
         quantity,
-        stockQuantity: parseStockQuantity(l, quantity),
+        stockQuantity: Math.min(parseStockQuantity(l, quantity), quantity),
         unitPrice: Math.round(Number(l.unitPrice) || 0)
       }
     })

@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { localDateStr } from './dates.js'
+import { machineTotalValue, parseMachineQuantity } from './machines.js'
 
 const EQUIPMENT_CATEGORY = 'machine'
 
@@ -8,11 +9,14 @@ export function normalizeAcquisition(value) {
 }
 
 function expensePayload(machine) {
+  const qty = parseMachineQuantity(machine.quantity)
+  const total = machineTotalValue(machine)
+  const qtyNote = qty > 1 ? ` (${qty}× ${Math.round(Number(machine.purchasePrice) || 0).toLocaleString('id-ID')})` : ''
   return {
     date: machine.purchaseDate || localDateStr(),
     category: EQUIPMENT_CATEGORY,
-    description: `Pembelian peralatan: ${machine.name}`,
-    amount: Math.round(Number(machine.purchasePrice) || 0)
+    description: `Pembelian peralatan: ${machine.name}${qtyNote}`,
+    amount: total
   }
 }
 

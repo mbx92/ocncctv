@@ -1,4 +1,5 @@
 export function normalizeProductStatus(status) {
+  if (status === 'pending') return 'pending'
   if (status === 'in_progress' || status === 'active') return 'in_progress'
   if (status === 'done' || status === 'discontinued') return 'done'
   return 'waiting'

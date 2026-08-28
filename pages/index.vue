@@ -188,7 +188,7 @@ function signedPct(n) {
                 :class="m.stockStatus === 'empty' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'"
               >
                 {{ m.stockStatus === 'empty' ? 'Habis' : 'Menipis' }}
-                · {{ formatNumber(m.stockQuantity, 1) }} {{ m.unit }}
+                · {{ formatNumber(m.stockQuantity) }} {{ m.unit }}
               </span>
             </NuxtLink>
             <NuxtLink
@@ -198,7 +198,7 @@ function signedPct(n) {
               class="flex items-center justify-between hover:bg-ink-50 -mx-1 px-1 rounded"
             >
               <span>{{ p.name }} <span class="text-ink-400">(produk)</span></span>
-              <span class="badge bg-amber-100 text-amber-800 font-mono">{{ formatNumber(p.stockQuantity, 1) }} {{ p.unit }}</span>
+              <span class="badge bg-amber-100 text-amber-800 font-mono">{{ formatNumber(p.stockQuantity) }} {{ p.unit }}</span>
             </NuxtLink>
           </template>
           <p v-else class="text-ink-500">Semua stok aman.</p>

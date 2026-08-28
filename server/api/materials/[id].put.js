@@ -1,13 +1,13 @@
 import { eq } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
 import { requireAdmin } from '../../utils/rbac.js'
-import { parseMaterialType, parseLowStockQuantity, stockStatusFromQuantity } from '../../utils/materialType.js'
+import { parseMaterialType, parseLowStockQuantity, parseMaterialStockQuantity, stockStatusFromQuantity } from '../../utils/materialType.js'
 
 export default defineEventHandler(async (event) => {
   requireAdmin(event)
   const id = Number(getRouterParam(event, 'id'))
   const body = await readBody(event)
-  const stockQuantity = Number(body.stockQuantity) || 0
+  const stockQuantity = parseMaterialStockQuantity(body.stockQuantity)
   const lowStockQuantity = parseLowStockQuantity(body.lowStockQuantity)
   const db = useDb()
   const rows = await db

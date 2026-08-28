@@ -568,7 +568,10 @@ const tab = computed({
         </div>
 
         <div class="px-4 py-3 sm:px-6 border-b border-ink-100 bg-ink-50">
-          <div v-if="projectPhase === 'waiting'" class="flex flex-col sm:flex-row sm:items-end gap-3">
+          <div v-if="projectPhase === 'waiting' || projectPhase === 'pending'" class="flex flex-col sm:flex-row sm:items-end gap-3">
+            <p v-if="projectPhase === 'pending'" class="text-sm text-violet-700 w-full sm:w-auto">
+              Diimpor dari ERP — periksa item & upah, lalu mulai manual.
+            </p>
             <div class="date-field sm:max-w-xs flex-1">
               <label class="label">Tanggal akan dimulai</label>
               <input v-model="plannedStartDate" type="date" class="input" />

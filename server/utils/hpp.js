@@ -1,4 +1,5 @@
 // Perhitungan HPP per unit produk dari recipe + packaging.
+import { parseMachineQuantity } from './machines.js'
 // recipeRows: baris product_recipes yang sudah di-join material & machine.
 // packagingRows: baris product_packaging yang sudah di-join packaging.
 // settings: baris app_settings (tarif listrik & asumsi jam pakai mesin/bulan).
@@ -24,7 +25,7 @@ export function computeHpp(recipeRows, packagingRows, settings) {
     if (row.machine) {
       electricityCost += hours * ((row.machine.powerWatt ?? 0) / 1000) * rate
       const depPerHour =
-        (row.machine.purchasePrice ?? 0) /
+        ((row.machine.purchasePrice ?? 0) * parseMachineQuantity(row.machine.quantity)) /
         Math.max(row.machine.depreciationMonths ?? 1, 1) /
         usageHours
       depreciationCost += hours * depPerHour

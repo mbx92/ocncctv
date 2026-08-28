@@ -1,4 +1,5 @@
 import { saleMoney } from './salePayment.js'
+import { machineTotalValue } from './machines.js'
 
 // Posisi modal kas + estimasi kas.
 // Alat yang sudah dimiliki (acquisition=owned) tidak masuk pengeluaran.
@@ -32,7 +33,7 @@ export function totalCashOut(expenseRows) {
 export function equipmentAssetTotal(machineRows) {
   return (machineRows || []).reduce((sum, row) => {
     if (row.acquisition === 'purchased') return sum
-    return sum + (Number(row.purchasePrice) || 0)
+    return sum + machineTotalValue(row)
   }, 0)
 }
 

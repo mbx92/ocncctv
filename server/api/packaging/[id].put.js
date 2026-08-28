@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
       name: body.name,
       unit: body.unit,
       pricePerUnit: Math.round(Number(body.pricePerUnit) || 0),
-      stockQuantity: Number(body.stockQuantity) || 0,
+      stockQuantity: Math.max(Math.round(Number(body.stockQuantity) || 0), 0),
       supplier: body.supplier || null
     })
     .where(eq(schema.packaging.id, id))
