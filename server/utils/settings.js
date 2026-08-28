@@ -8,3 +8,19 @@ export async function getSettings() {
   const inserted = await db.insert(schema.appSettings).values({}).returning()
   return inserted[0]
 }
+
+export function presentSettings(row) {
+  const key = String(row?.erpSyncApiKey || '').trim()
+  const { erpSyncApiKey, ...rest } = row || {}
+  return {
+    ...rest,
+    erpSyncApiKeySet: !!key,
+    erpSyncApiKeyHint: key ? `••••${key.slice(-4)}` : null
+  }
+}
+
+export function erpSyncConfig(settings, runtime = {}) {
+  const baseUrl = String(settings?.erpSyncBaseUrl || runtime.baseUrl || '').trim().replace(/\/+$/, '')
+  const apiKey = String(settings?.erpSyncApiKey || runtime.apiKey || '').trim()
+  return { baseUrl, apiKey }
+}

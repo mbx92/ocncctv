@@ -158,17 +158,6 @@ export const machines = pgTable('machines', {
   expenseId: integer('expense_id').references(() => expenses.id, { onDelete: 'set null' }),
   // Object key gambar di MinIO (bucket sama dengan file 3D). null = tanpa gambar.
   imageKey: text('image_key'),
-  // Smart plug Tuya (Local Tuya). local_key jangan dikirim ke klien.
-  tuyaIp: text('tuya_ip'),
-  tuyaDeviceId: text('tuya_device_id'),
-  tuyaLocalKey: text('tuya_local_key'),
-  tuyaVersion: text('tuya_version').notNull().default('3.4'),
-  tuyaLastPowerWatt: real('tuya_last_power_watt'),
-  tuyaLastVoltage: real('tuya_last_voltage'),
-  tuyaLastCurrentMa: integer('tuya_last_current_ma'),
-  tuyaLastOn: boolean('tuya_last_on'),
-  tuyaLastReadAt: timestamp('tuya_last_read_at'),
-  tuyaLastError: text('tuya_last_error'),
   // owned = sudah dimiliki (aset/modal, tanpa pengeluaran).
   // purchased = beli baru (kas keluar, tercatat di pengeluaran).
   acquisition: text('acquisition').notNull().default('owned')
@@ -190,8 +179,12 @@ export const products = pgTable('products', {
   plannedStartDate: date('planned_start_date'),
   startedAt: date('started_at'),
   completedAt: date('completed_at'),
+  customerName: text('customer_name'),
+  erpProjectId: text('erp_project_id'),
   createdAt: timestamp('created_at').notNull().defaultNow()
-})
+}, (t) => ({
+  erpProjectUniq: uniqueIndex('products_erp_project_id_uidx').on(t.erpProjectId)
+}))
 
 export const productImages = pgTable('product_images', {
   id: serial('id').primaryKey(),
@@ -310,6 +303,33 @@ export const projectTechnicianWages = pgTable(
   })
 )
 
+// Item/jasa tambahan di proyek, di luar baris RAB. Penawaran RAB tetap utuh.
+export const projectExtraLines = pgTable(
+  'project_extra_lines',
+  {
+    id: serial('id').primaryKey(),
+    productId: integer('product_id')
+      .notNull()
+      .references(() => products.id, { onDelete: 'cascade' }),
+    lineType: customOrderLineTypeEnum('line_type').notNull().default('catalog'),
+    catalogItemId: integer('catalog_item_id').references(() => supplierCatalogItems.id, {
+      onDelete: 'set null'
+    }),
+    serviceId: integer('service_id').references(() => services.id, { onDelete: 'set null' }),
+    packagingId: integer('packaging_id').references(() => packaging.id, { onDelete: 'set null' }),
+    name: text('name').notNull(),
+    code: text('code'),
+    unit: text('unit'),
+    quantity: real('quantity').notNull().default(1),
+    costPrice: integer('cost_price').notNull().default(0),
+    salePrice: integer('sale_price').notNull().default(0),
+    sortOrder: integer('sort_order').notNull().default(0)
+  },
+  (t) => ({
+    productIdx: pgIndex('project_extra_lines_product_id_idx').on(t.productId)
+  })
+)
+
 export const customOrders = pgTable(
   'custom_orders',
   {
@@ -360,6 +380,27 @@ export const customOrderLines = pgTable(
   (t) => ({
     orderIdx: pgIndex('custom_order_lines_custom_order_id_idx').on(t.customOrderId),
     packagingIdx: pgIndex('custom_order_lines_packaging_id_idx').on(t.packagingId)
+  })
+)
+
+// Qty aktual baris RAB di proyek (boleh lebih kecil / 0). Penawaran RAB tidak diubah.
+export const projectRabAdjustments = pgTable(
+  'project_rab_adjustments',
+  {
+    id: serial('id').primaryKey(),
+    productId: integer('product_id')
+      .notNull()
+      .references(() => products.id, { onDelete: 'cascade' }),
+    customOrderLineId: integer('custom_order_line_id')
+      .notNull()
+      .references(() => customOrderLines.id, { onDelete: 'cascade' }),
+    quantity: real('quantity').notNull().default(0)
+  },
+  (t) => ({
+    productLineUniq: uniqueIndex('project_rab_adjustments_product_line_uidx').on(
+      t.productId,
+      t.customOrderLineId
+    )
   })
 )
 
@@ -454,7 +495,10 @@ export const appSettings = pgTable('app_settings', {
   invoicePhone: text('invoice_phone'),
   invoiceFooter: text('invoice_footer'),
   rabFooter: text('rab_footer'),
-  invoiceShareTtlDays: integer('invoice_share_ttl_days').notNull().default(7)
+  invoiceShareTtlDays: integer('invoice_share_ttl_days').notNull().default(7),
+  erpSyncBaseUrl: text('erp_sync_base_url'),
+  erpSyncApiKey: text('erp_sync_api_key'),
+  erpSyncLastAt: timestamp('erp_sync_last_at')
 })
 
 // Tautan publik invoice: token acak, kadaluarsa sesuai pengaturan saat dibuat.

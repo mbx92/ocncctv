@@ -5,7 +5,8 @@ import {
   TrashIcon,
   CheckIcon,
   XMarkIcon,
-  MagnifyingGlassIcon
+  MagnifyingGlassIcon,
+  ArrowPathIcon
 } from '@heroicons/vue/24/outline'
 import { PRODUCT_STATUSES, productStatusLabel, productStatusClass } from '~/utils/productStatus.js'
 
@@ -21,7 +22,11 @@ const filteredProducts = computed(() => {
   return (products.value || []).filter((p) => {
     if (statusFilter.value && p.status !== statusFilter.value) return false
     if (!q) return true
-    return p.name.toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q)
+    return (
+      p.name.toLowerCase().includes(q) ||
+      (p.description || '').toLowerCase().includes(q) ||
+      (p.customerName || '').toLowerCase().includes(q)
+    )
   })
 })
 const { page, pageSize, paged, total, totalPages, rangeStart, rangeEnd, reset } = usePagination(
@@ -33,6 +38,21 @@ watch([search, statusFilter], reset)
 const showForm = ref(false)
 const form = ref({})
 const errorMsg = ref('')
+const syncing = ref(false)
+
+async function syncErp() {
+  if (syncing.value) return
+  syncing.value = true
+  try {
+    const data = await $fetch('/api/projects/sync-erp', { method: 'POST', timeout: 120000 })
+    await refresh()
+    useToast().success(data.message || 'Sync ERP selesai.')
+  } catch (e) {
+    useToast().error(e.data?.statusMessage || 'Gagal sync dari ERP')
+  } finally {
+    syncing.value = false
+  }
+}
 
 function openAdd() {
   form.value = { name: '', description: '' }
@@ -65,11 +85,18 @@ async function remove(p) {
     <div class="flex items-center justify-between gap-2">
       <div>
         <h1 class="text-xl font-bold">Proyek</h1>
-        <p class="text-xs text-ink-500">Pekerjaan pemasangan dari RAB Deal — item, jasa, dan revenue.</p>
+        <p class="text-xs text-ink-500">Pekerjaan pemasangan dari RAB Deal atau sync proyek selesai dari ERP.</p>
       </div>
-      <button v-if="isAdmin" class="btn-primary" @click="openAdd">
-        <PlusIcon class="w-4 h-4" /><span class="hidden sm:inline">Tambah Proyek</span><span class="sm:hidden">Tambah</span>
-      </button>
+      <div class="flex items-center gap-2">
+        <button v-if="isAdmin" type="button" class="btn-secondary" :disabled="syncing" @click="syncErp">
+          <ArrowPathIcon class="w-4 h-4" :class="syncing ? 'animate-spin' : ''" />
+          <span class="hidden sm:inline">{{ syncing ? 'Sync ERP…' : 'Sync ERP' }}</span>
+          <span class="sm:hidden">{{ syncing ? '…' : 'ERP' }}</span>
+        </button>
+        <button v-if="isAdmin" class="btn-primary" @click="openAdd">
+          <PlusIcon class="w-4 h-4" /><span class="hidden sm:inline">Tambah Proyek</span><span class="sm:hidden">Tambah</span>
+        </button>
+      </div>
     </div>
 
     <div class="flex flex-col sm:flex-row flex-wrap gap-2">
@@ -109,7 +136,10 @@ async function remove(p) {
                 <NuxtLink :to="`/projects/${p.id}`" class="font-medium text-ink-900 hover:text-accent-600">
                   {{ p.name }}
                 </NuxtLink>
-                <div v-if="p.description" class="text-xs text-ink-400">{{ p.description }}</div>
+                <div v-if="p.customerName || p.description" class="text-xs text-ink-400">
+                  {{ p.customerName || p.description }}
+                </div>
+                <div v-if="p.erpProjectId" class="text-[10px] uppercase tracking-wide text-ink-400 mt-0.5">Dari ERP</div>
               </td>
               <td><span class="badge" :class="productStatusClass(p.status)">{{ statusLabel[p.status] }}</span></td>
               <td class="num">
@@ -158,6 +188,7 @@ async function remove(p) {
         </div>
         <div class="text-sm font-mono">
           <span v-if="p.hasRab">Pendapatan {{ formatIDR(p.revenue) }} · Laba {{ formatIDR(p.profit) }}</span>
+          <span v-else-if="p.erpProjectId" class="text-ink-400 text-xs">Dari ERP{{ p.customerName ? ` · ${p.customerName}` : '' }}</span>
           <span v-else class="text-ink-400 text-xs">Belum terkait RAB</span>
         </div>
         <div class="btn-actions pt-1">

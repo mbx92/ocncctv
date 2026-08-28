@@ -78,18 +78,65 @@ function formatBytes(bytes) {
   return n + ' B'
 }
 
-const {
-  data: tuyaReady,
-  refresh: refreshTuya,
-  status: tuyaFetchStatus
-} = await useFetch('/api/tuya/ready', { immediate: false })
+const erpForm = ref({
+  erpSyncBaseUrl: settings.value?.erpSyncBaseUrl || '',
+  erpSyncApiKey: ''
+})
+const erpSaving = ref(false)
+const erpSyncing = ref(false)
+const erpMsg = ref('')
+
 watch(
-  tab,
-  (id) => {
-    if (id === 'integrasi' && isAdmin.value) refreshTuya()
-  },
-  { immediate: true }
+  () => settings.value?.erpSyncBaseUrl,
+  (url) => {
+    if (url != null) erpForm.value.erpSyncBaseUrl = url || ''
+  }
 )
+
+async function saveErp() {
+  if (!isAdmin.value) return
+  erpSaving.value = true
+  erpMsg.value = ''
+  try {
+    const saved = await $fetch('/api/settings', {
+      method: 'PUT',
+      body: {
+        ...form.value,
+        erpSyncBaseUrl: erpForm.value.erpSyncBaseUrl,
+        erpSyncApiKey: erpForm.value.erpSyncApiKey
+      }
+    })
+    await refresh()
+    Object.assign(form.value, settings.value)
+    erpForm.value.erpSyncApiKey = ''
+    erpMsg.value = saved.erpSyncApiKeySet ? 'Integrasi ERP tersimpan.' : 'URL tersimpan. Isi API key untuk sync.'
+    setTimeout(() => (erpMsg.value = ''), 3000)
+    return true
+  } catch (e) {
+    useToast().error(e.data?.statusMessage || 'Gagal menyimpan integrasi ERP')
+    return false
+  } finally {
+    erpSaving.value = false
+  }
+}
+
+async function syncErpProjects() {
+  if (erpSyncing.value) return
+  erpSyncing.value = true
+  try {
+    if (erpForm.value.erpSyncBaseUrl !== (settings.value?.erpSyncBaseUrl || '') || erpForm.value.erpSyncApiKey) {
+      const saved = await saveErp()
+      if (!saved) return
+    }
+    const data = await $fetch('/api/projects/sync-erp', { method: 'POST', timeout: 120000 })
+    await refresh()
+    useToast().success(data.message || 'Sync ERP selesai.')
+  } catch (e) {
+    useToast().error(e.data?.statusMessage || 'Gagal sync proyek dari ERP')
+  } finally {
+    erpSyncing.value = false
+  }
+}
 </script>
 
 <template>
@@ -275,41 +322,50 @@ watch(
 
       <div class="panel">
         <div class="panel-header">
-          <span class="panel-title">Tuya (smart plug)</span>
-          <button
-            v-if="isAdmin"
-            class="btn-secondary"
-            :disabled="tuyaFetchStatus === 'pending'"
-            @click="refreshTuya"
-          >
-            <ArrowPathIcon class="w-3.5 h-3.5" />Cek ulang
-          </button>
+          <span class="panel-title">ERP OCN (proyek selesai)</span>
         </div>
-        <div class="p-4 space-y-2 text-sm">
-          <template v-if="isAdmin">
-            <div class="flex items-center gap-2">
-              <span
-                class="inline-block w-2.5 h-2.5 rounded-full shrink-0"
-                :class="tuyaReady?.ok ? 'bg-green-500' : 'bg-amber-500'"
-              ></span>
-              <span class="font-medium">{{ tuyaReady?.ok ? 'Library local Tuya siap' : 'Library belum siap / belum dicek' }}</span>
-            </div>
-            <dl class="grid grid-cols-2 gap-x-4 gap-y-2">
-              <div>
-                <dt class="text-xs uppercase text-ink-500">Cloud API</dt>
-                <dd>{{ tuyaReady?.cloudConfigured ? 'Terkonfigurasi' : 'Belum diisi' }}</dd>
-              </div>
-              <div>
-                <dt class="text-xs uppercase text-ink-500">Region</dt>
-                <dd class="font-mono">{{ tuyaReady?.region || '—' }}</dd>
-              </div>
-            </dl>
-            <p v-if="tuyaReady?.error" class="text-sm text-red-600">{{ tuyaReady.error }}</p>
-            <p class="text-xs text-ink-400">
-              `TUYA_API_KEY` / `TUYA_API_SECRET` di environment. Pairing perangkat di halaman Mesin.
+        <div class="p-4 space-y-3">
+          <p class="text-xs text-ink-500">
+            Ambil proyek status selesai dari usaha OC Networks di paymentSystemOCN. RAB tidak ikut.
+          </p>
+          <div>
+            <label class="label">URL ERP</label>
+            <input
+              v-model="erpForm.erpSyncBaseUrl"
+              class="input"
+              :disabled="!isAdmin"
+              placeholder="http://localhost:8000"
+              autocomplete="off"
+            />
+          </div>
+          <div>
+            <label class="label">API key</label>
+            <input
+              v-model="erpForm.erpSyncApiKey"
+              class="input"
+              type="password"
+              :disabled="!isAdmin"
+              :placeholder="settings?.erpSyncApiKeyHint || 'sama dengan OCN_CCTV_API_KEY di ERP'"
+              autocomplete="new-password"
+            />
+            <p class="text-xs text-ink-400 mt-1">
+              Key di ERP: `OCN_CCTV_API_KEY`. Usaha: `OCN_CCTV_COMPANY_NAME` (default OC Networks).
             </p>
-          </template>
-          <p v-else class="text-ink-500">Status Tuya hanya terlihat oleh admin.</p>
+          </div>
+          <p v-if="settings?.erpSyncLastAt" class="text-xs text-ink-400">
+            Terakhir sync {{ formatDate(settings.erpSyncLastAt) }}
+          </p>
+          <div v-if="isAdmin" class="flex flex-wrap items-center gap-2 pt-1">
+            <button type="button" class="btn-secondary" :disabled="erpSaving" @click="saveErp">
+              <CheckIcon class="w-4 h-4" />{{ erpSaving ? 'Menyimpan…' : 'Simpan' }}
+            </button>
+            <button type="button" class="btn-primary" :disabled="erpSyncing || erpSaving" @click="syncErpProjects">
+              <ArrowPathIcon class="w-4 h-4" :class="erpSyncing ? 'animate-spin' : ''" />
+              {{ erpSyncing ? 'Sync…' : 'Sync sekarang' }}
+            </button>
+            <span v-if="erpMsg" class="text-sm text-green-600">{{ erpMsg }}</span>
+          </div>
+          <p v-else class="text-sm text-ink-500">Integrasi ERP hanya diubah oleh admin.</p>
         </div>
       </div>
     </div>

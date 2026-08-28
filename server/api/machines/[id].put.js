@@ -2,7 +2,6 @@ import { eq } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
 import { requireAdmin } from '../../utils/rbac.js'
 import { logAudit } from '../../utils/audit.js'
-import { publicMachine, tuyaFieldsFromBody } from '../../utils/tuyaLocal.js'
 import { normalizeAcquisition, syncMachinePurchaseExpense } from '../../utils/machineExpense.js'
 
 export default defineEventHandler(async (event) => {
@@ -13,10 +12,6 @@ export default defineEventHandler(async (event) => {
   const machine = await db.transaction(async (tx) => {
     const [existing] = await tx.select().from(schema.machines).where(eq(schema.machines.id, id))
     if (!existing) throw createError({ statusCode: 404, statusMessage: 'Peralatan tidak ditemukan' })
-    const tuyaUpdate =
-      body.tuyaIp !== undefined || body.tuyaDeviceId !== undefined || body.tuyaClear
-        ? tuyaFieldsFromBody(body, existing)
-        : {}
     const [row] = await tx
       .update(schema.machines)
       .set({
@@ -26,13 +21,12 @@ export default defineEventHandler(async (event) => {
         purchaseDate: body.purchaseDate || null,
         depreciationMonths: Math.round(Number(body.depreciationMonths) || 36),
         notes: body.notes || null,
-        acquisition: normalizeAcquisition(body.acquisition ?? existing.acquisition),
-        ...tuyaUpdate
+        acquisition: normalizeAcquisition(body.acquisition ?? existing.acquisition)
       })
       .where(eq(schema.machines.id, id))
       .returning()
     return syncMachinePurchaseExpense(tx, schema, row)
   })
   await logAudit(event, { action: 'update', entity: 'machine', entityId: id, summary: `Ubah peralatan "${machine.name}"` })
-  return publicMachine(machine)
+  return machine
 })

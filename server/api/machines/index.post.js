@@ -1,7 +1,6 @@
 import { useDb, schema } from '../../db/index.js'
 import { requireAdmin } from '../../utils/rbac.js'
 import { logAudit } from '../../utils/audit.js'
-import { publicMachine, tuyaFieldsFromBody } from '../../utils/tuyaLocal.js'
 import { normalizeAcquisition, syncMachinePurchaseExpense } from '../../utils/machineExpense.js'
 
 export default defineEventHandler(async (event) => {
@@ -19,12 +18,11 @@ export default defineEventHandler(async (event) => {
         purchaseDate: body.purchaseDate || null,
         depreciationMonths: Math.round(Number(body.depreciationMonths) || 36),
         notes: body.notes || null,
-        acquisition: normalizeAcquisition(body.acquisition),
-        ...tuyaFieldsFromBody(body, null)
+        acquisition: normalizeAcquisition(body.acquisition)
       })
       .returning()
     return syncMachinePurchaseExpense(tx, schema, row)
   })
   await logAudit(event, { action: 'create', entity: 'machine', entityId: machine.id, summary: `Tambah peralatan "${machine.name}"` })
-  return publicMachine(machine)
+  return machine
 })

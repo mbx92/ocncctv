@@ -32,7 +32,7 @@ export default defineEventHandler(async () => {
       printMinutesPerUnit,
       hasRab: !!finance?.rab,
       rabId: finance?.rab?.id || null,
-      customerName: finance?.rab?.customerName || null,
+      customerName: finance?.rab?.customerName || p.customerName || null,
       goodsSale: summary?.goodsSale ?? 0,
       goodsCost: summary?.goodsCost ?? 0,
       serviceSale: summary?.serviceSale ?? 0,

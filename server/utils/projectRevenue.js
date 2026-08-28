@@ -1,5 +1,6 @@
 import { asc, inArray } from 'drizzle-orm'
 import { loadRabLines, withRabTotals } from './customOrders.js'
+import { applyRabAdjustments, loadProjectExtraLines, loadProjectRabAdjustments } from './projectLines.js'
 
 function lineAmount(line) {
   return Math.round((Number(line.quantity) || 0) * (Number(line.salePrice) || 0))
@@ -39,7 +40,7 @@ export async function loadProjectFinanceMap(db, schema, productIds) {
   const map = new Map(
     ids.map((id) => [
       id,
-      { rab: null, wages: [], summary: summarizeProjectRevenue([], []) }
+      { rab: null, extraLines: [], rabAdjustments: [], wages: [], summary: summarizeProjectRevenue([], []) }
     ])
   )
   if (!ids.length) return map
@@ -51,6 +52,15 @@ export async function loadProjectFinanceMap(db, schema, productIds) {
     .orderBy(asc(schema.projectTechnicianWages.sortOrder), asc(schema.projectTechnicianWages.id))
   for (const row of wageRows) {
     map.get(row.productId)?.wages.push(row)
+  }
+
+  const extraMap = await loadProjectExtraLines(db, schema, ids)
+  const adjMap = await loadProjectRabAdjustments(db, schema, ids)
+  for (const id of ids) {
+    const entry = map.get(id)
+    if (!entry) continue
+    entry.extraLines = extraMap.get(id) || []
+    entry.rabAdjustments = adjMap.get(id) || []
   }
 
   const rabs = await db
@@ -65,10 +75,12 @@ export async function loadProjectFinanceMap(db, schema, productIds) {
     const entry = map.get(rab.projectId)
     if (!entry) continue
     entry.rab = withRabTotals(rab, lineMap.get(rab.id) || [])
+    entry.rab.lines = applyRabAdjustments(entry.rab.lines, entry.rabAdjustments)
   }
 
   for (const entry of map.values()) {
-    entry.summary = summarizeProjectRevenue(entry.rab?.lines || [], entry.wages)
+    const rabLines = (entry.rab?.lines || []).map((line) => ({ ...line, source: line.source || 'rab' }))
+    entry.summary = summarizeProjectRevenue([...rabLines, ...entry.extraLines], entry.wages)
   }
   return map
 }

@@ -20,6 +20,8 @@ export default defineEventHandler(async (event) => {
     ...rows[0],
     images,
     rab: finance?.rab || null,
+    extraLines: finance?.extraLines || [],
+    rabAdjustments: finance?.rabAdjustments || [],
     wages: finance?.wages || [],
     finance: finance?.summary || null,
     hpp: hpp.total,

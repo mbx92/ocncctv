@@ -34,21 +34,20 @@ function ymd(year, monthIndex, day) {
   return `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
-function projectRange(p) {
+function projectEvent(p) {
   const status = normalizeProductStatus(p.status)
   const planned = toYmd(p.plannedStartDate)
   const started = toYmd(p.startedAt)
   const done = toYmd(p.completedAt)
   if (status === 'done') {
-    const from = started || planned || done
-    const to = done || started || planned
-    return from && to ? { from, to } : null
+    if (done) return { date: done, kind: 'Selesai' }
+    if (started) return { date: started, kind: 'Mulai' }
+    if (planned) return { date: planned, kind: 'Rencana' }
+    return null
   }
-  if (status === 'in_progress') {
-    const from = started || planned
-    return from ? { from, to: from > today ? from : today } : null
-  }
-  return planned ? { from: planned, to: planned } : null
+  if (planned) return { date: planned, kind: started ? 'Mulai' : 'Rencana' }
+  if (started) return { date: started, kind: 'Mulai' }
+  return null
 }
 
 function statusTone(status) {
@@ -72,26 +71,22 @@ const visibleProjects = computed(() =>
   })
 )
 
-const unscheduled = computed(() => visibleProjects.value.filter((p) => !projectRange(p)))
+const unscheduled = computed(() => visibleProjects.value.filter((p) => !projectEvent(p)))
 
 const eventsByDate = computed(() => {
   const { year, month } = cursor.value
   const monthStart = ymd(year, month, 1)
   const monthEnd = ymd(year, month, new Date(year, month + 1, 0).getDate())
   const map = {}
+  const seen = new Set()
   for (const p of visibleProjects.value) {
-    const range = projectRange(p)
-    if (!range) continue
-    const from = range.from < monthStart ? monthStart : range.from
-    const to = range.to > monthEnd ? monthEnd : range.to
-    if (from > to) continue
-    const startDay = Number(from.slice(8))
-    const endDay = Number(to.slice(8))
-    for (let d = startDay; d <= endDay; d++) {
-      const date = ymd(year, month, d)
-      if (!map[date]) map[date] = []
-      map[date].push(p)
-    }
+    const event = projectEvent(p)
+    if (!event) continue
+    if (event.date < monthStart || event.date > monthEnd) continue
+    if (seen.has(p.id)) continue
+    seen.add(p.id)
+    if (!map[event.date]) map[event.date] = []
+    map[event.date].push({ ...p, calendarKind: event.kind })
   }
   return map
 })
@@ -304,7 +299,9 @@ function selectDay(date) {
               <span class="mt-1.5 w-2 h-2 rounded-full shrink-0" :class="statusDot(p.status)" />
               <div class="min-w-0 flex-1">
                 <div class="font-medium text-sm break-words leading-snug">{{ p.name }}</div>
-                <div v-if="p.customerName" class="text-xs text-ink-500 mt-0.5">{{ p.customerName }}</div>
+                <div class="text-xs text-ink-500 mt-0.5">
+                  {{ p.calendarKind }}{{ p.customerName ? ` · ${p.customerName}` : '' }}
+                </div>
               </div>
               <span class="badge shrink-0" :class="productStatusClass(p.status)">
                 {{ productStatusLabel[p.status] || p.status }}

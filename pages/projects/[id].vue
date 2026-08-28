@@ -37,6 +37,7 @@ const id = route.params.id
 const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
 
 const { data: product, refresh } = await useFetch(`/api/products/${id}`)
+const { data: settings } = await useFetch('/api/settings')
 
 const info = ref({
   name: product.value?.name,
@@ -145,9 +146,64 @@ async function completeProject() {
   }
 }
 
-const rabLines = computed(() => product.value?.rab?.lines || [])
-const goods = computed(() => catalogLines(rabLines.value))
-const jasa = computed(() => serviceLines(rabLines.value))
+const rabLines = computed(() => (product.value?.rab?.lines || []).map((l) => ({ ...l, source: l.source || 'rab' })))
+const extraLines = computed(() => product.value?.extraLines || [])
+const extraDraft = ref((product.value?.extraLines || []).map((l) => ({ ...l })))
+const rabQty = ref(Object.fromEntries((product.value?.rab?.lines || []).map((l) => [l.id, l.quantity])))
+const savingExtras = ref(false)
+const extraError = ref('')
+const extrasLocked = computed(() => projectPhase.value === 'done')
+const canEditExtras = computed(() => isAdmin.value && !extrasLocked.value)
+const marginPercent = computed(() => settings.value?.defaultMarginPercent ?? 40)
+const priceRounding = computed(() => settings.value?.salePriceRounding ?? 500)
+
+watch(
+  () => product.value?.extraLines,
+  (rows) => {
+    if (!savingExtras.value) extraDraft.value = (rows || []).map((l) => ({ ...l }))
+  }
+)
+watch(
+  () => product.value?.rab?.lines,
+  (rows) => {
+    if (savingExtras.value) return
+    rabQty.value = Object.fromEntries((rows || []).map((l) => [l.id, l.quantity]))
+  }
+)
+
+const rabLive = computed(() =>
+  rabLines.value.map((line) => {
+    const originalQuantity = Number(line.originalQuantity ?? line.quantity) || 0
+    const raw = rabQty.value[line.id]
+    const quantity = Math.min(Math.max(Math.round(Number(raw ?? line.quantity) || 0), 0), originalQuantity)
+    return {
+      ...line,
+      originalQuantity,
+      quantity,
+      reduced: quantity < originalQuantity,
+      omitted: quantity <= 0
+    }
+  })
+)
+const scopeLines = computed(() => [...rabLive.value, ...extraDraft.value])
+const goods = computed(() => catalogLines(scopeLines.value))
+const jasa = computed(() => serviceLines(scopeLines.value))
+const rabGoods = computed(() => catalogLines(rabLive.value))
+const rabJasa = computed(() => serviceLines(rabLive.value))
+
+function setRabQty(line, value) {
+  const original = Number(line.originalQuantity ?? line.quantity) || 0
+  rabQty.value = {
+    ...rabQty.value,
+    [line.id]: Math.min(Math.max(Math.round(Number(value) || 0), 0), original)
+  }
+}
+function omitRabLine(line) {
+  setRabQty(line, 0)
+}
+function restoreRabLine(line) {
+  setRabQty(line, line.originalQuantity ?? line.quantity)
+}
 
 function mapWageRow(w) {
   return {
@@ -204,14 +260,14 @@ async function onTechnicianCreated(created) {
   }
 }
 
-const liveFinance = computed(() => summarizeProjectRevenue(rabLines.value, wageRows.value))
+const liveFinance = computed(() => summarizeProjectRevenue(scopeLines.value, wageRows.value))
 const financeMargin = computed(() => {
   const revenue = liveFinance.value.revenue
   if (!revenue) return null
   return Math.round((liveFinance.value.profit / revenue) * 100)
 })
-const previewLines = computed(() => rabLines.value.slice(0, 5))
-const extraLineCount = computed(() => Math.max(rabLines.value.length - previewLines.value.length, 0))
+const previewLines = computed(() => scopeLines.value.slice(0, 5))
+const extraLineCount = computed(() => Math.max(scopeLines.value.length - previewLines.value.length, 0))
 
 async function saveWages() {
   savingWages.value = true
@@ -228,6 +284,29 @@ async function saveWages() {
     useToast().error(e.data?.statusMessage || 'Gagal menyimpan upah')
   } finally {
     savingWages.value = false
+  }
+}
+
+async function saveExtras() {
+  extraError.value = ''
+  savingExtras.value = true
+  try {
+    await $fetch(`/api/products/${id}/extra-lines`, {
+      method: 'PUT',
+      body: {
+        lines: extraDraft.value,
+        adjustments: rabLive.value.map((line) => ({
+          customOrderLineId: line.id,
+          quantity: line.quantity
+        }))
+      }
+    })
+    await refresh()
+    useToast().success('Lingkup proyek tersimpan')
+  } catch (e) {
+    extraError.value = e.data?.statusMessage || 'Gagal menyimpan item tambahan'
+  } finally {
+    savingExtras.value = false
   }
 }
 
@@ -449,7 +528,7 @@ const tab = computed({
             <div
               class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-accent-500 text-white flex items-center justify-center font-bold text-lg sm:text-xl shrink-0"
             >
-              {{ initials(product.rab?.customerName || product.name) }}
+              {{ initials(product.rab?.customerName || product.customerName || product.name) }}
             </div>
             <div class="min-w-0 flex-1">
               <div class="flex flex-wrap items-center gap-1.5 mb-1">
@@ -459,6 +538,7 @@ const tab = computed({
                 <span v-if="product.rab" class="badge" :class="rabStatusBadge[product.rab.status]">
                   RAB · {{ rabStatusLabel[product.rab.status] }}
                 </span>
+                <span v-else-if="product.erpProjectId" class="badge bg-ink-700 text-ink-200">Dari ERP</span>
                 <span v-else class="badge bg-ink-700 text-ink-200">Tanpa RAB</span>
               </div>
               <h2 class="text-lg sm:text-2xl font-bold text-white break-words leading-tight">{{ product.name }}</h2>
@@ -466,6 +546,9 @@ const tab = computed({
               <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-300">
                 <span v-if="product.rab" class="inline-flex items-center gap-1.5">
                   <UserIcon class="w-4 h-4 text-ink-400" />{{ product.rab.customerName }}
+                </span>
+                <span v-else-if="product.customerName" class="inline-flex items-center gap-1.5">
+                  <UserIcon class="w-4 h-4 text-ink-400" />{{ product.customerName }}
                 </span>
                 <span v-if="productPhase === 'waiting' && (plannedStartDate || product.plannedStartDate)" class="inline-flex items-center gap-1.5">
                   <CalendarDaysIcon class="w-4 h-4 text-ink-400" />Rencana {{ formatDate(plannedStartDate || product.plannedStartDate) }}
@@ -572,28 +655,34 @@ const tab = computed({
         <div class="panel lg:col-span-7 overflow-hidden">
           <div class="panel-header">
             <span class="panel-title">Lingkup pekerjaan</span>
-            <button v-if="product.rab" type="button" class="text-xs text-accent-600 hover:underline" @click="tab = 'items'">
+            <button v-if="product.rab || extraLines.length || canEditExtras" type="button" class="text-xs text-accent-600 hover:underline" @click="tab = 'items'">
               Semua item
             </button>
           </div>
-          <div v-if="product.rab" class="p-3 sm:p-4 space-y-3">
-            <p v-if="product.rab.notes" class="text-sm text-ink-600">{{ product.rab.notes }}</p>
+          <div v-if="product.rab || extraDraft.length" class="p-3 sm:p-4 space-y-3">
+            <p v-if="product.rab?.notes" class="text-sm text-ink-600">{{ product.rab.notes }}</p>
             <div class="space-y-2">
               <div
                 v-for="line in previewLines"
-                :key="line.id || `${line.lineType}-${line.name}`"
+                :key="line.id || `${line.source}-${line.lineType}-${line.name}`"
                 class="flex items-start justify-between gap-3 text-sm"
               >
                 <div class="min-w-0">
                   <span class="badge mr-1" :class="rabLineTypeBadge(line.lineType)">{{ rabLineTypeLabel(line.lineType) }}</span>
-                  <span class="font-medium break-words">{{ line.name }}</span>
+                  <span v-if="line.source === 'extra'" class="badge mr-1 bg-amber-100 text-amber-800">Tambahan</span>
+                  <span v-else-if="line.omitted" class="badge mr-1 bg-ink-100 text-ink-500">Dibatalkan</span>
+                  <span v-else-if="line.reduced" class="badge mr-1 bg-amber-100 text-amber-800">Dikurangi</span>
+                  <span class="font-medium break-words" :class="line.omitted ? 'line-through text-ink-400' : ''">{{ line.name }}</span>
                   <div class="text-xs text-ink-400 mt-0.5">
                     {{ formatNumber(line.quantity) }}{{ line.unit ? ` ${line.unit}` : '' }}
+                    <span v-if="line.reduced && line.originalQuantity">
+                      · RAB {{ formatNumber(line.originalQuantity) }}
+                    </span>
                   </div>
                 </div>
                 <span class="font-mono text-ink-700 shrink-0">{{ formatIDR(lineAmount(line)) }}</span>
               </div>
-              <p v-if="!previewLines.length" class="text-sm text-ink-500">RAB belum punya baris item.</p>
+              <p v-if="!previewLines.length" class="text-sm text-ink-500">Belum ada item. Tambah di tab Item.</p>
               <button
                 v-if="extraLineCount"
                 type="button"
@@ -605,7 +694,7 @@ const tab = computed({
             </div>
           </div>
           <div v-else class="p-6 text-sm text-ink-500 text-center">
-            Proyek ini belum terkait RAB. Item dan revenue muncul setelah Deal.
+            Proyek ini belum terkait RAB. Tambah barang dan jasa di tab Item.
           </div>
         </div>
 
@@ -839,43 +928,81 @@ const tab = computed({
     </div>
 
     <div v-else-if="tab === 'items'" class="space-y-3">
-      <div v-if="!product.rab" class="panel p-6 text-sm text-ink-500 text-center">
-        Proyek ini belum terkait RAB. Item barang dan jasa muncul setelah RAB di-Deal ke proyek ini.
-      </div>
-      <template v-else>
+      <template v-if="product.rab">
         <div class="flex items-center justify-between gap-2">
-          <p class="text-xs text-ink-500">Salinan baris dari RAB. Ubah di halaman RAB jika masih Draft/Dikirim.</p>
-          <NuxtLink :to="`/rab/${product.rab.id}`" class="text-xs text-accent-600 hover:underline shrink-0">Buka RAB</NuxtLink>
+          <p class="text-xs text-ink-500">
+            Qty aktual boleh lebih kecil dari RAB (atau 0 = batal). Penawaran RAB tidak berubah. Yang nambah di panel bawah.
+          </p>
+          <div class="flex items-center gap-2 shrink-0">
+            <NuxtLink :to="`/rab/${product.rab.id}`" class="text-xs text-accent-600 hover:underline">Buka RAB</NuxtLink>
+            <button
+              v-if="canEditExtras"
+              type="button"
+              class="btn-primary"
+              :disabled="savingExtras"
+              @click="saveExtras"
+            >
+              <CheckIcon class="w-4 h-4" />{{ savingExtras ? 'Menyimpan…' : 'Simpan' }}
+            </button>
+          </div>
         </div>
 
         <div class="panel overflow-hidden">
-          <div class="panel-header"><span class="panel-title">Barang</span></div>
+          <div class="panel-header"><span class="panel-title">Barang dari RAB</span></div>
           <div class="overflow-x-auto">
             <table class="table-std">
               <thead>
                 <tr>
                   <th>Item</th>
-                  <th class="text-right">Qty</th>
+                  <th class="text-right">Qty RAB</th>
+                  <th class="text-right">Qty aktual</th>
                   <th class="text-right">Modal</th>
                   <th class="text-right">Harga jual</th>
                   <th class="text-right">Jumlah</th>
+                  <th v-if="canEditExtras"></th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="line in goods" :key="line.id || line.name">
+                <tr v-for="line in rabGoods" :key="line.id || line.name" :class="line.omitted ? 'opacity-60' : ''">
                   <td>
-                    <div class="font-medium">{{ line.name }}</div>
+                    <div class="font-medium" :class="line.omitted ? 'line-through' : ''">{{ line.name }}</div>
                     <div v-if="line.code" class="text-xs font-mono text-ink-400">{{ line.code }}</div>
                   </td>
+                  <td class="num whitespace-nowrap text-ink-400">
+                    {{ formatNumber(line.originalQuantity) }}{{ line.unit ? ` ${line.unit}` : '' }}
+                  </td>
                   <td class="num whitespace-nowrap">
-                    {{ formatNumber(line.quantity) }}{{ line.unit ? ` ${line.unit}` : '' }}
+                    <input
+                      v-if="canEditExtras"
+                      :value="line.quantity"
+                      type="number"
+                      min="0"
+                      :max="line.originalQuantity"
+                      step="1"
+                      class="input-num w-20 ml-auto"
+                      @input="setRabQty(line, $event.target.value)"
+                    />
+                    <span v-else>
+                      {{ formatNumber(line.quantity) }}{{ line.unit ? ` ${line.unit}` : '' }}
+                    </span>
                   </td>
                   <td class="num">{{ formatIDR(line.costPrice) }}</td>
                   <td class="num">{{ formatIDR(line.salePrice) }}</td>
                   <td class="num">{{ formatIDR(lineAmount(line)) }}</td>
+                  <td v-if="canEditExtras" class="text-right whitespace-nowrap">
+                    <button
+                      v-if="!line.omitted"
+                      type="button"
+                      class="btn-action-danger"
+                      @click="omitRabLine(line)"
+                    >
+                      Batal
+                    </button>
+                    <button v-else type="button" class="btn-action" @click="restoreRabLine(line)">Pulihkan</button>
+                  </td>
                 </tr>
-                <tr v-if="!goods.length">
-                  <td colspan="5" class="text-center text-ink-500 py-6">Tidak ada barang di RAB ini.</td>
+                <tr v-if="!rabGoods.length">
+                  <td :colspan="canEditExtras ? 7 : 6" class="text-center text-ink-500 py-6">Tidak ada barang di RAB ini.</td>
                 </tr>
               </tbody>
             </table>
@@ -883,37 +1010,90 @@ const tab = computed({
         </div>
 
         <div class="panel overflow-hidden">
-          <div class="panel-header"><span class="panel-title">Jasa</span></div>
+          <div class="panel-header"><span class="panel-title">Jasa dari RAB</span></div>
           <div class="overflow-x-auto">
             <table class="table-std">
               <thead>
                 <tr>
                   <th>Item</th>
-                  <th class="text-right">Qty</th>
+                  <th class="text-right">Qty RAB</th>
+                  <th class="text-right">Qty aktual</th>
                   <th class="text-right">Harga</th>
                   <th class="text-right">Jumlah</th>
+                  <th v-if="canEditExtras"></th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="line in jasa" :key="line.id || line.name">
+                <tr v-for="line in rabJasa" :key="line.id || line.name" :class="line.omitted ? 'opacity-60' : ''">
                   <td>
                     <span class="badge mr-1" :class="rabLineTypeBadge('service')">{{ rabLineTypeLabel('service') }}</span>
-                    <span class="font-medium">{{ line.name }}</span>
+                    <span class="font-medium" :class="line.omitted ? 'line-through' : ''">{{ line.name }}</span>
+                  </td>
+                  <td class="num whitespace-nowrap text-ink-400">
+                    {{ formatNumber(line.originalQuantity) }}{{ line.unit ? ` ${line.unit}` : '' }}
                   </td>
                   <td class="num whitespace-nowrap">
-                    {{ formatNumber(line.quantity) }}{{ line.unit ? ` ${line.unit}` : '' }}
+                    <input
+                      v-if="canEditExtras"
+                      :value="line.quantity"
+                      type="number"
+                      min="0"
+                      :max="line.originalQuantity"
+                      step="1"
+                      class="input-num w-20 ml-auto"
+                      @input="setRabQty(line, $event.target.value)"
+                    />
+                    <span v-else>
+                      {{ formatNumber(line.quantity) }}{{ line.unit ? ` ${line.unit}` : '' }}
+                    </span>
                   </td>
                   <td class="num">{{ formatIDR(line.salePrice) }}</td>
                   <td class="num">{{ formatIDR(lineAmount(line)) }}</td>
+                  <td v-if="canEditExtras" class="text-right whitespace-nowrap">
+                    <button
+                      v-if="!line.omitted"
+                      type="button"
+                      class="btn-action-danger"
+                      @click="omitRabLine(line)"
+                    >
+                      Batal
+                    </button>
+                    <button v-else type="button" class="btn-action" @click="restoreRabLine(line)">Pulihkan</button>
+                  </td>
                 </tr>
-                <tr v-if="!jasa.length">
-                  <td colspan="4" class="text-center text-ink-500 py-6">Tidak ada jasa di RAB ini.</td>
+                <tr v-if="!rabJasa.length">
+                  <td :colspan="canEditExtras ? 6 : 5" class="text-center text-ink-500 py-6">Tidak ada jasa di RAB ini.</td>
                 </tr>
               </tbody>
             </table>
           </div>
         </div>
       </template>
+      <p v-else class="text-xs text-ink-500">Proyek ini tidak punya RAB. Item di bawah ini hanya tambahan lapangan.</p>
+
+      <div class="panel overflow-hidden">
+        <div class="panel-header">
+          <span class="panel-title">Tambahan di luar RAB</span>
+        </div>
+        <div class="p-4 space-y-3">
+          <p class="text-xs text-ink-500">
+            Barang katalog, stok Produk, atau jasa yang muncul di lapangan. Tidak mengubah penawaran RAB. Stok gudang tidak terpotong otomatis.
+          </p>
+          <RabLinesEditor
+            v-model="extraDraft"
+            :disabled="!canEditExtras"
+            :margin-percent="marginPercent"
+            :price-rounding="priceRounding"
+          />
+          <p v-if="extraError" class="text-sm text-red-600">{{ extraError }}</p>
+          <div v-if="canEditExtras" class="flex justify-end">
+            <button type="button" class="btn-primary" :disabled="savingExtras" @click="saveExtras">
+              <CheckIcon class="w-4 h-4" />{{ savingExtras ? 'Menyimpan…' : 'Simpan perubahan item' }}
+            </button>
+          </div>
+          <p v-else-if="extrasLocked" class="text-xs text-ink-400">Proyek selesai — tambahan tidak bisa diubah.</p>
+        </div>
+      </div>
     </div>
 
     <div v-else-if="tab === 'revenue'" class="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
@@ -923,7 +1103,7 @@ const tab = computed({
           <div class="px-3 py-2.5 flex items-start justify-between gap-3">
             <div>
               <div class="text-sm">Pendapatan barang</div>
-              <div class="text-xs text-ink-400">Harga jual item katalog</div>
+              <div class="text-xs text-ink-400">Harga jual item (RAB disesuaikan + tambahan)</div>
             </div>
             <div class="num text-sm">{{ formatIDR(liveFinance.goodsSale) }}</div>
           </div>
@@ -959,8 +1139,8 @@ const tab = computed({
             </span>
           </div>
         </div>
-        <p v-if="!product.rab" class="px-3 py-3 text-xs text-ink-400 border-t border-ink-100">
-          Belum ada RAB terkait. Pendapatan 0 sampai proyek dibuat dari Deal RAB.
+        <p v-if="!product.rab && !extraLines.length" class="px-3 py-3 text-xs text-ink-400 border-t border-ink-100">
+          Belum ada RAB atau item tambahan. Pendapatan 0 sampai ada baris item.
         </p>
         <p
           v-else-if="liveFinance.wageTotal > liveFinance.serviceSale"

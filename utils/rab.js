@@ -56,6 +56,26 @@ export function serviceLines(lines) {
   return (lines || []).filter((line) => line.lineType === 'service')
 }
 
+export function applyRabAdjustments(lines, adjustments) {
+  const map = new Map(
+    (adjustments || []).map((row) => [Number(row.customOrderLineId), Number(row.quantity)])
+  )
+  return (lines || []).map((line) => {
+    const originalQuantity = Number(line.originalQuantity ?? line.quantity) || 0
+    const id = Number(line.id)
+    const quantity = map.has(id)
+      ? Math.min(Math.max(Math.round(map.get(id) || 0), 0), originalQuantity)
+      : originalQuantity
+    return {
+      ...line,
+      originalQuantity,
+      quantity,
+      reduced: quantity < originalQuantity,
+      omitted: quantity <= 0
+    }
+  })
+}
+
 export function summarizeProjectRevenue(lines, wages) {
   let goodsSale = 0
   let goodsCost = 0

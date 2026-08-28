@@ -20,14 +20,13 @@ export default defineNuxtConfig({
       secretKey: process.env.MINIO_SECRET_KEY || 'minioadmin',
       bucket: process.env.MINIO_BUCKET || 'ocn-files'
     },
-    tuya: {
-      apiKey: process.env.TUYA_API_KEY || '',
-      apiSecret: process.env.TUYA_API_SECRET || '',
-      apiRegion: process.env.TUYA_API_REGION || 'in'
-    },
     supplierCatalog: {
       spreadsheetId: process.env.SUPPLIER_CATALOG_SPREADSHEET_ID || '1aaKkgM9NVRsdKTFhqE46lvyLZ4rsLtxcq3_ninX6ncg',
       supplierName: process.env.SUPPLIER_CATALOG_SUPPLIER_NAME || 'PL TUNAS JAYA ELEKTRONIK'
+    },
+    erpSync: {
+      baseUrl: process.env.ERP_SYNC_BASE_URL || '',
+      apiKey: process.env.ERP_SYNC_API_KEY || ''
     },
     public: {
       // Global toast UI — posisi default 'top' (aman untuk PWA / keyboard).

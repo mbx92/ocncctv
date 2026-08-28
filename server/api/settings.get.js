@@ -1,5 +1,5 @@
-import { getSettings } from '../utils/settings.js'
+import { getSettings, presentSettings } from '../utils/settings.js'
 
 export default defineEventHandler(async () => {
-  return getSettings()
+  return presentSettings(await getSettings())
 })
