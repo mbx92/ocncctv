@@ -84,7 +84,9 @@ const erpForm = ref({
 })
 const erpSaving = ref(false)
 const erpSyncing = ref(false)
+const erpTesting = ref(false)
 const erpMsg = ref('')
+const erpTest = ref(null)
 
 watch(
   () => settings.value?.erpSyncBaseUrl,
@@ -117,6 +119,28 @@ async function saveErp() {
     return false
   } finally {
     erpSaving.value = false
+  }
+}
+
+async function testErp() {
+  if (erpTesting.value) return
+  erpTesting.value = true
+  erpTest.value = null
+  try {
+    erpTest.value = await $fetch('/api/projects/test-erp', {
+      method: 'POST',
+      body: {
+        erpSyncBaseUrl: erpForm.value.erpSyncBaseUrl,
+        erpSyncApiKey: erpForm.value.erpSyncApiKey
+      },
+      timeout: 30000
+    })
+    useToast().success('Koneksi ERP berhasil.')
+  } catch (e) {
+    erpTest.value = { ok: false, error: e.data?.statusMessage || 'Gagal menghubungi ERP' }
+    useToast().error(erpTest.value.error)
+  } finally {
+    erpTesting.value = false
   }
 }
 
@@ -355,11 +379,33 @@ async function syncErpProjects() {
           <p v-if="settings?.erpSyncLastAt" class="text-xs text-ink-400">
             Terakhir sync {{ formatDate(settings.erpSyncLastAt) }}
           </p>
+          <div v-if="erpTest" class="rounded-panel border p-3 text-sm space-y-1" :class="erpTest.ok ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'">
+            <div class="flex items-center gap-2">
+              <span
+                class="inline-block w-2.5 h-2.5 rounded-full shrink-0"
+                :class="erpTest.ok ? 'bg-green-500' : 'bg-red-500'"
+              ></span>
+              <span class="font-medium">{{ erpTest.ok ? 'ERP terhubung' : 'ERP tidak terhubung' }}</span>
+            </div>
+            <template v-if="erpTest.ok">
+              <p v-if="erpTest.companyName" class="text-ink-600">Usaha: {{ erpTest.companyName }}</p>
+              <p class="text-xs text-ink-500 font-mono">
+                Halaman 1: {{ erpTest.pageProjects }} proyek
+                <span v-if="erpTest.totalProjects != null"> · total {{ erpTest.totalProjects }}</span>
+                · {{ erpTest.latencyMs }} ms
+              </p>
+            </template>
+            <p v-else class="text-red-600 text-xs">{{ erpTest.error }}</p>
+          </div>
           <div v-if="isAdmin" class="flex flex-wrap items-center gap-2 pt-1">
             <button type="button" class="btn-secondary" :disabled="erpSaving" @click="saveErp">
               <CheckIcon class="w-4 h-4" />{{ erpSaving ? 'Menyimpan…' : 'Simpan' }}
             </button>
-            <button type="button" class="btn-primary" :disabled="erpSyncing || erpSaving" @click="syncErpProjects">
+            <button type="button" class="btn-secondary" :disabled="erpTesting || erpSaving" @click="testErp">
+              <ArrowPathIcon class="w-4 h-4" :class="erpTesting ? 'animate-spin' : ''" />
+              {{ erpTesting ? 'Mengecek…' : 'Test koneksi' }}
+            </button>
+            <button type="button" class="btn-primary" :disabled="erpSyncing || erpSaving || erpTesting" @click="syncErpProjects">
               <ArrowPathIcon class="w-4 h-4" :class="erpSyncing ? 'animate-spin' : ''" />
               {{ erpSyncing ? 'Sync…' : 'Sync sekarang' }}
             </button>

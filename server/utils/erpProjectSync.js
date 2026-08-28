@@ -107,6 +107,25 @@ async function fetchCompletedPage(baseUrl, apiKey, page) {
   return body || { projects: [], meta: { current_page: page, last_page: page } }
 }
 
+export async function testErpConnection({ baseUrl, apiKey }) {
+  if (!baseUrl || !apiKey) {
+    const error = new Error('Isi URL ERP dan API key.')
+    error.statusCode = 400
+    throw error
+  }
+  const started = Date.now()
+  const payload = await fetchCompletedPage(baseUrl, apiKey, 1)
+  const meta = payload.meta || {}
+  return {
+    ok: true,
+    latencyMs: Date.now() - started,
+    companyName: payload.company?.name || null,
+    pageProjects: (payload.projects || []).length,
+    totalProjects: Number(meta.total) || null,
+    lastPage: Number(meta.last_page) || 1
+  }
+}
+
 export async function syncCompletedErpProjects({ baseUrl, apiKey }) {
   if (!baseUrl || !apiKey) {
     const error = new Error('Isi URL ERP dan API key di Pengaturan → Integrasi.')
