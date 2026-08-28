@@ -13,17 +13,21 @@ export default defineEventHandler(async (event) => {
   const rows = await db
     .update(schema.appSettings)
     .set({
-      electricityRatePerKwh: Math.round(Number(body.electricityRatePerKwh) || 1445),
-      machineUsageHoursPerMonth: Math.max(Math.round(Number(body.machineUsageHoursPerMonth) || 100), 1),
-      defaultMarginPercent: Number(body.defaultMarginPercent) || 40,
+      electricityRatePerKwh: current.electricityRatePerKwh,
+      machineUsageHoursPerMonth: current.machineUsageHoursPerMonth,
+      defaultMarginPercent: Math.min(Math.max(Number(body.defaultMarginPercent) || 40, 0), 95),
+      salePriceRounding: [0, 100, 500, 1000, 5000].includes(Math.round(Number(body.salePriceRounding)))
+        ? Math.round(Number(body.salePriceRounding))
+        : 500,
       invoiceBusinessName: String(body.invoiceBusinessName || '').trim() || 'OCN',
       invoiceAddress: String(body.invoiceAddress || '').trim() || null,
       invoicePhone: String(body.invoicePhone || '').trim() || null,
       invoiceFooter: String(body.invoiceFooter || '').replace(/\r\n/g, '\n').trim() || null,
+      rabFooter: String(body.rabFooter || '').replace(/\r\n/g, '\n').trim() || null,
       invoiceShareTtlDays: clampShareTtlDays(body.invoiceShareTtlDays)
     })
     .where(eq(schema.appSettings.id, current.id))
     .returning()
-  await logAudit(event, { action: 'update', entity: 'settings', entityId: current.id, summary: 'Ubah pengaturan HPP (tarif listrik/pemakaian mesin/margin default)' })
+  await logAudit(event, { action: 'update', entity: 'settings', entityId: current.id, summary: 'Ubah pengaturan' })
   return rows[0]
 })

@@ -23,13 +23,13 @@ function formatQuoteQty(item) {
         </div>
       </div>
       <div class="text-right shrink-0">
-        <div class="text-xs font-semibold uppercase tracking-wide text-ink-500">Penawaran</div>
+        <div class="text-xs font-semibold uppercase tracking-wide text-ink-500">{{ quote.docLabel || 'Penawaran' }}</div>
         <div class="font-mono text-lg font-semibold">{{ quote.quoteNumber }}</div>
         <div class="text-sm text-ink-600 mt-1">{{ formatDate(quote.date) }}</div>
       </div>
     </header>
 
-    <section class="grid grid-cols-2 gap-4 py-4 text-sm">
+    <section v-if="quote.customerName" class="grid grid-cols-2 gap-4 py-4 text-sm">
       <div>
         <div class="text-xs font-semibold uppercase tracking-wide text-ink-500">Kepada</div>
         <div class="font-medium mt-1">{{ quote.customerName }}</div>
@@ -38,6 +38,10 @@ function formatQuoteQty(item) {
         <div class="text-xs font-semibold uppercase tracking-wide text-ink-500">Pekerjaan</div>
         <div class="mt-1 font-medium">{{ quote.title }}</div>
       </div>
+    </section>
+    <section v-else class="py-4 text-sm">
+      <div class="text-xs font-semibold uppercase tracking-wide text-ink-500">Paket</div>
+      <div class="font-medium mt-1">{{ quote.title }}</div>
     </section>
 
     <table class="w-full text-sm border-t border-ink-200">
@@ -53,7 +57,6 @@ function formatQuoteQty(item) {
         <tr v-for="(item, i) in quote.items" :key="i" class="border-t border-ink-100">
           <td class="py-3 pr-2">
             {{ item.name }}
-            <span v-if="item.code" class="text-xs text-ink-400"> · {{ item.code }}</span>
             <span v-if="item.lineType === 'service'" class="text-xs text-ink-400"> · Jasa</span>
           </td>
           <td class="py-3 px-2 text-right font-mono whitespace-nowrap">{{ formatQuoteQty(item) }}</td>
@@ -75,7 +78,9 @@ function formatQuoteQty(item) {
       </dl>
     </div>
 
-    <p class="mt-6 text-xs text-ink-400">Dokumen ini adalah penawaran harga, bukan invoice.</p>
+    <p class="mt-6 text-xs text-ink-400">
+      {{ quote.docLabel ? 'Dokumen ini adalah daftar harga paket, bukan invoice.' : 'Dokumen ini adalah penawaran harga, bukan invoice.' }}
+    </p>
     <p v-if="quote.notes" class="mt-3 text-xs text-ink-500">Catatan: {{ quote.notes }}</p>
     <p class="mt-8 text-sm text-ink-600 whitespace-pre-line">{{ quote.business.footer }}</p>
   </article>

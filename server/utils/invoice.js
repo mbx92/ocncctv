@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { eq, sql } from 'drizzle-orm'
 import { loadRabLines } from './customOrders.js'
+import { catalogDisplayName } from './catalogName.js'
 
 const CHANNEL_LABEL = {
   tokopedia: 'Tokopedia',
@@ -122,8 +123,8 @@ function itemsFromRabLines(lines) {
       const quantity = Math.max(Math.round(Number(line.quantity) || 0), 0)
       const unitPrice = Math.max(Math.round(Number(line.salePrice) || 0), 0)
       return {
-        name: String(line.name || '').trim() || 'Item',
-        code: String(line.code || '').trim(),
+        name: catalogDisplayName(line) || String(line.name || '').trim() || 'Item',
+        code: '',
         lineType: line.lineType === 'service' ? 'service' : 'catalog',
         quantity,
         unit: String(line.unit || '').trim(),

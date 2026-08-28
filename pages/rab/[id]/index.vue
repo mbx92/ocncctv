@@ -34,6 +34,7 @@ const files = computed(() => order.value?.files || [])
 const locked = computed(() => rabIsLocked(order.value?.status))
 const canEdit = computed(() => order.value && !locked.value)
 const marginPercent = computed(() => settings.value?.defaultMarginPercent ?? 40)
+const priceRounding = computed(() => settings.value?.salePriceRounding ?? 500)
 
 watch(
   () => order.value?.lines,
@@ -295,7 +296,12 @@ async function deleteFile(f) {
         <span class="panel-title">Baris penawaran</span>
       </div>
       <div class="p-4 space-y-3">
-        <RabLinesEditor v-if="canEdit" v-model="lineDraft" :margin-percent="marginPercent" />
+        <RabLinesEditor
+          v-if="canEdit"
+          v-model="lineDraft"
+          :margin-percent="marginPercent"
+          :price-rounding="priceRounding"
+        />
         <template v-else>
           <div class="space-y-2">
             <div

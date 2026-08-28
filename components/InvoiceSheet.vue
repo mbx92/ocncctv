@@ -50,7 +50,6 @@ defineProps({
         <tr v-for="(item, i) in invoice.items?.length ? invoice.items : [invoice.item]" :key="i" class="border-t border-ink-100">
           <td class="py-3 pr-2">
             {{ item.name }}
-            <span v-if="item.code" class="text-xs text-ink-400"> · {{ item.code }}</span>
             <span v-if="item.lineType === 'service'" class="text-xs text-ink-400"> · Jasa</span>
           </td>
           <td class="py-3 px-2 text-right font-mono whitespace-nowrap">

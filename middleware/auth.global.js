@@ -5,6 +5,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
     PUBLIC_PATHS.has(to.path) ||
     to.path.startsWith('/i/') ||
     to.path.startsWith('/q/') ||
+    to.path.startsWith('/p/') ||
     to.path.startsWith('/workbox-')
   ) {
     return

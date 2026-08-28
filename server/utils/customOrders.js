@@ -2,6 +2,7 @@ import { asc, eq, inArray } from 'drizzle-orm'
 import { useDb, schema } from '../db/index.js'
 import { computeHpp } from './hpp.js'
 import { getSettings } from './settings.js'
+import { catalogDisplayName } from './catalogName.js'
 
 export const RAB_OPEN_STATUSES = ['draft', 'sent', 'open', 'ready']
 export const RAB_LOCKED_STATUSES = ['deal', 'lost', 'delivered', 'cancelled']
@@ -24,7 +25,8 @@ export function totalsFromLines(lines) {
 export function parseRabLines(raw) {
   const list = Array.isArray(raw) ? raw : []
   return list.map((line, i) => {
-    const lineType = line.lineType === 'service' ? 'service' : 'catalog'
+    const lineType =
+      line.lineType === 'service' ? 'service' : line.lineType === 'product' ? 'product' : 'catalog'
     const name = String(line.name || '').trim()
     if (!name) {
       throw createError({ statusCode: 400, statusMessage: `Nama baris ${i + 1} wajib diisi` })
@@ -35,15 +37,21 @@ export function parseRabLines(raw) {
     }
     const catalogItemId = Number(line.catalogItemId)
     const serviceId = Number(line.serviceId)
-    const unit = String(line.unit || '').trim() || null
+    const packagingId = Number(line.packagingId)
+    const unit = String(line.unit || '').trim() || (lineType === 'service' ? 'titik' : 'pcs')
     return {
       lineType,
-      catalogItemId: Number.isInteger(catalogItemId) && catalogItemId > 0 ? catalogItemId : null,
+      catalogItemId:
+        lineType === 'catalog' && Number.isInteger(catalogItemId) && catalogItemId > 0
+          ? catalogItemId
+          : null,
       serviceId:
         lineType === 'service' && Number.isInteger(serviceId) && serviceId > 0 ? serviceId : null,
+      packagingId:
+        lineType === 'product' && Number.isInteger(packagingId) && packagingId > 0 ? packagingId : null,
       name,
       code: String(line.code || '').trim() || null,
-      unit: lineType === 'service' ? unit : null,
+      unit,
       quantity,
       costPrice: lineType === 'service' ? 0 : Math.max(Math.round(Number(line.costPrice) || 0), 0),
       salePrice: Math.max(Math.round(Number(line.salePrice) || 0), 0),
@@ -91,6 +99,7 @@ export async function replaceRabLines(tx, orderId, lines) {
       lineType: line.lineType,
       catalogItemId: line.catalogItemId,
       serviceId: line.serviceId,
+      packagingId: line.packagingId,
       name: line.name,
       code: line.code,
       unit: line.unit || null,
@@ -107,31 +116,85 @@ export async function loadRabLines(db, orderIds) {
   const map = new Map(ids.map((id) => [id, []]))
   if (!ids.length) return map
   const rows = await db
-    .select()
+    .select({
+      line: schema.customOrderLines,
+      catalogName: schema.supplierCatalogItems.name,
+      catalogSheetLabel: schema.supplierCatalogItems.sheetLabel,
+      catalogUnit: schema.supplierCatalogItems.unit,
+      packagingName: schema.packaging.name,
+      packagingUnit: schema.packaging.unit,
+      packagingStock: schema.packaging.stockQuantity
+    })
     .from(schema.customOrderLines)
+    .leftJoin(
+      schema.supplierCatalogItems,
+      eq(schema.customOrderLines.catalogItemId, schema.supplierCatalogItems.id)
+    )
+    .leftJoin(schema.packaging, eq(schema.customOrderLines.packagingId, schema.packaging.id))
     .where(inArray(schema.customOrderLines.customOrderId, ids))
     .orderBy(asc(schema.customOrderLines.sortOrder), asc(schema.customOrderLines.id))
   for (const row of rows) {
-    const list = map.get(row.customOrderId) || []
-    list.push(row)
-    map.set(row.customOrderId, list)
+    const list = map.get(row.line.customOrderId) || []
+    list.push(
+      presentRabLine(row.line, {
+        catalogName: row.catalogName,
+        catalogSheetLabel: row.catalogSheetLabel,
+        catalogUnit: row.catalogUnit,
+        packagingName: row.packagingName,
+        packagingUnit: row.packagingUnit,
+        packagingStock: row.packagingStock
+      })
+    )
+    map.set(row.line.customOrderId, list)
   }
   return map
 }
 
+export function presentRabLine(line, extra = {}) {
+  if (line.lineType === 'service') {
+    return { ...line, unit: line.unit || 'titik' }
+  }
+  if (line.lineType === 'product') {
+    return {
+      ...line,
+      name: extra.packagingName || line.name,
+      unit: line.unit || extra.packagingUnit || 'pcs',
+      stockQuantity: extra.packagingStock ?? null
+    }
+  }
+  return {
+    ...line,
+    name: catalogDisplayName({
+      name: extra.catalogName || line.name,
+      sheetLabel: extra.catalogSheetLabel
+    }),
+    unit: line.unit || extra.catalogUnit || 'pcs'
+  }
+}
+
 export function withRabTotals(order, lines, extra = {}) {
-  const totals = totalsFromLines(lines)
-  if (!lines.length && Number(order.pricePerUnit)) {
+  const presented = (lines || []).map((line) =>
+    presentRabLine(line, {
+      catalogName: line.catalogName,
+      catalogSheetLabel: line.catalogSheetLabel || line.sheetLabel,
+      catalogUnit: line.catalogUnit || line.unit,
+      packagingName: line.packagingName,
+      packagingUnit: line.packagingUnit,
+      packagingStock: line.packagingStock ?? line.stockQuantity
+    })
+  )
+  const totals = totalsFromLines(presented)
+  if (!presented.length && Number(order.pricePerUnit)) {
     return {
       ...order,
-      lines,
+      lines: presented,
       totalSale: Number(order.pricePerUnit) || 0,
       totalCost: 0,
       margin: Number(order.pricePerUnit) || 0,
       ...extra
     }
   }
-  return { ...order, lines, ...totals, ...extra }
+  return { ...order, lines: presented, ...totals, ...extra }
 }
 
 export function productionValuesFromOrder(order, extra = {}) {

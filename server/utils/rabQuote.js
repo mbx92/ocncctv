@@ -2,6 +2,7 @@ import { and, eq, gt } from 'drizzle-orm'
 import { useDb, schema } from '../db/index.js'
 import { getSettings } from './settings.js'
 import { loadRabLines } from './customOrders.js'
+import { catalogDisplayName } from './catalogName.js'
 
 export function quoteNumberFor(id) {
   const n = Math.max(Math.round(Number(id) || 0), 0)
@@ -20,8 +21,8 @@ export function toRabQuotePayload(order, lines, settings) {
     const qty = Math.max(Math.round(Number(line.quantity) || 0), 0)
     const unitPrice = Math.max(Math.round(Number(line.salePrice) || 0), 0)
     return {
-      name: String(line.name || '').trim() || 'Item',
-      code: String(line.code || '').trim(),
+      name: catalogDisplayName(line) || String(line.name || '').trim() || 'Item',
+      code: '',
       lineType: line.lineType === 'service' ? 'service' : 'catalog',
       quantity: qty,
       unit: String(line.unit || '').trim(),
@@ -56,7 +57,7 @@ export function toRabQuotePayload(order, lines, settings) {
       name: settings.invoiceBusinessName || 'OCN',
       address: settings.invoiceAddress || null,
       phone: settings.invoicePhone || null,
-      footer: settings.invoiceFooter || 'Terima kasih atas kepercayaannya.'
+      footer: settings.rabFooter || settings.invoiceFooter || 'Terima kasih atas kepercayaannya.'
     }
   }
 }

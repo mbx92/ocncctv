@@ -1,11 +1,13 @@
 <script setup>
 import { MagnifyingGlassIcon, PlusIcon, MinusIcon, TrashIcon } from '@heroicons/vue/24/outline'
 import { lineAmount, lineCost, rabLineTypeBadge, rabLineTypeLabel, suggestedSalePrice } from '~/utils/rab.js'
+import { catalogDisplayName } from '~/utils/catalogName.js'
 
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
   disabled: Boolean,
-  marginPercent: { type: Number, default: 40 }
+  marginPercent: { type: Number, default: 40 },
+  priceRounding: { type: Number, default: 500 }
 })
 const emit = defineEmits(['update:modelValue'])
 
@@ -18,6 +20,7 @@ const { data: services } = await useFetch('/api/services')
 const serviceList = computed(() => services.value || [])
 const showCatalog = ref(false)
 const showServicePicker = ref(false)
+const showStock = ref(false)
 
 function patch(index, fields) {
   const next = lines.value.map((line, i) => (i === index ? { ...line, ...fields } : line))
@@ -58,12 +61,13 @@ function addCatalogItems(items) {
         lineType: 'catalog',
         catalogItemId: item.id,
         serviceId: null,
-        name: item.name,
+        packagingId: null,
+        name: catalogDisplayName(item) || item.name,
         code: item.code || '',
-        unit: null,
+        unit: item.unit || 'pcs',
         quantity: 1,
         costPrice: cost,
-        salePrice: suggestedSalePrice(cost, props.marginPercent)
+        salePrice: suggestedSalePrice(cost, props.marginPercent, props.priceRounding)
       })
     }
     added += 1
@@ -80,6 +84,7 @@ function addServiceFromMaster(item) {
       lineType: 'service',
       catalogItemId: null,
       serviceId: item.id,
+      packagingId: null,
       name: item.name,
       code: '',
       unit: item.unit || 'titik',
@@ -98,6 +103,7 @@ function addCustomService() {
       lineType: 'service',
       catalogItemId: null,
       serviceId: null,
+      packagingId: null,
       name: '',
       code: '',
       unit: 'titik',
@@ -107,6 +113,40 @@ function addCustomService() {
     }
   ]
   showServicePicker.value = false
+}
+
+function addStockProducts(items) {
+  const next = [...lines.value]
+  let added = 0
+  for (const item of items || []) {
+    const existing = next.findIndex((l) => l.lineType === 'product' && l.packagingId === item.id)
+    if (existing >= 0) {
+      next[existing] = {
+        ...next[existing],
+        quantity: qtyInt(next[existing].quantity) + 1,
+        stockQuantity: item.stockQuantity
+      }
+    } else {
+      const cost = Number(item.pricePerUnit) || 0
+      next.push({
+        lineType: 'product',
+        catalogItemId: null,
+        serviceId: null,
+        packagingId: item.id,
+        name: item.name,
+        code: '',
+        unit: item.unit || 'pcs',
+        quantity: 1,
+        costPrice: cost,
+        salePrice: suggestedSalePrice(cost, props.marginPercent, props.priceRounding),
+        stockQuantity: item.stockQuantity
+      })
+    }
+    added += 1
+  }
+  lines.value = next
+  showStock.value = false
+  if (added) useToast().success(added === 1 ? '1 produk ditambahkan.' : `${added} produk ditambahkan.`)
 }
 
 function toggleServicePicker() {
@@ -133,6 +173,9 @@ const totals = computed(() => {
     <div v-if="!disabled" class="flex flex-col sm:flex-row gap-2">
       <button type="button" class="btn-secondary flex-1" @click="showCatalog = true">
         <MagnifyingGlassIcon class="w-4 h-4" />Cari katalog
+      </button>
+      <button type="button" class="btn-secondary flex-1" @click="showStock = true">
+        <MagnifyingGlassIcon class="w-4 h-4" />Dari produk
       </button>
       <div class="relative shrink-0">
         <button type="button" class="btn-secondary w-full sm:w-auto" @click="toggleServicePicker">
@@ -168,11 +211,11 @@ const totals = computed(() => {
       </div>
     </div>
     <p v-if="!disabled" class="text-xs text-ink-500">
-      Barang dari katalog: filter brand/jenis, bisa pilih banyak item sekaligus. Jasa dari master, atau diketik. Tidak ada stok.
+      Katalog supplier, produk di gudang, atau jasa. Stok tidak terpotong saat menyusun RAB/paket.
     </p>
 
     <div v-if="!lines.length" class="rounded-panel border border-dashed border-ink-200 p-4 text-sm text-ink-500 text-center">
-      Belum ada baris. Pilih barang dari katalog, atau pilih jasa.
+      Belum ada baris. Pilih dari katalog, stok produk, atau jasa.
     </div>
 
     <div v-else class="space-y-2">
@@ -180,7 +223,13 @@ const totals = computed(() => {
         v-for="(line, i) in lines"
         :key="i"
         class="rounded-panel border p-3 space-y-2"
-        :class="line.lineType === 'service' ? 'border-purple-200 bg-purple-50/40' : 'border-ink-200'"
+        :class="
+          line.lineType === 'service'
+            ? 'border-purple-200 bg-purple-50/40'
+            : line.lineType === 'product'
+              ? 'border-emerald-200 bg-emerald-50/30'
+              : 'border-ink-200'
+        "
       >
         <div v-if="line.lineType === 'service'" class="space-y-2">
           <div class="flex items-center justify-between gap-2">
@@ -214,6 +263,9 @@ const totals = computed(() => {
           <div class="min-w-0 flex-1">
             <div class="font-medium break-words text-sm">{{ line.name }}</div>
             <div v-if="line.code" class="text-xs font-mono text-ink-400">{{ line.code }}</div>
+            <div v-if="line.lineType === 'product'" class="text-xs text-emerald-700">
+              Stok {{ formatNumber(line.stockQuantity ?? 0, 1) }} {{ line.unit || 'pcs' }}
+            </div>
           </div>
           <button
             v-if="!disabled"
@@ -259,8 +311,12 @@ const totals = computed(() => {
                 <PlusIcon class="w-4 h-4" />
               </button>
             </div>
-            <p v-if="line.lineType === 'service'" class="text-[11px] text-ink-400 mt-0.5">
-              {{ line.unit || 'titik / jam / paket' }}
+            <p class="text-[11px] text-ink-400 mt-0.5">
+              {{
+                line.lineType === 'service'
+                  ? line.unit || 'titik / jam / paket'
+                  : line.unit || 'pcs'
+              }}
             </p>
           </div>
           <div v-if="line.lineType !== 'service'">
@@ -293,5 +349,6 @@ const totals = computed(() => {
     </div>
 
     <CatalogPickerModal v-if="showCatalog" @close="showCatalog = false" @add="addCatalogItems" />
+    <ProductStockPickerModal v-if="showStock" @close="showStock = false" @add="addStockProducts" />
   </div>
 </template>

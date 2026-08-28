@@ -1,5 +1,6 @@
 <script setup>
 import { CheckIcon, ArrowPathIcon } from '@heroicons/vue/24/outline'
+import { suggestedSalePrice } from '~/utils/rab.js'
 
 const { data: settings, refresh } = await useFetch('/api/settings')
 const form = ref({
@@ -7,7 +8,10 @@ const form = ref({
   invoiceAddress: '',
   invoicePhone: '',
   invoiceFooter: '',
+  rabFooter: '',
   invoiceShareTtlDays: 7,
+  defaultMarginPercent: 40,
+  salePriceRounding: 500,
   ...settings.value
 })
 const savedMsg = ref('')
@@ -17,8 +21,8 @@ const tabs = computed(() => {
   const list = [
     { id: 'umum', label: 'Umum' },
     { id: 'integrasi', label: 'Integrasi' },
-    { id: 'invoice', label: 'Invoice' },
-    { id: 'hpp', label: 'Perhitungan HPP' }
+    { id: 'invoice', label: 'Dokumen' },
+    { id: 'hpp', label: 'Harga' }
   ]
   if (isAdmin.value) {
     list.push({ id: 'user', label: 'User' }, { id: 'audit', label: 'Log aktivitas' })
@@ -45,6 +49,18 @@ async function save() {
   savedMsg.value = 'Pengaturan tersimpan.'
   setTimeout(() => (savedMsg.value = ''), 3000)
 }
+
+const PRICE_ROUNDING_OPTIONS = [
+  { value: 0, label: 'Tidak dibulatkan' },
+  { value: 100, label: 'Rp 100' },
+  { value: 500, label: 'Rp 500' },
+  { value: 1000, label: 'Rp 1.000' },
+  { value: 5000, label: 'Rp 5.000' }
+]
+const previewCost = 100000
+const previewSale = computed(() =>
+  suggestedSalePrice(previewCost, form.value.defaultMarginPercent, form.value.salePriceRounding)
+)
 
 const { data: minioStatus, refresh: refreshMinio, status: minioFetchStatus } = await useFetch(
   '/api/system/minio-status'
@@ -77,7 +93,7 @@ watch(
 </script>
 
 <template>
-  <div class="space-y-4" :class="tab === 'user' || tab === 'audit' ? 'max-w-5xl' : 'max-w-2xl'">
+  <div class="space-y-4" :class="tab === 'user' || tab === 'audit' ? 'max-w-5xl' : 'max-w-3xl'">
     <h1 class="text-xl font-bold">Pengaturan</h1>
     <p v-if="!isAdmin" class="text-xs text-ink-500">Read-only — hanya admin yang bisa mengubah pengaturan.</p>
 
@@ -113,7 +129,7 @@ watch(
 
       <template v-else-if="tab === 'invoice'">
         <p class="text-xs text-ink-500">
-          Kop invoice memakai nama, alamat, dan telepon dari tab Umum.
+          Kop memakai nama, alamat, dan telepon dari tab Umum. Catatan kaki bisa berbeda untuk invoice dan penawaran RAB.
         </p>
         <div>
           <label class="label">Catatan kaki invoice</label>
@@ -124,7 +140,18 @@ watch(
             :disabled="!isAdmin"
             placeholder="Terima kasih telah berbelanja.&#10;BCA 1234567890 a.n. OCN"
           ></textarea>
-          <p class="text-xs text-ink-500 mt-1">Bisa beberapa baris — rekening, QRIS, atau catatan lain. Tampil di bawah total invoice dan penawaran RAB.</p>
+          <p class="text-xs text-ink-500 mt-1">Tampil di bawah total invoice. Bisa beberapa baris — rekening, QRIS, atau syarat pembayaran.</p>
+        </div>
+        <div>
+          <label class="label">Catatan kaki penawaran RAB</label>
+          <textarea
+            v-model="form.rabFooter"
+            class="input min-h-[7rem]"
+            rows="5"
+            :disabled="!isAdmin"
+            placeholder="Terima kasih atas kepercayaannya.&#10;Penawaran berlaku 14 hari."
+          ></textarea>
+          <p class="text-xs text-ink-500 mt-1">Tampil di bawah total penawaran RAB. Terpisah dari catatan invoice.</p>
         </div>
         <div>
           <label class="label">Umur tautan bagikan (hari)</label>
@@ -140,34 +167,28 @@ watch(
             Tautan publik invoice dan penawaran RAB dari tombol Bagikan berlaku selama ini (1–365 hari). Tautan yang sudah dibuat tidak berubah umurnya.
           </p>
         </div>
-        <div class="rounded-panel border border-ink-200 bg-ink-50 p-3 text-sm space-y-1">
-          <div class="font-semibold">{{ form.invoiceBusinessName || 'OCN' }}</div>
-          <div v-if="form.invoiceAddress" class="text-ink-600 whitespace-pre-line text-xs">{{ form.invoiceAddress }}</div>
-          <div v-if="form.invoicePhone" class="text-ink-600 text-xs">{{ form.invoicePhone }}</div>
-          <div class="text-ink-500 text-xs pt-2 whitespace-pre-line">{{ form.invoiceFooter || 'Terima kasih telah berbelanja.' }}</div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="rounded-panel border border-ink-200 bg-ink-50 p-3 text-sm space-y-1">
+            <div class="text-[10px] uppercase font-semibold tracking-wide text-ink-400">Pratinjau invoice</div>
+            <div class="font-semibold">{{ form.invoiceBusinessName || 'OCN' }}</div>
+            <div v-if="form.invoiceAddress" class="text-ink-600 whitespace-pre-line text-xs">{{ form.invoiceAddress }}</div>
+            <div v-if="form.invoicePhone" class="text-ink-600 text-xs">{{ form.invoicePhone }}</div>
+            <div class="text-ink-500 text-xs pt-2 whitespace-pre-line">{{ form.invoiceFooter || 'Terima kasih telah berbelanja.' }}</div>
+          </div>
+          <div class="rounded-panel border border-ink-200 bg-ink-50 p-3 text-sm space-y-1">
+            <div class="text-[10px] uppercase font-semibold tracking-wide text-ink-400">Pratinjau penawaran RAB</div>
+            <div class="font-semibold">{{ form.invoiceBusinessName || 'OCN' }}</div>
+            <div v-if="form.invoiceAddress" class="text-ink-600 whitespace-pre-line text-xs">{{ form.invoiceAddress }}</div>
+            <div v-if="form.invoicePhone" class="text-ink-600 text-xs">{{ form.invoicePhone }}</div>
+            <div class="text-ink-500 text-xs pt-2 whitespace-pre-line">{{ form.rabFooter || form.invoiceFooter || 'Terima kasih atas kepercayaannya.' }}</div>
+          </div>
         </div>
       </template>
 
       <template v-else-if="tab === 'hpp'">
-        <div>
-          <label class="label">Tarif listrik (Rp / kWh)</label>
-          <IdrInput v-model="form.electricityRatePerKwh" required :disabled="!isAdmin" />
-          <p class="text-xs text-ink-500 mt-1">Tarif PLN rumah tangga 1.300–2.200 VA ± Rp 1.445/kWh.</p>
-        </div>
-        <div>
-          <label class="label">Asumsi pemakaian mesin (jam / bulan)</label>
-          <input
-            v-model.number="form.machineUsageHoursPerMonth"
-            type="number"
-            min="1"
-            class="input-num"
-            required
-            :disabled="!isAdmin"
-          />
-          <p class="text-xs text-ink-500 mt-1">
-            Dipakai untuk depresiasi per jam = harga beli ÷ masa depresiasi (bulan) ÷ jam pakai per bulan.
-          </p>
-        </div>
+        <p class="text-xs text-ink-500">
+          Dipakai saat menambah barang katalog ke RAB: harga jual diisi dari modal + margin, lalu dibulatkan.
+        </p>
         <div>
           <label class="label">Target margin default (%)</label>
           <input
@@ -179,7 +200,25 @@ watch(
             required
             :disabled="!isAdmin"
           />
-          <p class="text-xs text-ink-500 mt-1">Prefill harga jual saran di produk dan penjualan.</p>
+          <p class="text-xs text-ink-500 mt-1">Harga jual = modal ÷ (1 − margin). Contoh 40% dari modal Rp 100.000 → Rp 166.667 sebelum pembulatan.</p>
+        </div>
+        <div>
+          <label class="label">Pembulatan harga jual</label>
+          <select v-model.number="form.salePriceRounding" class="input" :disabled="!isAdmin">
+            <option v-for="opt in PRICE_ROUNDING_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+          </select>
+          <p class="text-xs text-ink-500 mt-1">Dibulatkan ke atas agar margin tidak turun di bawah target.</p>
+        </div>
+        <div class="rounded-panel border border-ink-200 bg-ink-50 p-3 text-sm space-y-1">
+          <div class="text-[10px] uppercase font-semibold tracking-wide text-ink-400">Contoh</div>
+          <div class="flex justify-between gap-2">
+            <span class="text-ink-500">Modal</span>
+            <span class="font-mono">{{ formatIDR(previewCost) }}</span>
+          </div>
+          <div class="flex justify-between gap-2">
+            <span class="text-ink-500">Harga jual saran</span>
+            <span class="font-mono font-semibold">{{ formatIDR(previewSale) }}</span>
+          </div>
         </div>
       </template>
 

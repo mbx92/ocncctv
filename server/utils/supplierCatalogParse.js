@@ -78,6 +78,9 @@ function parseDataRow(row, columnMap, codeIdx) {
   let category = ''
   if (columnMap.category != null) category = String(row[columnMap.category] ?? '').trim()
 
+  let unit = ''
+  if (columnMap.unit != null) unit = String(row[columnMap.unit] ?? '').trim()
+
   let priceIdx = columnMap.price
   if (priceIdx == null) {
     for (let j = row.length - 1; j > codeIdx; j--) {
@@ -90,7 +93,7 @@ function parseDataRow(row, columnMap, codeIdx) {
 
   if (!category && priceIdx != null) {
     for (let j = codeIdx + 1; j < priceIdx; j++) {
-      if (j === nameIdx || j === (columnMap.name ?? -1)) continue
+      if (j === nameIdx || j === (columnMap.name ?? -1) || j === columnMap.unit) continue
       const candidate = String(row[j] ?? '').trim()
       if (candidate && !looksLikePrice(candidate)) {
         category = candidate
@@ -103,7 +106,7 @@ function parseDataRow(row, columnMap, codeIdx) {
   const supplierPrice =
     typeof priceRaw === 'number' && Number.isFinite(priceRaw) ? Math.round(priceRaw) : parseRupiah(priceRaw)
 
-  return { code, name, category, supplierPrice }
+  return { code, name, category, supplierPrice, unit }
 }
 
 export function parseSheetRows(rows, sheet, supplierName) {
@@ -124,6 +127,13 @@ export function parseSheetRows(rows, sheet, supplierName) {
         columnMap.category = colIndex
       } else if (header === 'harga' || header.includes('harga')) {
         columnMap.price = colIndex
+      } else if (
+        header === 'satuan' ||
+        header === 'unit' ||
+        header === 'uom' ||
+        header.includes('satuan')
+      ) {
+        columnMap.unit = colIndex
       }
     })
     break
@@ -144,6 +154,7 @@ export function parseSheetRows(rows, sheet, supplierName) {
       code: parsed.code,
       name: parsed.name,
       category: parsed.category || sheetLabel,
+      unit: String(parsed.unit || '').trim() || 'pcs',
       supplierPrice: parsed.supplierPrice,
       sheetKey,
       sheetLabel,

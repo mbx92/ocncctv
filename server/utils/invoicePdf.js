@@ -194,7 +194,6 @@ export async function buildInvoicePdf(invoice) {
   const items = invoice.items?.length ? invoice.items : invoice.item ? [invoice.item] : []
   for (const item of items) {
     const nameBits = [item.name]
-    if (item.code) nameBits.push(item.code)
     if (item.lineType === 'service') nameBits.push('Jasa')
     const nameLines = wrapText(font, nameBits.filter(Boolean).join(' · '), 10, 250)
     const rowH = Math.max(nameLines.length, 1) * 12 + 8

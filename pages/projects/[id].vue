@@ -149,18 +149,59 @@ const rabLines = computed(() => product.value?.rab?.lines || [])
 const goods = computed(() => catalogLines(rabLines.value))
 const jasa = computed(() => serviceLines(rabLines.value))
 
-const wageRows = ref((product.value?.wages || []).map((w) => ({ ...w })))
+function mapWageRow(w) {
+  return {
+    ...w,
+    technicianId: w?.technicianId != null && w.technicianId !== '' ? String(w.technicianId) : ''
+  }
+}
+const { data: technicians, refresh: refreshTechnicians } = await useFetch('/api/technicians')
+const wageRows = ref((product.value?.wages || []).map(mapWageRow))
 watch(
   () => product.value?.wages,
   (rows) => {
-    wageRows.value = (rows || []).map((w) => ({ ...w }))
+    wageRows.value = (rows || []).map(mapWageRow)
   }
 )
 const savingWages = ref(false)
 const wageMsg = ref('')
+const showTechnicians = ref(false)
+const wageAssignIndex = ref(null)
 
 function addWageRow() {
-  wageRows.value.push({ name: '', amount: 0 })
+  wageRows.value.push({ technicianId: '', name: '', amount: 0 })
+}
+
+function techniciansFor(index) {
+  const used = new Set(
+    wageRows.value.map((r, i) => (i === index ? '' : String(r.technicianId || ''))).filter(Boolean)
+  )
+  return (technicians.value || []).filter((t) => !used.has(String(t.id)))
+}
+
+function onWageTechnician(row) {
+  const t = (technicians.value || []).find((x) => String(x.id) === String(row.technicianId))
+  row.name = t?.name || ''
+}
+
+function openTechnicians(rowIndex) {
+  wageAssignIndex.value = rowIndex
+  showTechnicians.value = true
+}
+
+function closeTechnicians() {
+  showTechnicians.value = false
+  refreshTechnicians()
+}
+
+async function onTechnicianCreated(created) {
+  await refreshTechnicians()
+  const idx = wageAssignIndex.value
+  const row = idx != null ? wageRows.value[idx] : null
+  if (row && created?.id != null) {
+    row.technicianId = String(created.id)
+    row.name = created.name
+  }
 }
 
 const liveFinance = computed(() => summarizeProjectRevenue(rabLines.value, wageRows.value))
@@ -938,13 +979,38 @@ const tab = computed({
         </div>
         <div class="p-3 sm:p-4 space-y-3">
           <p class="text-xs text-ink-500">
-            Bagi pendapatan jasa ke teknisi. Tidak otomatis tercatat di Pengeluaran — catat kas terpisah jika sudah dibayar.
+            Pilih teknisi dari daftar. Tidak otomatis tercatat di Pengeluaran — catat kas terpisah jika sudah dibayar.
           </p>
           <div v-for="(row, i) in wageRows" :key="i" class="flex items-start gap-2">
             <div class="flex-1 min-w-0 space-y-2 sm:space-y-0 sm:grid sm:grid-cols-2 sm:gap-2">
               <div>
-                <label class="label">Nama</label>
-                <input v-model="row.name" class="input" placeholder="Nama teknisi" :disabled="!isAdmin" />
+                <label class="label">Teknisi</label>
+                <div class="flex gap-2 min-w-0">
+                  <select
+                    v-model="row.technicianId"
+                    class="input min-w-0"
+                    :disabled="!isAdmin"
+                    @change="onWageTechnician(row)"
+                  >
+                    <option value="">Pilih teknisi...</option>
+                    <option
+                      v-if="row.name && row.technicianId && !techniciansFor(i).some((t) => String(t.id) === String(row.technicianId))"
+                      :value="row.technicianId"
+                    >
+                      {{ row.name }}
+                    </option>
+                    <option v-for="t in techniciansFor(i)" :key="t.id" :value="String(t.id)">{{ t.name }}</option>
+                  </select>
+                  <button
+                    v-if="isAdmin"
+                    type="button"
+                    class="btn-secondary shrink-0"
+                    title="Kelola teknisi"
+                    @click="openTechnicians(i)"
+                  >
+                    <PlusIcon class="w-4 h-4" />
+                  </button>
+                </div>
               </div>
               <div>
                 <label class="label">Upah</label>
@@ -972,6 +1038,13 @@ const tab = computed({
         </div>
       </div>
     </div>
+
+    <TechnicianManageModal
+      v-if="showTechnicians"
+      @close="closeTechnicians"
+      @created="onTechnicianCreated"
+      @changed="refreshTechnicians"
+    />
 
     <AppModal v-if="renameTarget" title="Rename file" @close="closeRename">
       <form class="space-y-3" @submit.prevent="saveRename">

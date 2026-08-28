@@ -2,6 +2,7 @@
 import { PlusIcon, PencilSquareIcon, TrashIcon, CheckIcon, XMarkIcon, MagnifyingGlassIcon, PhotoIcon } from '@heroicons/vue/24/outline'
 
 const { data: items, refresh } = await useFetch('/api/packaging')
+const { data: suppliers, refresh: refreshSuppliers } = await useFetch('/api/suppliers')
 const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
 
 const search = ref('')
@@ -19,9 +20,17 @@ const { page, pageSize, paged, total, totalPages, rangeStart, rangeEnd, reset } 
 watch(search, reset)
 
 const showForm = ref(false)
+const showSuppliers = ref(false)
 const editing = ref(null)
 const form = ref({})
 const errorMsg = ref('')
+
+const knownSupplierNames = computed(() => new Set((suppliers.value || []).map((s) => s.name)))
+const orphanSupplier = computed(() => {
+  const name = form.value.supplier
+  if (!name) return ''
+  return knownSupplierNames.value.has(name) ? '' : name
+})
 
 function openAdd() {
   editing.value = null
@@ -50,6 +59,16 @@ async function save() {
     errorMsg.value = e.data?.statusMessage || 'Gagal menyimpan'
   }
 }
+function closeSuppliers() {
+  showSuppliers.value = false
+  refreshSuppliers()
+}
+
+async function onSupplierCreated(created) {
+  await refreshSuppliers()
+  if (created?.name) form.value.supplier = created.name
+}
+
 async function remove(p) {
   if (!(await useConfirm().confirm(`Hapus produk "${p.name}"?`))) return
   try {
@@ -206,7 +225,16 @@ async function remove(p) {
         </div>
         <div>
           <label class="label">Supplier</label>
-          <input v-model="form.supplier" class="input" placeholder="opsional" />
+          <div class="flex gap-2 min-w-0">
+            <select v-model="form.supplier" class="input min-w-0">
+              <option value="">Tanpa supplier</option>
+              <option v-if="orphanSupplier" :value="orphanSupplier">{{ orphanSupplier }}</option>
+              <option v-for="s in suppliers" :key="s.id" :value="s.name">{{ s.name }}</option>
+            </select>
+            <button type="button" class="btn-secondary shrink-0" title="Kelola supplier" @click="showSuppliers = true">
+              <PlusIcon class="w-4 h-4" />
+            </button>
+          </div>
         </div>
         <p v-if="errorMsg" class="text-sm text-red-600">{{ errorMsg }}</p>
         <div class="flex justify-end gap-2 pt-2">
@@ -217,5 +245,13 @@ async function remove(p) {
         </div>
       </form>
     </AppModal>
+
+    <SupplierManageModal
+      v-if="showSuppliers"
+      nested
+      @close="closeSuppliers"
+      @created="onSupplierCreated"
+      @changed="refreshSuppliers"
+    />
   </div>
 </template>

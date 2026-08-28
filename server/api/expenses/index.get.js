@@ -36,11 +36,14 @@ export default defineEventHandler(async (event) => {
       description: schema.expenses.description,
       amount: schema.expenses.amount,
       relatedProductId: schema.expenses.relatedProductId,
+      technicianId: schema.expenses.technicianId,
+      technicianName: schema.technicians.name,
       productName: schema.products.name,
       fromMachine: schema.machines.id
     })
     .from(schema.expenses)
     .leftJoin(schema.products, eq(schema.expenses.relatedProductId, schema.products.id))
+    .leftJoin(schema.technicians, eq(schema.expenses.technicianId, schema.technicians.id))
     .leftJoin(schema.expenseCategories, eq(schema.expenses.category, schema.expenseCategories.key))
     .leftJoin(schema.machines, eq(schema.machines.expenseId, schema.expenses.id))
     .where(conds.length ? and(...conds) : undefined)

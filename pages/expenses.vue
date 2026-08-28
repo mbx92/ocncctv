@@ -12,6 +12,7 @@ const query = computed(() => {
 const { data: expenses, refresh } = await useFetch('/api/expenses', { query })
 const { data: products } = await useFetch('/api/products')
 const { data: categories, refresh: refreshCategories } = await useFetch('/api/expense-categories')
+const { data: technicians, refresh: refreshTechnicians } = await useFetch('/api/technicians')
 
 const grandTotal = computed(() => (expenses.value || []).reduce((a, e) => a + e.amount, 0))
 
@@ -27,6 +28,7 @@ function catName(key) {
 
 const showForm = ref(false)
 const showCategories = ref(false)
+const showTechnicians = ref(false)
 const editing = ref(null)
 const form = ref({})
 const errorMsg = ref('')
@@ -36,16 +38,54 @@ const savingCategory = ref(false)
 
 function openAdd() {
   editing.value = null
-  form.value = { date: todayStr(), category: 'material', description: '', amount: 0, relatedProductId: '' }
+  form.value = {
+    date: todayStr(),
+    category: 'material',
+    description: '',
+    amount: 0,
+    relatedProductId: '',
+    technicianId: ''
+  }
   errorMsg.value = ''
   showForm.value = true
 }
 function openEdit(e) {
   editing.value = e
-  form.value = { ...e, relatedProductId: e.relatedProductId || '' }
+  form.value = {
+    ...e,
+    relatedProductId: e.relatedProductId || '',
+    technicianId: e.technicianId != null ? String(e.technicianId) : ''
+  }
   errorMsg.value = ''
   showForm.value = true
 }
+function openTechnicians() {
+  showTechnicians.value = true
+}
+function closeTechnicians() {
+  showTechnicians.value = false
+  refreshTechnicians()
+}
+
+function onExpenseTechnician() {
+  const t = (technicians.value || []).find((x) => String(x.id) === String(form.value.technicianId))
+  if (!t) return
+  if (!form.value.description || /^Upah /.test(form.value.description)) {
+    form.value.description = `Upah ${t.name}`
+  }
+  if (!editing.value && (form.value.category === 'material' || form.value.category === 'technician')) {
+    form.value.category = 'technician'
+  }
+}
+
+async function onTechnicianCreated(created) {
+  await refreshTechnicians()
+  if (created?.id != null) {
+    form.value.technicianId = String(created.id)
+    onExpenseTechnician()
+  }
+}
+
 function openCategories() {
   categoryForm.value = { name: '' }
   categoryError.value = ''
@@ -109,7 +149,8 @@ async function remove(e) {
       Pembelian perlengkapan ke toko sebaiknya dicatat lewat tombol <strong>Beli</strong> di
       <NuxtLink to="/materials" class="text-accent-600 hover:underline">Perlengkapan</NuxtLink>
       atau menu <NuxtLink to="/purchases" class="text-accent-600 hover:underline">Pembelian</NuxtLink>
-      agar stok dan kas ikut. Halaman ini untuk pengeluaran lain (listrik, bensin, R&amp;D).
+      agar stok dan kas ikut. Upah teknisi: pilih nama dari daftar, kategori <strong>Upah teknisi</strong>.
+      Halaman ini juga untuk pengeluaran lain (listrik, bensin).
     </p>
 
     <!-- Filter -->
@@ -253,8 +294,20 @@ async function remove(e) {
           </div>
         </div>
         <div>
+          <label class="label">Teknisi (opsional)</label>
+          <div class="flex gap-2 min-w-0">
+            <select v-model="form.technicianId" class="input min-w-0" @change="onExpenseTechnician">
+              <option value="">—</option>
+              <option v-for="t in technicians" :key="t.id" :value="String(t.id)">{{ t.name }}</option>
+            </select>
+            <button type="button" class="btn-secondary shrink-0" title="Kelola teknisi" @click="openTechnicians">
+              <PlusIcon class="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+        <div>
           <label class="label">Deskripsi</label>
-          <input v-model="form.description" class="input" required placeholder="Beli PLA 2 roll" />
+          <input v-model="form.description" class="input" required placeholder="Upah Andi / Beli PLA 2 roll" />
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
@@ -277,6 +330,14 @@ async function remove(e) {
         </div>
       </form>
     </AppModal>
+
+    <TechnicianManageModal
+      v-if="showTechnicians"
+      nested
+      @close="closeTechnicians"
+      @created="onTechnicianCreated"
+      @changed="refreshTechnicians"
+    />
 
     <AppModal v-if="showCategories" title="Kategori Pengeluaran" nested @close="showCategories = false">
       <div class="space-y-4">

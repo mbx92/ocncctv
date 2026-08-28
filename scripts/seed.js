@@ -14,7 +14,8 @@ async function main() {
   await db.insert(schema.appSettings).values({
     electricityRatePerKwh: 1445,
     machineUsageHoursPerMonth: 100,
-    defaultMarginPercent: 40
+    defaultMarginPercent: 40,
+    salePriceRounding: 500
   })
 
   const [pla, plaPutih, petg, resin] = await db

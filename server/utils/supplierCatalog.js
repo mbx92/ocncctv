@@ -6,6 +6,7 @@ import {
   getSupplierCatalogSettings
 } from './supplierCatalogConfig.js'
 import { parseCsv } from './supplierCatalogParse.js'
+import { catalogDisplayName } from './catalogName.js'
 
 function catalogConfigFromRuntime() {
   try {
@@ -33,12 +34,13 @@ export function catalogSupplierName() {
 }
 
 export function mapStoredCatalogItem(row) {
-  return {
+  const item = {
     id: row.id,
     ref: row.ref,
     code: row.code,
     name: row.name,
     category: row.category || '',
+    unit: String(row.unit || '').trim() || 'pcs',
     supplierPrice: Number(row.supplierPrice) || 0,
     lastPrice: row.lastPrice == null ? null : Number(row.lastPrice),
     lastSyncedAt: row.lastSyncedAt ? new Date(row.lastSyncedAt).toISOString() : null,
@@ -46,6 +48,7 @@ export function mapStoredCatalogItem(row) {
     sheetLabel: row.sheetLabel,
     supplierName: row.supplierName
   }
+  return { ...item, name: catalogDisplayName(item) }
 }
 
 export async function lastCatalogSyncedAt(db) {
@@ -179,6 +182,7 @@ export async function syncSheet(db, sheetKey) {
             code: item.code,
             name: item.name,
             category: item.category,
+            unit: String(item.unit || '').trim() || 'pcs',
             supplierPrice: newPrice,
             lastPrice: newPrice !== currentPrice ? currentPrice : row.lastPrice,
             lastSyncedAt: syncedAt
@@ -194,6 +198,7 @@ export async function syncSheet(db, sheetKey) {
           code: item.code,
           name: item.name,
           category: item.category,
+          unit: String(item.unit || '').trim() || 'pcs',
           supplierPrice: item.supplierPrice,
           lastPrice: null,
           lastSyncedAt: syncedAt

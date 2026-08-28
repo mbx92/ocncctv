@@ -67,7 +67,7 @@ async function remove(row) {
       <div>
         <h1 class="text-xl font-bold">RAB</h1>
         <p class="text-xs text-ink-500">
-          Penawaran ke pelanggan dari katalog + jasa. Belum Deal = belum proyek. Kas dan stok tidak bergerak.
+          Penawaran ke pelanggan dari katalog, produk stok, atau jasa. Belum Deal = belum proyek. Kas dan stok tidak bergerak.
         </p>
       </div>
       <button class="btn-primary" @click="openAdd">

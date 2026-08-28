@@ -50,7 +50,11 @@ export const customOrderStatusEnum = pgEnum('custom_order_status', [
   'delivered',
   'cancelled'
 ])
-export const customOrderLineTypeEnum = pgEnum('custom_order_line_type', ['catalog', 'service'])
+export const customOrderLineTypeEnum = pgEnum('custom_order_line_type', [
+  'catalog',
+  'service',
+  'product'
+])
 
 // Master jasa RAB. Tidak ada stok. Nama & harga jual disalin ke baris penawaran.
 export const services = pgTable('services', {
@@ -63,6 +67,14 @@ export const services = pgTable('services', {
 })
 
 export const suppliers = pgTable('suppliers', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull().unique(),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').notNull().defaultNow()
+})
+
+// Daftar teknisi (seperti supplier): pilih dari dropdown, kelola tanpa menu sendiri.
+export const technicians = pgTable('technicians', {
   id: serial('id').primaryKey(),
   name: text('name').notNull().unique(),
   notes: text('notes'),
@@ -82,6 +94,7 @@ export const supplierCatalogItems = pgTable(
     code: text('code').notNull(),
     name: text('name').notNull(),
     category: text('category'),
+    unit: text('unit').notNull().default('pcs'),
     supplierPrice: integer('supplier_price').notNull().default(0),
     lastPrice: integer('last_price'),
     lastSyncedAt: timestamp('last_synced_at'),
@@ -211,6 +224,9 @@ export const expenses = pgTable('expenses', {
   relatedProductId: integer('related_product_id').references(() => products.id, {
     onDelete: 'set null'
   }),
+  technicianId: integer('technician_id').references(() => technicians.id, {
+    onDelete: 'set null'
+  }),
   createdAt: timestamp('created_at').notNull().defaultNow()
 })
 
@@ -280,13 +296,17 @@ export const projectTechnicianWages = pgTable(
     productId: integer('product_id')
       .notNull()
       .references(() => products.id, { onDelete: 'cascade' }),
+    technicianId: integer('technician_id').references(() => technicians.id, {
+      onDelete: 'set null'
+    }),
     name: text('name').notNull(),
     amount: integer('amount').notNull().default(0),
     sortOrder: integer('sort_order').notNull().default(0),
     createdAt: timestamp('created_at').notNull().defaultNow()
   },
   (t) => ({
-    productIdx: pgIndex('project_technician_wages_product_id_idx').on(t.productId)
+    productIdx: pgIndex('project_technician_wages_product_id_idx').on(t.productId),
+    technicianIdx: pgIndex('project_technician_wages_technician_id_idx').on(t.technicianId)
   })
 )
 
@@ -328,6 +348,7 @@ export const customOrderLines = pgTable(
       onDelete: 'set null'
     }),
     serviceId: integer('service_id').references(() => services.id, { onDelete: 'set null' }),
+    packagingId: integer('packaging_id').references(() => packaging.id, { onDelete: 'set null' }),
     name: text('name').notNull(),
     code: text('code'),
     unit: text('unit'),
@@ -337,7 +358,8 @@ export const customOrderLines = pgTable(
     sortOrder: integer('sort_order').notNull().default(0)
   },
   (t) => ({
-    orderIdx: pgIndex('custom_order_lines_custom_order_id_idx').on(t.customOrderId)
+    orderIdx: pgIndex('custom_order_lines_custom_order_id_idx').on(t.customOrderId),
+    packagingIdx: pgIndex('custom_order_lines_packaging_id_idx').on(t.packagingId)
   })
 )
 
@@ -426,10 +448,12 @@ export const appSettings = pgTable('app_settings', {
   electricityRatePerKwh: integer('electricity_rate_per_kwh').notNull().default(1445),
   machineUsageHoursPerMonth: integer('machine_usage_hours_per_month').notNull().default(100),
   defaultMarginPercent: real('default_margin_percent').notNull().default(40),
+  salePriceRounding: integer('sale_price_rounding').notNull().default(500),
   invoiceBusinessName: text('invoice_business_name').notNull().default('OCN'),
   invoiceAddress: text('invoice_address'),
   invoicePhone: text('invoice_phone'),
   invoiceFooter: text('invoice_footer'),
+  rabFooter: text('rab_footer'),
   invoiceShareTtlDays: integer('invoice_share_ttl_days').notNull().default(7)
 })
 
@@ -465,6 +489,58 @@ export const rabShareLinks = pgTable(
   (t) => ({
     tokenUniq: uniqueIndex('rab_share_links_token_uidx').on(t.token),
     orderIdx: pgIndex('rab_share_links_custom_order_id_idx').on(t.customOrderId)
+  })
+)
+
+// Paket siap-share: campuran katalog, produk stok, dan jasa. Harga di-sync dari sumber.
+export const packages = pgTable('packages', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').notNull().defaultNow()
+})
+
+export const packageLines = pgTable(
+  'package_lines',
+  {
+    id: serial('id').primaryKey(),
+    packageId: integer('package_id')
+      .notNull()
+      .references(() => packages.id, { onDelete: 'cascade' }),
+    lineType: customOrderLineTypeEnum('line_type').notNull().default('catalog'),
+    catalogItemId: integer('catalog_item_id').references(() => supplierCatalogItems.id, {
+      onDelete: 'set null'
+    }),
+    serviceId: integer('service_id').references(() => services.id, { onDelete: 'set null' }),
+    packagingId: integer('packaging_id').references(() => packaging.id, { onDelete: 'set null' }),
+    name: text('name').notNull(),
+    code: text('code'),
+    unit: text('unit'),
+    quantity: real('quantity').notNull().default(1),
+    costPrice: integer('cost_price').notNull().default(0),
+    salePrice: integer('sale_price').notNull().default(0),
+    sortOrder: integer('sort_order').notNull().default(0)
+  },
+  (t) => ({
+    packageIdx: pgIndex('package_lines_package_id_idx').on(t.packageId)
+  })
+)
+
+export const packageShareLinks = pgTable(
+  'package_share_links',
+  {
+    id: serial('id').primaryKey(),
+    packageId: integer('package_id')
+      .notNull()
+      .references(() => packages.id, { onDelete: 'cascade' }),
+    token: text('token').notNull(),
+    expiresAt: timestamp('expires_at').notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow()
+  },
+  (t) => ({
+    tokenUniq: uniqueIndex('package_share_links_token_uidx').on(t.token),
+    packageIdx: pgIndex('package_share_links_package_id_idx').on(t.packageId)
   })
 )
 

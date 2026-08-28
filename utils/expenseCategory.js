@@ -6,6 +6,7 @@ export function categoryBadgeClass(key) {
     electricity: 'bg-amber-100 text-amber-700',
     machine: 'bg-slate-200 text-slate-700',
     rnd: 'bg-purple-100 text-purple-700',
+    technician: 'bg-emerald-100 text-emerald-800',
     other: 'bg-ink-100 text-ink-500'
   }
   if (known[key]) return known[key]

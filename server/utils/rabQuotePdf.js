@@ -110,10 +110,11 @@ export async function buildRabQuotePdf(quote) {
     })
   }
 
-  const quoteNo = String(quote.quoteNumber || 'Penawaran')
+  const label = String(quote.docLabel || 'Penawaran').toUpperCase()
+  const quoteNo = String(quote.quoteNumber || label)
   const quoteW = fontBold.widthOfTextAtSize(quoteNo, 13)
-  page.drawText('PENAWARAN', {
-    x: right - font.widthOfTextAtSize('PENAWARAN', 9),
+  page.drawText(label, {
+    x: right - font.widthOfTextAtSize(label, 9),
     y: y + 20,
     size: 9,
     font,
@@ -133,27 +134,38 @@ export async function buildRabQuotePdf(quote) {
   page.drawLine({ start: { x: left, y }, end: { x: right, y }, thickness: 1, color: line })
   y -= 24
 
-  page.drawText('KEPADA', { x: left, y, size: 8, font: fontBold, color: muted })
-  page.drawText('PEKERJAAN', {
-    x: right - fontBold.widthOfTextAtSize('PEKERJAAN', 8),
-    y,
-    size: 8,
-    font: fontBold,
-    color: muted
-  })
-  y -= 14
-  page.drawText(String(quote.customerName || '—'), { x: left, y, size: 11, font: fontBold, color: ink })
-  const titleLines = wrapText(font, String(quote.title || '—'), 11, 250)
-  for (const [i, row] of titleLines.entries()) {
-    page.drawText(row, {
-      x: right - font.widthOfTextAtSize(row, 11),
-      y: y - i * 13,
-      size: 11,
-      font,
-      color: ink
+  if (quote.customerName) {
+    page.drawText('KEPADA', { x: left, y, size: 8, font: fontBold, color: muted })
+    page.drawText('PEKERJAAN', {
+      x: right - fontBold.widthOfTextAtSize('PEKERJAAN', 8),
+      y,
+      size: 8,
+      font: fontBold,
+      color: muted
     })
+    y -= 14
+    page.drawText(String(quote.customerName), { x: left, y, size: 11, font: fontBold, color: ink })
+    const titleLines = wrapText(font, String(quote.title || '—'), 11, 250)
+    for (const [i, row] of titleLines.entries()) {
+      page.drawText(row, {
+        x: right - font.widthOfTextAtSize(row, 11),
+        y: y - i * 13,
+        size: 11,
+        font,
+        color: ink
+      })
+    }
+    y -= Math.max(titleLines.length, 1) * 13 + 16
+  } else {
+    page.drawText('PAKET', { x: left, y, size: 8, font: fontBold, color: muted })
+    y -= 14
+    const titleLines = wrapText(fontBold, String(quote.title || '—'), 11, right - left)
+    for (const row of titleLines) {
+      page.drawText(row, { x: left, y, size: 11, font: fontBold, color: ink })
+      y -= 13
+    }
+    y -= 8
   }
-  y -= Math.max(titleLines.length, 1) * 13 + 16
 
   function drawTableHeader() {
     if (continued) {
@@ -188,7 +200,6 @@ export async function buildRabQuotePdf(quote) {
 
   for (const item of items) {
     const nameBits = [item.name]
-    if (item.code) nameBits.push(item.code)
     if (item.lineType === 'service') nameBits.push('Jasa')
     const nameLines = wrapText(font, nameBits.join(' · '), 10, 250)
     const rowH = Math.max(nameLines.length, 1) * 12 + 8
@@ -216,7 +227,9 @@ export async function buildRabQuotePdf(quote) {
   page.drawText(total, { x: right - fontBold.widthOfTextAtSize(total, 11), y, size: 11, font: fontBold, color: ink })
 
   y -= 28
-  const disclaimer = 'Dokumen ini adalah penawaran harga, bukan invoice.'
+  const disclaimer = quote.docLabel
+    ? 'Dokumen ini adalah daftar harga paket, bukan invoice.'
+    : 'Dokumen ini adalah penawaran harga, bukan invoice.'
   ensure(16)
   page.drawText(disclaimer, { x: left, y, size: 9, font, color: muted })
   y -= 20

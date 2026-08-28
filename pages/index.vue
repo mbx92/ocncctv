@@ -107,7 +107,7 @@ function signedPct(n) {
         <div class="text-[10px] uppercase font-semibold text-ink-400">Proyek</div>
         <div class="font-mono font-semibold">{{ data?.inventory?.productsActive || 0 }} berjalan</div>
         <div class="text-xs text-ink-400">
-          {{ data?.inventory?.productsWaiting || 0 }} menunggu · {{ data?.inventory?.productsDone || 0 }} selesai · {{ data?.productionOpen || 0 }} produksi berjalan
+          {{ data?.inventory?.productsWaiting || 0 }} menunggu · {{ data?.inventory?.productsDone || 0 }} selesai
         </div>
       </div>
     </div>
@@ -170,7 +170,7 @@ function signedPct(n) {
             <NuxtLink
               v-for="p in data.lowProducts"
               :key="'pr' + p.id"
-              to="/production"
+              to="/projects"
               class="flex items-center justify-between hover:bg-ink-50 -mx-1 px-1 rounded"
             >
               <span>{{ p.name }} <span class="text-ink-400">(proyek)</span></span>

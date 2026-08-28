@@ -29,11 +29,15 @@ export function rabIsLocked(status) {
 export const SERVICE_UNITS = ['titik', 'jam', 'paket', 'meter', 'ls']
 
 export function rabLineTypeLabel(lineType) {
-  return lineType === 'service' ? 'Jasa' : 'Barang'
+  if (lineType === 'service') return 'Jasa'
+  if (lineType === 'product') return 'Stok'
+  return 'Barang'
 }
 
 export function rabLineTypeBadge(lineType) {
-  return lineType === 'service' ? 'bg-purple-100 text-purple-700' : 'bg-sky-100 text-sky-800'
+  if (lineType === 'service') return 'bg-purple-100 text-purple-700'
+  if (lineType === 'product') return 'bg-emerald-100 text-emerald-800'
+  return 'bg-sky-100 text-sky-800'
 }
 
 export function lineAmount(line) {
@@ -77,9 +81,14 @@ export function summarizeProjectRevenue(lines, wages) {
   }
 }
 
-export function suggestedSalePrice(cost, marginPercent) {
+export function suggestedSalePrice(cost, marginPercent, rounding = 0) {
   const c = Math.max(Math.round(Number(cost) || 0), 0)
   const m = Math.min(Math.max(Number(marginPercent) || 0, 0), 95) / 100
   if (!c) return 0
-  return Math.round(c / (1 - m))
+  const raw = Math.round(c / (1 - m))
+  const step = Math.max(Math.round(Number(rounding) || 0), 0)
+  if (!step) return raw
+  return Math.ceil(raw / step) * step
 }
+
+export const PRICE_ROUNDING_STEPS = [0, 100, 500, 1000, 5000]

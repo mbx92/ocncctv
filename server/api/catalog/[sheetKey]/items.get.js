@@ -1,6 +1,7 @@
 import { useDb } from '../../../db/index.js'
 import { findCatalogSheet } from '../../../utils/supplierCatalogConfig.js'
 import { fetchRemoteItemsForSheet, itemsForSheet, lastCatalogSyncedAt } from '../../../utils/supplierCatalog.js'
+import { catalogDisplayName } from '../../../utils/catalogName.js'
 
 export default defineEventHandler(async (event) => {
   const sheetKey = getRouterParam(event, 'sheetKey')
@@ -15,14 +16,15 @@ export default defineEventHandler(async (event) => {
 
   if (!items.length) {
     try {
-      items = await fetchRemoteItemsForSheet(sheetKey)
+      const remote = await fetchRemoteItemsForSheet(sheetKey)
       source = 'remote'
       const term = String(q || '').trim().toLowerCase()
-      if (term) {
-        items = items.filter((item) =>
-          `${item.code} ${item.name} ${item.category}`.toLowerCase().includes(term)
-        )
-      }
+      items = (term
+        ? remote.filter((item) =>
+            `${item.code} ${item.name} ${item.category}`.toLowerCase().includes(term)
+          )
+        : remote
+      ).map((item) => ({ ...item, name: catalogDisplayName(item) }))
     } catch {
       items = []
     }
