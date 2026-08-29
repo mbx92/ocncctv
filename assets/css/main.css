@@ -183,6 +183,12 @@
     @apply grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0 w-full;
   }
 
+  /* Modal: beri ruang scroll saat keyboard mobile menutupi field bawah */
+  .modal-body :is(input, textarea, select) {
+    scroll-margin-top: 4.5rem;
+    scroll-margin-bottom: 1rem;
+  }
+
   .money-input {
     @apply relative;
   }
