@@ -1,7 +1,7 @@
 import { and, eq, gt } from 'drizzle-orm'
 import { useDb, schema } from '../db/index.js'
 import { getSettings } from './settings.js'
-import { loadRabLines } from './customOrders.js'
+import { loadRabLines, presentRabLines } from './customOrders.js'
 import { catalogDisplayName } from './catalogName.js'
 
 export function quoteNumberFor(id) {
@@ -17,13 +17,15 @@ export function formatQuoteQty(item) {
 }
 
 export function toRabQuotePayload(order, lines, settings) {
-  let items = (lines || []).map((line) => {
+  let items = presentRabLines(lines).map((line) => {
     const qty = Math.max(Math.round(Number(line.quantity) || 0), 0)
     const unitPrice = Math.max(Math.round(Number(line.salePrice) || 0), 0)
+    const lineType =
+      line.lineType === 'service' ? 'service' : line.lineType === 'product' ? 'product' : 'catalog'
     return {
-      name: catalogDisplayName(line) || String(line.name || '').trim() || 'Item',
-      code: '',
-      lineType: line.lineType === 'service' ? 'service' : 'catalog',
+      name: String(line.name || '').trim() || 'Item',
+      code: line.code || '',
+      lineType,
       quantity: qty,
       unit: String(line.unit || '').trim(),
       unitPrice,

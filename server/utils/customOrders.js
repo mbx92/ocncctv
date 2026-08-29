@@ -39,6 +39,12 @@ export function parseRabLines(raw) {
     const serviceId = Number(line.serviceId)
     const packagingId = Number(line.packagingId)
     const unit = String(line.unit || '').trim() || (lineType === 'service' ? 'titik' : 'pcs')
+    if (lineType === 'product' && !(Number.isInteger(packagingId) && packagingId > 0)) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: `Baris ${i + 1}: pilih produk stok yang valid`
+      })
+    }
     return {
       lineType,
       catalogItemId:
@@ -135,19 +141,31 @@ export async function loadRabLines(db, orderIds) {
     .orderBy(asc(schema.customOrderLines.sortOrder), asc(schema.customOrderLines.id))
   for (const row of rows) {
     const list = map.get(row.line.customOrderId) || []
-    list.push(
-      presentRabLine(row.line, {
-        catalogName: row.catalogName,
-        catalogSheetLabel: row.catalogSheetLabel,
-        catalogUnit: row.catalogUnit,
-        packagingName: row.packagingName,
-        packagingUnit: row.packagingUnit,
-        packagingStock: row.packagingStock
-      })
-    )
+    list.push({
+      ...row.line,
+      catalogName: row.catalogName,
+      catalogSheetLabel: row.catalogSheetLabel,
+      catalogUnit: row.catalogUnit,
+      packagingName: row.packagingName,
+      packagingUnit: row.packagingUnit,
+      packagingStock: row.packagingStock
+    })
     map.set(row.line.customOrderId, list)
   }
   return map
+}
+
+export function presentRabLines(lines) {
+  return (lines || []).map((line) =>
+    presentRabLine(line, {
+      catalogName: line.catalogName,
+      catalogSheetLabel: line.catalogSheetLabel,
+      catalogUnit: line.catalogUnit,
+      packagingName: line.packagingName,
+      packagingUnit: line.packagingUnit,
+      packagingStock: line.packagingStock ?? line.stockQuantity
+    })
+  )
 }
 
 export function presentRabLine(line, extra = {}) {
@@ -173,16 +191,7 @@ export function presentRabLine(line, extra = {}) {
 }
 
 export function withRabTotals(order, lines, extra = {}) {
-  const presented = (lines || []).map((line) =>
-    presentRabLine(line, {
-      catalogName: line.catalogName,
-      catalogSheetLabel: line.catalogSheetLabel || line.sheetLabel,
-      catalogUnit: line.catalogUnit || line.unit,
-      packagingName: line.packagingName,
-      packagingUnit: line.packagingUnit,
-      packagingStock: line.packagingStock ?? line.stockQuantity
-    })
-  )
+  const presented = presentRabLines(lines)
   const totals = totalsFromLines(presented)
   if (!presented.length && Number(order.pricePerUnit)) {
     return {
