@@ -1,7 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { eq, sql } from 'drizzle-orm'
-import { loadRabLines } from './customOrders.js'
-import { catalogDisplayName } from './catalogName.js'
+import { loadRabLines, presentRabLines } from './customOrders.js'
 
 const CHANNEL_LABEL = {
   tokopedia: 'Tokopedia',
@@ -123,9 +122,10 @@ function itemsFromRabLines(lines) {
       const quantity = Math.max(Math.round(Number(line.quantity) || 0), 0)
       const unitPrice = Math.max(Math.round(Number(line.salePrice) || 0), 0)
       return {
-        name: catalogDisplayName(line) || String(line.name || '').trim() || 'Item',
-        code: '',
-        lineType: line.lineType === 'service' ? 'service' : 'catalog',
+        name: String(line.name || '').trim() || 'Item',
+        code: line.code || '',
+        lineType:
+          line.lineType === 'service' ? 'service' : line.lineType === 'product' ? 'product' : 'catalog',
         quantity,
         unit: String(line.unit || '').trim(),
         unitPrice,
@@ -208,7 +208,7 @@ export async function buildInvoicePayload(db, schema, row, settings) {
   let lines = []
   if (orderId) {
     const map = await loadRabLines(db, [orderId])
-    lines = map.get(orderId) || []
+    lines = presentRabLines(map.get(orderId) || [])
   }
   return toInvoicePayload(row, settings, lines)
 }
