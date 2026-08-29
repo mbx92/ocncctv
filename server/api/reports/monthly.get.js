@@ -4,8 +4,8 @@ import { loadSalesWithHpp, marginPercent } from '../../utils/salesAggregate.js'
 import { isOperatingExpenseCategory } from '../../utils/expensePl.js'
 import { monthKey } from '../../utils/dates.js'
 
-// Tren N bulan terakhir (default 12): revenue bersih, HPP, pengeluaran
-// operasional (termasuk perlengkapan), dan laba bersih per bulan.
+// Tren N bulan terakhir (default 12): revenue bersih, biaya material (HPP),
+// biaya operasional (tanpa pembelian material/packaging), dan laba bersih per bulan.
 export default defineEventHandler(async (event) => {
   const months = Math.min(Math.max(Number(getQuery(event).months) || 12, 1), 36)
   const now = new Date()
