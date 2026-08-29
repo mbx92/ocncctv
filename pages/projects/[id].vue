@@ -18,7 +18,8 @@ import {
   FolderIcon,
   BanknotesIcon,
   PlayIcon,
-  CheckCircleIcon
+  CheckCircleIcon,
+  TruckIcon
 } from '@heroicons/vue/24/outline'
 import { productStatusLabel, productStatusClass, normalizeProductStatus } from '~/utils/productStatus.js'
 import {
@@ -38,6 +39,7 @@ const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
 
 const { data: product, refresh } = await useFetch(`/api/products/${id}`)
 const { data: settings } = await useFetch('/api/settings')
+const { data: suppliers } = await useFetch('/api/suppliers')
 
 const info = ref({
   name: product.value?.name,
@@ -190,6 +192,83 @@ const goods = computed(() => catalogLines(scopeLines.value))
 const jasa = computed(() => serviceLines(scopeLines.value))
 const rabGoods = computed(() => catalogLines(rabLive.value))
 const rabJasa = computed(() => serviceLines(rabLive.value))
+
+const showRabPurchase = ref(false)
+const rabPurchaseDraft = ref(null)
+const rabPurchaseLoading = ref(false)
+const rabPurchaseSaving = ref(false)
+const rabPurchaseError = ref('')
+const rabPurchaseForm = ref({
+  date: todayStr(),
+  supplier: '',
+  notes: '',
+  shippingFee: 0,
+  platformFee: 0
+})
+
+const rabPurchaseGoodsTotal = computed(() =>
+  (rabPurchaseDraft.value?.lines || []).reduce(
+    (sum, line) => sum + Math.round((Number(line.quantity) || 0) * (Number(line.unitPrice) || 0)),
+    0
+  )
+)
+const rabPurchaseGrandTotal = computed(() => {
+  const shipping = Math.max(Math.round(Number(rabPurchaseForm.value.shippingFee) || 0), 0)
+  const platform = Math.max(Math.round(Number(rabPurchaseForm.value.platformFee) || 0), 0)
+  return rabPurchaseGoodsTotal.value + shipping + platform
+})
+const rabPurchaseNewCount = computed(
+  () => (rabPurchaseDraft.value?.lines || []).filter((line) => line.matchStatus === 'missing').length
+)
+
+async function openRabPurchase() {
+  rabPurchaseError.value = ''
+  rabPurchaseLoading.value = true
+  showRabPurchase.value = true
+  try {
+    const draft = await $fetch(`/api/products/${id}/rab-purchase-draft`)
+    rabPurchaseDraft.value = draft
+    rabPurchaseForm.value = {
+      date: todayStr(),
+      supplier: draft.suggestedSupplier || suppliers.value?.[0]?.name || '',
+      notes: `Kebutuhan proyek · ${draft.projectName || product.value?.name || ''}`,
+      shippingFee: 0,
+      platformFee: 0
+    }
+  } catch (e) {
+    rabPurchaseError.value = e.data?.statusMessage || 'Gagal memuat kebutuhan RAB'
+    rabPurchaseDraft.value = null
+  } finally {
+    rabPurchaseLoading.value = false
+  }
+}
+
+function closeRabPurchase() {
+  showRabPurchase.value = false
+  rabPurchaseDraft.value = null
+  rabPurchaseError.value = ''
+}
+
+async function submitRabPurchase() {
+  rabPurchaseError.value = ''
+  rabPurchaseSaving.value = true
+  try {
+    const res = await $fetch(`/api/products/${id}/purchases/from-rab`, {
+      method: 'POST',
+      body: {
+        ...rabPurchaseForm.value,
+        createMissingPackaging: true,
+        category: 'packaging'
+      }
+    })
+    closeRabPurchase()
+    useToast().success(`Pembelian tercatat · ${formatIDR(res.purchase?.totalAmount || 0)}`)
+  } catch (e) {
+    rabPurchaseError.value = e.data?.statusMessage || 'Gagal mencatat pembelian'
+  } finally {
+    rabPurchaseSaving.value = false
+  }
+}
 
 function setRabQty(line, value) {
   const original = Number(line.originalQuantity ?? line.quantity) || 0
@@ -652,6 +731,14 @@ const tab = computed({
         <button type="button" class="btn-action" @click="tab = 'revenue'">
           <BanknotesIcon class="w-3.5 h-3.5" />Revenue
         </button>
+        <button
+          v-if="goods.length"
+          type="button"
+          class="btn-action"
+          @click="openRabPurchase"
+        >
+          <TruckIcon class="w-3.5 h-3.5" />Beli kebutuhan
+        </button>
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-start">
@@ -937,6 +1024,14 @@ const tab = computed({
             Qty aktual boleh lebih kecil dari RAB (atau 0 = batal). Penawaran RAB tidak berubah. Yang nambah di panel bawah.
           </p>
           <div class="flex items-center gap-2 shrink-0">
+            <button
+              v-if="goods.length"
+              type="button"
+              class="btn-secondary"
+              @click="openRabPurchase"
+            >
+              <TruckIcon class="w-4 h-4" />Beli kebutuhan
+            </button>
             <NuxtLink :to="`/rab/${product.rab.id}`" class="text-xs text-accent-600 hover:underline">Buka RAB</NuxtLink>
             <button
               v-if="canEditExtras"
@@ -1072,7 +1167,17 @@ const tab = computed({
           </div>
         </div>
       </template>
-      <p v-else class="text-xs text-ink-500">Proyek ini tidak punya RAB. Item di bawah ini hanya tambahan lapangan.</p>
+      <div v-else class="flex items-center justify-between gap-2">
+        <p class="text-xs text-ink-500">Proyek ini tidak punya RAB. Item di bawah ini hanya tambahan lapangan.</p>
+        <button
+          v-if="goods.length"
+          type="button"
+          class="btn-secondary shrink-0"
+          @click="openRabPurchase"
+        >
+          <TruckIcon class="w-4 h-4" />Beli kebutuhan
+        </button>
+      </div>
 
       <div class="panel overflow-hidden">
         <div class="panel-header">
@@ -1228,6 +1333,141 @@ const tab = computed({
       @created="onTechnicianCreated"
       @changed="refreshTechnicians"
     />
+
+    <AppModal v-if="showRabPurchase" title="Beli kebutuhan proyek" size="lg" @close="closeRabPurchase">
+      <div v-if="rabPurchaseLoading" class="py-10 text-center text-sm text-ink-500">Memuat kebutuhan dari RAB…</div>
+      <form v-else class="space-y-4" @submit.prevent="submitRabPurchase">
+        <div
+          v-if="rabPurchaseDraft"
+          class="rounded-panel border border-sky-200 bg-sky-50 px-3 py-2.5 text-xs text-sky-900 space-y-1"
+        >
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="badge bg-white/80 text-sky-800 border border-sky-200">{{ rabPurchaseDraft.lines.length }} barang</span>
+            <span v-if="rabPurchaseNewCount" class="badge bg-white/80 text-sky-800 border border-sky-200">
+              {{ rabPurchaseNewCount }} produk baru
+            </span>
+            <span class="text-sky-800/75">Qty langsung terpakai proyek · tidak masuk stok</span>
+          </div>
+          <p class="text-sky-800/70">Simpan perubahan item dulu jika qty tambahan belum disimpan.</p>
+        </div>
+
+        <div v-if="rabPurchaseDraft?.lines?.length" class="panel overflow-hidden">
+          <div class="panel-header">
+            <span class="panel-title">Daftar barang</span>
+            <span class="text-xs font-mono text-ink-500">{{ formatIDR(rabPurchaseGoodsTotal) }}</span>
+          </div>
+          <div class="overflow-x-auto max-h-[min(52vh,22rem)] overflow-y-auto">
+            <table class="table-std text-sm">
+              <thead class="sticky top-0 z-10 bg-ink-50">
+                <tr>
+                  <th class="min-w-[11rem]">Item</th>
+                  <th class="text-right w-24">Qty</th>
+                  <th class="text-right w-28">Harga</th>
+                  <th class="text-right w-32">Jumlah</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="(line, i) in rabPurchaseDraft.lines"
+                  :key="i"
+                  class="even:bg-ink-50/50 align-top"
+                >
+                  <td class="py-3">
+                    <div class="flex flex-wrap items-center gap-1.5 mb-1">
+                      <span
+                        v-if="line.matchStatus === 'matched'"
+                        class="badge bg-green-100 text-green-700"
+                      >
+                        Gudang
+                      </span>
+                      <span v-else class="badge bg-sky-100 text-sky-800">Baru</span>
+                      <span v-if="line.source === 'extra'" class="badge bg-amber-100 text-amber-800">Tambahan</span>
+                    </div>
+                    <div class="font-medium text-ink-900 leading-snug break-words">{{ line.name }}</div>
+                    <div v-if="line.code" class="text-[11px] font-mono text-ink-400 mt-0.5">{{ line.code }}</div>
+                  </td>
+                  <td class="num whitespace-nowrap py-3">
+                    <div class="font-mono text-ink-900">{{ formatNumber(line.quantity) }}</div>
+                    <div v-if="line.unit" class="text-[11px] text-ink-400 font-sans normal-case">{{ line.unit }}</div>
+                  </td>
+                  <td class="num whitespace-nowrap py-3 text-ink-600">{{ formatIDR(line.unitPrice) }}</td>
+                  <td class="num whitespace-nowrap py-3 font-medium text-ink-900">
+                    {{ formatIDR(line.quantity * line.unitPrice) }}
+                  </td>
+                </tr>
+              </tbody>
+              <tfoot class="sticky bottom-0 bg-ink-100 border-t border-ink-200">
+                <tr>
+                  <td colspan="3" class="py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-ink-500">
+                    Subtotal barang
+                  </td>
+                  <td class="num py-2.5 font-semibold text-ink-900">{{ formatIDR(rabPurchaseGoodsTotal) }}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="date-field">
+            <label class="label">Tanggal</label>
+            <input v-model="rabPurchaseForm.date" type="date" class="input" required />
+          </div>
+          <div>
+            <label class="label">Supplier</label>
+            <input v-model="rabPurchaseForm.supplier" class="input" required list="rab-purchase-suppliers" />
+            <datalist id="rab-purchase-suppliers">
+              <option v-for="s in suppliers || []" :key="s.id" :value="s.name" />
+            </datalist>
+          </div>
+          <div>
+            <label class="label">Ongkir</label>
+            <IdrInput v-model="rabPurchaseForm.shippingFee" input-class="w-full" />
+          </div>
+          <div>
+            <label class="label">Fee platform</label>
+            <IdrInput v-model="rabPurchaseForm.platformFee" input-class="w-full" />
+          </div>
+          <div class="sm:col-span-2">
+            <label class="label">Catatan</label>
+            <textarea v-model="rabPurchaseForm.notes" class="input min-h-[4rem]" rows="2" />
+          </div>
+        </div>
+
+        <div class="rounded-panel border border-ink-200 bg-ink-50 p-3 text-sm">
+          <dl class="space-y-1.5">
+            <div class="flex justify-between gap-4">
+              <dt class="text-ink-500">Subtotal barang</dt>
+              <dd class="font-mono">{{ formatIDR(rabPurchaseGoodsTotal) }}</dd>
+            </div>
+            <div v-if="rabPurchaseForm.shippingFee" class="flex justify-between gap-4">
+              <dt class="text-ink-500">Ongkir</dt>
+              <dd class="font-mono">{{ formatIDR(rabPurchaseForm.shippingFee) }}</dd>
+            </div>
+            <div v-if="rabPurchaseForm.platformFee" class="flex justify-between gap-4">
+              <dt class="text-ink-500">Fee platform</dt>
+              <dd class="font-mono">{{ formatIDR(rabPurchaseForm.platformFee) }}</dd>
+            </div>
+            <div class="flex justify-between gap-4 border-t border-ink-200 pt-2 font-semibold">
+              <dt>Total pembelian</dt>
+              <dd class="font-mono text-base">{{ formatIDR(rabPurchaseGrandTotal) }}</dd>
+            </div>
+          </dl>
+        </div>
+
+        <p v-if="rabPurchaseError" class="text-sm text-red-600">{{ rabPurchaseError }}</p>
+        <div class="flex justify-end gap-2">
+          <button type="button" class="btn-secondary" @click="closeRabPurchase"><XMarkIcon class="w-4 h-4" />Batal</button>
+          <button
+            type="submit"
+            class="btn-primary"
+            :disabled="rabPurchaseSaving || !rabPurchaseDraft?.lines?.length"
+          >
+            <CheckIcon class="w-4 h-4" />{{ rabPurchaseSaving ? 'Mencatat…' : 'Catat pembelian' }}
+          </button>
+        </div>
+      </form>
+    </AppModal>
 
     <AppModal v-if="renameTarget" title="Rename file" @close="closeRename">
       <form class="space-y-3" @submit.prevent="saveRename">

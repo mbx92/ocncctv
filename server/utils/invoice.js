@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { eq, sql } from 'drizzle-orm'
 import { loadRabLines, presentRabLines } from './customOrders.js'
+import { applyRabAdjustments, loadProjectExtraLines, loadProjectRabAdjustments } from './projectLines.js'
 
 const CHANNEL_LABEL = {
   tokopedia: 'Tokopedia',
@@ -135,15 +136,10 @@ function itemsFromRabLines(lines) {
     .filter((item) => item.quantity > 0)
 }
 
-export function toInvoicePayload(row, settings, lines = []) {
+function buildInvoiceItems(row, lines) {
   const qty = row.quantity
   const unitPrice = row.salePricePerUnit
   const amount = qty * unitPrice
-  const discount = Math.min(Math.max(Math.round(Number(row.discountAmount) || 0), 0), amount)
-  const discountKind = row.discountKind === 'percent' ? 'percent' : 'amount'
-  const discountPercent = Math.min(Math.max(Number(row.discountPercent) || 0, 0), 100)
-  const paid = row.paymentStatus === 'paid'
-  const methodLabel = PAYMENT_METHOD_LABEL[row.paymentMethod] || row.paymentMethod || null
   const fallback = [
     {
       name: row.productName || row.customTitle || 'Proyek',
@@ -156,8 +152,32 @@ export function toInvoicePayload(row, settings, lines = []) {
     }
   ]
   const lineItems = itemsFromRabLines(lines)
+  if (!lineItems.length) return { items: fallback, subtotal: amount }
+
   const lineSum = lineItems.reduce((sum, item) => sum + item.amount, 0)
-  const items = lineItems.length && lineSum === amount ? lineItems : fallback
+  const items = [...lineItems]
+  const diff = amount - lineSum
+  if (diff !== 0) {
+    items.push({
+      name: 'Penyesuaian',
+      code: '',
+      lineType: 'catalog',
+      quantity: 1,
+      unit: '',
+      unitPrice: diff,
+      amount: diff
+    })
+  }
+  return { items, subtotal: amount }
+}
+
+export function toInvoicePayload(row, settings, lines = []) {
+  const { items, subtotal } = buildInvoiceItems(row, lines)
+  const discount = Math.min(Math.max(Math.round(Number(row.discountAmount) || 0), 0), subtotal)
+  const discountKind = row.discountKind === 'percent' ? 'percent' : 'amount'
+  const discountPercent = Math.min(Math.max(Number(row.discountPercent) || 0, 0), 100)
+  const paid = row.paymentStatus === 'paid'
+  const methodLabel = PAYMENT_METHOD_LABEL[row.paymentMethod] || row.paymentMethod || null
   const customerName = row.customerName || row.customCustomerName || '—'
   return {
     id: row.id,
@@ -173,9 +193,9 @@ export function toInvoicePayload(row, settings, lines = []) {
     paidAt: paid ? row.paidAt || null : null,
     notes: row.notes,
     isCustom: !!row.customOrderId,
-    item: items[0],
+    item: items[0] || null,
     items,
-    subtotal: amount,
+    subtotal,
     discount,
     discountKind,
     discountPercent,
@@ -185,7 +205,7 @@ export function toInvoicePayload(row, settings, lines = []) {
           ? `Diskon ${discountPercent}%`
           : 'Diskon'
         : null,
-    total: amount - discount,
+    total: subtotal - discount,
     business: {
       name: settings.invoiceBusinessName || 'OCN',
       address: settings.invoiceAddress || null,
@@ -208,7 +228,20 @@ export async function buildInvoicePayload(db, schema, row, settings) {
   let lines = []
   if (orderId) {
     const map = await loadRabLines(db, [orderId])
-    lines = presentRabLines(map.get(orderId) || [])
+    let rabLines = presentRabLines(map.get(orderId) || [])
+    if (row.productId) {
+      const productId = row.productId
+      const [adjMap, extraMap] = await Promise.all([
+        loadProjectRabAdjustments(db, schema, [productId]),
+        loadProjectExtraLines(db, schema, [productId])
+      ])
+      rabLines = applyRabAdjustments(rabLines, adjMap.get(productId) || []).filter(
+        (line) => !line.omitted && (Number(line.quantity) || 0) > 0
+      )
+      lines = [...rabLines, ...(extraMap.get(productId) || [])]
+    } else {
+      lines = rabLines
+    }
   }
   return toInvoicePayload(row, settings, lines)
 }

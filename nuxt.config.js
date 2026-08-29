@@ -38,7 +38,7 @@ export default defineNuxtConfig({
   },
   app: {
     head: {
-      title: 'OCN — Pencatatan Produksi',
+      title: 'OCN — CCTV & Networking',
       meta: [
         {
           name: 'viewport',
@@ -65,9 +65,9 @@ export default defineNuxtConfig({
     registerType: 'autoUpdate',
     injectRegister: 'auto',
     manifest: {
-      name: 'OCN — Pencatatan Produksi',
+      name: 'OCN — CCTV & Networking',
       short_name: 'OCN',
-      description: 'Pencatatan produksi, HPP, dan penjualan workshop 3D printing',
+      description: 'Pencatatan RAB, Proyek, dan penjualan CCTV & Networking',
       theme_color: '#1f2429',
       background_color: '#15181c',
       display: 'standalone',
