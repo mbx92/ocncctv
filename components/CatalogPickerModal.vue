@@ -23,8 +23,9 @@ const rangeStart = computed(() => (total.value ? (page.value - 1) * pageSize.val
 const rangeEnd = computed(() => Math.min(page.value * pageSize.value, total.value))
 const selectedCount = computed(() => selected.value.size)
 const selectedItems = computed(() => [...selected.value.values()])
+const source = ref('database')
 const pageAllSelected = computed(
-  () => items.value.length > 0 && items.value.every((item) => selected.value.has(item.id))
+  () => items.value.length > 0 && items.value.every((item) => selected.value.has(catalogItemKey(item)))
 )
 const canQuery = computed(
   () => !!filters.value.sheetKey || !!filters.value.category || filters.value.q.trim().length >= 2
@@ -57,6 +58,7 @@ async function fetchItems() {
     const data = await $fetch('/api/catalog/search', { query: query.value })
     items.value = data.items || []
     total.value = data.total || 0
+    source.value = data.source || 'database'
     if (Array.isArray(data.categories)) categories.value = data.categories
   } catch (e) {
     errorMsg.value = e.data?.statusMessage || 'Gagal memuat katalog'
@@ -92,23 +94,24 @@ onMounted(() => {
 })
 onUnmounted(() => clearTimeout(timer))
 
-function isSelected(id) {
-  return selected.value.has(id)
+function isSelected(item) {
+  return selected.value.has(catalogItemKey(item))
 }
 
 function toggle(item) {
+  const key = catalogItemKey(item)
   const next = new Map(selected.value)
-  if (next.has(item.id)) next.delete(item.id)
-  else next.set(item.id, item)
+  if (next.has(key)) next.delete(key)
+  else next.set(key, item)
   selected.value = next
 }
 
 function togglePage() {
   const next = new Map(selected.value)
   if (pageAllSelected.value) {
-    for (const item of items.value) next.delete(item.id)
+    for (const item of items.value) next.delete(catalogItemKey(item))
   } else {
-    for (const item of items.value) next.set(item.id, item)
+    for (const item of items.value) next.set(catalogItemKey(item), item)
   }
   selected.value = next
 }
@@ -161,6 +164,7 @@ function confirmAdd() {
         </div>
         <p class="text-[11px] text-ink-400">
           Pilih brand, atau ketik minimal 2 huruf. Centang beberapa item lalu tambahkan sekaligus.
+          <span v-if="source === 'remote'"> Data langsung dari Google Sheets — jalankan sync katalog agar tersimpan.</span>
         </p>
       </div>
 
@@ -181,7 +185,7 @@ function confirmAdd() {
               <input
                 type="checkbox"
                 class="mt-1 h-4 w-4 accent-accent-600"
-                :checked="isSelected(item.id)"
+                :checked="isSelected(item)"
                 @change="toggle(item)"
               />
               <div class="min-w-0 flex-1">
@@ -219,14 +223,14 @@ function confirmAdd() {
                   v-for="item in items"
                   :key="item.id"
                   class="cursor-pointer hover:bg-ink-50"
-                  :class="isSelected(item.id) ? 'bg-accent-50' : ''"
+                  :class="isSelected(item) ? 'bg-accent-50' : ''"
                   @click="toggle(item)"
                 >
                   <td @click.stop>
                     <input
                       type="checkbox"
                       class="h-4 w-4 accent-accent-600"
-                      :checked="isSelected(item.id)"
+                      :checked="isSelected(item)"
                       @change="toggle(item)"
                     />
                   </td>
