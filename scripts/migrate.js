@@ -36,13 +36,13 @@ try {
     )
   `)
 
-  const { rows } = await client.query(
-    'SELECT id, hash, created_at FROM drizzle.__drizzle_migrations ORDER BY created_at DESC LIMIT 1'
+  const { rows: applied } = await client.query(
+    'SELECT hash, created_at FROM drizzle.__drizzle_migrations'
   )
-  const last = rows[0]
+  const appliedWhen = new Set(applied.map((row) => Number(row.created_at)))
 
   for (const entry of journal.entries) {
-    if (last && Number(last.created_at) >= entry.when) continue
+    if (appliedWhen.has(entry.when)) continue
 
     const migrationPath = join(migrationsFolder, `${entry.tag}.sql`)
     if (!existsSync(migrationPath)) {
