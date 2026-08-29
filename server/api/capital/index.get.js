@@ -24,7 +24,8 @@ export default defineEventHandler(async (event) => {
       .select({
         quantity: schema.sales.quantity,
         salePricePerUnit: schema.sales.salePricePerUnit,
-        discountAmount: schema.sales.discountAmount
+        discountAmount: schema.sales.discountAmount,
+        paymentStatus: schema.sales.paymentStatus
       })
       .from(schema.sales),
     db.select({ amount: schema.expenses.amount, category: schema.expenses.category }).from(schema.expenses),

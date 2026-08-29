@@ -15,14 +15,26 @@ export function ownerCapital(rows) {
   }
 }
 
+function saleNet(row) {
+  const { net } = saleMoney({
+    salePricePerUnit: row.salePricePerUnit,
+    quantity: row.quantity,
+    discountAmount: row.discountAmount
+  })
+  return net
+}
+
 export function salesInflow(salesRows) {
   return salesRows.reduce((sum, row) => {
-    const { net } = saleMoney({
-      salePricePerUnit: row.salePricePerUnit,
-      quantity: row.quantity,
-      discountAmount: row.discountAmount
-    })
-    return sum + net
+    if (row.paymentStatus === 'unpaid') return sum
+    return sum + saleNet(row)
+  }, 0)
+}
+
+export function salesReceivable(salesRows) {
+  return salesRows.reduce((sum, row) => {
+    if (row.paymentStatus !== 'unpaid') return sum
+    return sum + saleNet(row)
   }, 0)
 }
 
@@ -40,11 +52,13 @@ export function equipmentAssetTotal(machineRows) {
 export function capitalPosition({ capitalRows, salesRows, expenseRows, machineRows = [] }) {
   const owner = ownerCapital(capitalRows)
   const salesRevenue = salesInflow(salesRows)
+  const receivable = salesReceivable(salesRows)
   const totalExpenses = totalCashOut(expenseRows)
   const equipmentAssets = equipmentAssetTotal(machineRows)
   return {
     ...owner,
     salesRevenue,
+    salesReceivable: receivable,
     totalExpenses,
     equipmentAssets,
     estimatedCash: owner.netCapital + salesRevenue - totalExpenses

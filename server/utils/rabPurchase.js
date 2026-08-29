@@ -18,7 +18,10 @@ function purchasableScopeLines(finance) {
   const rabLines = (finance?.rab?.lines || []).map((line) => ({ ...line, source: 'rab' }))
   const extraLines = (finance?.extraLines || []).map((line) => ({ ...line, source: 'extra' }))
   return catalogLines([...rabLines, ...extraLines]).filter(
-    (line) => (Number(line.quantity) || 0) > 0 && !line.omitted
+    (line) =>
+      line.lineType !== 'product' &&
+      (Number(line.quantity) || 0) > 0 &&
+      !line.omitted
   )
 }
 
@@ -65,24 +68,105 @@ async function loadCatalogMap(db, schema, catalogItemIds) {
   return map
 }
 
-function mergePurchaseLine(map, packagingId, line, packagingName) {
-  const quantity = Math.max(Math.round(Number(line.quantity) || 0), 0)
-  const unitPrice = Math.max(Math.round(Number(line.costPrice) || 0), 0)
-  const key = Number(packagingId)
-  const existing = map.get(key)
-  if (existing) {
-    existing.quantity += quantity
-    return
+function groupKeyForLine(line, packaging) {
+  if (packaging?.id) return `p:${packaging.id}`
+  return `new:${normalizeKey(line.name)}:${normalizeKey(line.code)}`
+}
+
+function planRabPurchase(scopeLines, packagingList, catalogMap, supplierName) {
+  const groups = new Map()
+
+  for (const line of scopeLines) {
+    const requiredQty = Math.max(Math.round(Number(line.quantity) || 0), 0)
+    if (requiredQty <= 0) continue
+
+    const catalogRow = line.catalogItemId ? catalogMap.get(line.catalogItemId) : null
+    const packaging = findPackagingForLine(packagingList, line)
+    const key = groupKeyForLine(line, packaging)
+
+    if (!groups.has(key)) {
+      groups.set(key, {
+        packaging,
+        requiredQty: 0,
+        sourceLineIds: [],
+        name: line.name,
+        code: line.code || '',
+        unit: line.unit || '',
+        source: line.source || 'rab',
+        lineType: line.lineType,
+        catalogItemId: line.catalogItemId || null,
+        catalogRow,
+        unitPrice: Math.max(Math.round(Number(line.costPrice ?? catalogRow?.supplierPrice) || 0), 0)
+      })
+    }
+
+    const group = groups.get(key)
+    group.requiredQty += requiredQty
+    if (line.id) group.sourceLineIds.push(line.id)
   }
-  map.set(key, {
-    itemType: 'packaging',
-    packagingId: key,
-    quantity,
-    stockQuantity: 0,
-    unitPrice,
-    name: packagingName || line.name,
-    sourceLineIds: [line.id].filter(Boolean)
-  })
+
+  const lines = []
+  const skippedLines = []
+
+  for (const group of groups.values()) {
+    const stockAvailable = group.packaging
+      ? Math.max(Math.round(Number(group.packaging.stockQuantity) || 0), 0)
+      : 0
+    const purchaseQty = Math.max(group.requiredQty - stockAvailable, 0)
+
+    if (purchaseQty <= 0) {
+      skippedLines.push({
+        name: group.name,
+        code: group.code,
+        unit: group.unit,
+        source: group.source,
+        requiredQuantity: group.requiredQty,
+        stockAvailable,
+        reason: 'stock_covered'
+      })
+      continue
+    }
+
+    lines.push({
+      sourceLineIds: group.sourceLineIds,
+      source: group.source,
+      lineType: group.lineType,
+      catalogItemId: group.catalogItemId,
+      packagingId: group.packaging?.id || null,
+      name: group.name,
+      code: group.code,
+      unit: group.unit,
+      requiredQuantity: group.requiredQty,
+      stockAvailable,
+      quantity: purchaseQty,
+      unitPrice: group.unitPrice,
+      matchStatus: group.packaging ? 'matched' : 'missing',
+      suggestedPackaging: group.packaging
+        ? null
+        : packagingValuesFromLine(
+            {
+              name: group.name,
+              unit: group.unit,
+              costPrice: group.unitPrice,
+              catalogItemId: group.catalogItemId
+            },
+            group.catalogRow,
+            supplierName
+          )
+    })
+  }
+
+  return { lines, skippedLines }
+}
+
+function emptyPurchaseMessage(scopeLines, skippedLines) {
+  if (!scopeLines.length) {
+    return 'Tidak ada barang katalog yang perlu dibeli untuk proyek ini'
+  }
+  if (skippedLines.length) {
+    return 'Semua barang sudah tersedia di gudang — tidak perlu pembelian'
+  }
+  return 'Tidak ada barang yang perlu dibeli untuk proyek ini'
 }
 
 export async function buildRabPurchaseDraft(db, schema, productId) {
@@ -95,10 +179,6 @@ export async function buildRabPurchaseDraft(db, schema, productId) {
   const financeMap = await loadProjectFinanceMap(db, schema, [productId])
   const finance = financeMap.get(productId)
   const scopeLines = purchasableScopeLines(finance)
-  if (!scopeLines.length) {
-    throw createError({ statusCode: 400, statusMessage: 'Tidak ada barang yang perlu dibeli untuk proyek ini' })
-  }
-
   const packagingList = await db.select().from(schema.packaging)
   const catalogMap = await loadCatalogMap(
     db,
@@ -106,49 +186,18 @@ export async function buildRabPurchaseDraft(db, schema, productId) {
     scopeLines.filter((line) => line.lineType === 'catalog').map((line) => line.catalogItemId)
   )
   const supplierName = defaultSupplierName()
+  const { lines, skippedLines } = planRabPurchase(scopeLines, packagingList, catalogMap, supplierName)
 
-  const draftLines = scopeLines.map((line) => {
-    const catalogRow = line.catalogItemId ? catalogMap.get(line.catalogItemId) : null
-    const matched = findPackagingForLine(packagingList, line)
-    const unitPrice = Math.max(Math.round(Number(line.costPrice ?? catalogRow?.supplierPrice) || 0), 0)
-    return {
-      sourceLineId: line.id || null,
-      source: line.source || 'rab',
-      lineType: line.lineType,
-      catalogItemId: line.catalogItemId || null,
-      packagingId: matched?.id || null,
-      name: line.name,
-      code: line.code || '',
-      unit: line.unit || '',
-      quantity: Math.max(Math.round(Number(line.quantity) || 0), 0),
-      unitPrice,
-      matchStatus: matched ? 'matched' : 'missing',
-      suggestedPackaging: matched
-        ? null
-        : packagingValuesFromLine(line, catalogRow, supplierName)
-    }
-  })
-
-  const merged = new Map()
-  for (const row of draftLines) {
-    const key = row.packagingId ? `p:${row.packagingId}` : `new:${normalizeKey(row.name)}:${normalizeKey(row.code)}`
-    const existing = merged.get(key)
-    if (existing) {
-      existing.quantity += row.quantity
-      if (row.sourceLineId) existing.sourceLineIds.push(row.sourceLineId)
-      continue
-    }
-    merged.set(key, {
-      ...row,
-      sourceLineIds: row.sourceLineId ? [row.sourceLineId] : []
-    })
+  if (!lines.length) {
+    throw createError({ statusCode: 400, statusMessage: emptyPurchaseMessage(scopeLines, skippedLines) })
   }
 
   return {
     projectId: project.id,
     projectName: project.name,
     suggestedSupplier: supplierName,
-    lines: [...merged.values()]
+    lines,
+    skippedLines
   }
 }
 
@@ -156,40 +205,55 @@ export async function resolveRabPurchaseLines(tx, schema, productId, { createMis
   const financeMap = await loadProjectFinanceMap(tx, schema, [productId])
   const finance = financeMap.get(productId)
   const scopeLines = purchasableScopeLines(finance)
-  if (!scopeLines.length) {
-    throw createError({ statusCode: 400, statusMessage: 'Tidak ada barang yang perlu dibeli untuk proyek ini' })
-  }
-
-  const packagingList = await tx.select().from(schema.packaging)
+  let packagingList = await tx.select().from(schema.packaging)
   const catalogMap = await loadCatalogMap(
     tx,
     schema,
     scopeLines.filter((line) => line.lineType === 'catalog').map((line) => line.catalogItemId)
   )
   const supplierName = defaultSupplierName()
-  const merged = new Map()
+  let { lines, skippedLines } = planRabPurchase(scopeLines, packagingList, catalogMap, supplierName)
 
-  for (const line of scopeLines) {
-    const catalogRow = line.catalogItemId ? catalogMap.get(line.catalogItemId) : null
-    let packaging = findPackagingForLine(packagingList, line)
-
-    if (!packaging) {
-      if (!createMissing) {
-        throw createError({
-          statusCode: 400,
-          statusMessage: `Produk "${line.name}" belum ada di gudang. Buat produk dulu atau aktifkan pembuatan otomatis.`
-        })
-      }
-      const values = packagingValuesFromLine(line, catalogRow, supplierName)
-      const [created] = await tx.insert(schema.packaging).values(values).returning()
-      packaging = created
-      packagingList.push(created)
-    }
-
-    mergePurchaseLine(merged, packaging.id, line, packaging.name)
+  if (!lines.length) {
+    throw createError({ statusCode: 400, statusMessage: emptyPurchaseMessage(scopeLines, skippedLines) })
   }
 
-  return [...merged.values()]
+  const resolved = []
+
+  for (const line of lines) {
+    if (line.packagingId) {
+      resolved.push({
+        itemType: 'packaging',
+        packagingId: line.packagingId,
+        quantity: line.quantity,
+        stockQuantity: 0,
+        unitPrice: line.unitPrice,
+        name: line.name
+      })
+      continue
+    }
+
+    if (!createMissing) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: `Produk "${line.name}" belum ada di gudang. Buat produk dulu atau aktifkan pembuatan otomatis.`
+      })
+    }
+
+    const values = line.suggestedPackaging || packagingValuesFromLine(line, null, supplierName)
+    const [created] = await tx.insert(schema.packaging).values(values).returning()
+    packagingList = [...packagingList, created]
+    resolved.push({
+      itemType: 'packaging',
+      packagingId: created.id,
+      quantity: line.quantity,
+      stockQuantity: 0,
+      unitPrice: line.unitPrice,
+      name: created.name
+    })
+  }
+
+  return resolved
 }
 
 export async function createPurchaseFromRab(db, schema, productId, body) {

@@ -189,6 +189,7 @@ const rabLive = computed(() =>
 )
 const scopeLines = computed(() => [...rabLive.value, ...extraDraft.value])
 const goods = computed(() => catalogLines(scopeLines.value))
+const catalogGoods = computed(() => goods.value.filter((line) => line.lineType !== 'product' && !line.omitted))
 const jasa = computed(() => serviceLines(scopeLines.value))
 const rabGoods = computed(() => catalogLines(rabLive.value))
 const rabJasa = computed(() => serviceLines(rabLive.value))
@@ -220,6 +221,7 @@ const rabPurchaseGrandTotal = computed(() => {
 const rabPurchaseNewCount = computed(
   () => (rabPurchaseDraft.value?.lines || []).filter((line) => line.matchStatus === 'missing').length
 )
+const rabPurchaseSkippedCount = computed(() => (rabPurchaseDraft.value?.skippedLines || []).length)
 
 async function openRabPurchase() {
   rabPurchaseError.value = ''
@@ -732,7 +734,7 @@ const tab = computed({
           <BanknotesIcon class="w-3.5 h-3.5" />Revenue
         </button>
         <button
-          v-if="goods.length"
+          v-if="catalogGoods.length"
           type="button"
           class="btn-action"
           @click="openRabPurchase"
@@ -1025,7 +1027,7 @@ const tab = computed({
           </p>
           <div class="flex items-center gap-2 shrink-0">
             <button
-              v-if="goods.length"
+              v-if="catalogGoods.length"
               type="button"
               class="btn-secondary"
               @click="openRabPurchase"
@@ -1170,7 +1172,7 @@ const tab = computed({
       <div v-else class="flex items-center justify-between gap-2">
         <p class="text-xs text-ink-500">Proyek ini tidak punya RAB. Item di bawah ini hanya tambahan lapangan.</p>
         <button
-          v-if="goods.length"
+          v-if="catalogGoods.length"
           type="button"
           class="btn-secondary shrink-0"
           @click="openRabPurchase"
@@ -1342,11 +1344,14 @@ const tab = computed({
           class="rounded-panel border border-sky-200 bg-sky-50 px-3 py-2.5 text-xs text-sky-900 space-y-1"
         >
           <div class="flex flex-wrap items-center gap-2">
-            <span class="badge bg-white/80 text-sky-800 border border-sky-200">{{ rabPurchaseDraft.lines.length }} barang</span>
+            <span class="badge bg-white/80 text-sky-800 border border-sky-200">{{ rabPurchaseDraft.lines.length }} perlu dibeli</span>
+            <span v-if="rabPurchaseSkippedCount" class="badge bg-white/80 text-emerald-800 border border-emerald-200">
+              {{ rabPurchaseSkippedCount }} cukup stok
+            </span>
             <span v-if="rabPurchaseNewCount" class="badge bg-white/80 text-sky-800 border border-sky-200">
               {{ rabPurchaseNewCount }} produk baru
             </span>
-            <span class="text-sky-800/75">Qty langsung terpakai proyek · tidak masuk stok</span>
+            <span class="text-sky-800/75">Qty beli langsung terpakai proyek · tidak masuk stok</span>
           </div>
           <p class="text-sky-800/70">Simpan perubahan item dulu jika qty tambahan belum disimpan.</p>
         </div>
@@ -1361,7 +1366,7 @@ const tab = computed({
               <thead class="sticky top-0 z-10 bg-ink-50">
                 <tr>
                   <th class="min-w-[11rem]">Item</th>
-                  <th class="text-right w-24">Qty</th>
+                  <th class="text-right w-28">Beli</th>
                   <th class="text-right w-28">Harga</th>
                   <th class="text-right w-32">Jumlah</th>
                 </tr>
@@ -1389,6 +1394,13 @@ const tab = computed({
                   <td class="num whitespace-nowrap py-3">
                     <div class="font-mono text-ink-900">{{ formatNumber(line.quantity) }}</div>
                     <div v-if="line.unit" class="text-[11px] text-ink-400 font-sans normal-case">{{ line.unit }}</div>
+                    <div
+                      v-if="line.requiredQuantity != null && line.requiredQuantity !== line.quantity"
+                      class="text-[11px] text-ink-400 font-sans normal-case mt-0.5"
+                    >
+                      perlu {{ formatNumber(line.requiredQuantity) }}
+                      <span v-if="line.stockAvailable"> · stok {{ formatNumber(line.stockAvailable) }}</span>
+                    </div>
                   </td>
                   <td class="num whitespace-nowrap py-3 text-ink-600">{{ formatIDR(line.unitPrice) }}</td>
                   <td class="num whitespace-nowrap py-3 font-medium text-ink-900">
@@ -1406,6 +1418,22 @@ const tab = computed({
               </tfoot>
             </table>
           </div>
+        </div>
+
+        <div
+          v-if="rabPurchaseDraft?.skippedLines?.length"
+          class="rounded-panel border border-emerald-200 bg-emerald-50/60 px-3 py-2.5 text-xs text-emerald-900"
+        >
+          <div class="font-semibold mb-1">{{ rabPurchaseDraft.skippedLines.length }} barang sudah cukup di gudang</div>
+          <ul class="space-y-0.5 text-emerald-800/90">
+            <li v-for="(line, i) in rabPurchaseDraft.skippedLines" :key="i">
+              {{ line.name }}
+              <span class="text-emerald-700/80">
+                · perlu {{ formatNumber(line.requiredQuantity) }}{{ line.unit ? ` ${line.unit}` : '' }}
+                · stok {{ formatNumber(line.stockAvailable) }}
+              </span>
+            </li>
+          </ul>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">

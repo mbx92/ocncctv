@@ -127,8 +127,12 @@ async function remove(t) {
             <td class="num">{{ formatIDR(summary.netCapital) }}</td>
           </tr>
           <tr>
-            <td class="pl-6 text-ink-500">+ Penjualan</td>
+            <td class="pl-6 text-ink-500">+ Penjualan lunas</td>
             <td class="num text-teal-600">{{ formatIDR(summary.salesRevenue) }}</td>
+          </tr>
+          <tr v-if="summary.salesReceivable">
+            <td class="pl-6 text-ink-500">Piutang (belum bayar)</td>
+            <td class="num text-amber-600">{{ formatIDR(summary.salesReceivable) }}</td>
           </tr>
           <tr>
             <td class="pl-6 text-ink-500">− Pengeluaran (termasuk beli alat baru)</td>
@@ -143,7 +147,8 @@ async function remove(t) {
         </tbody>
       </table>
       <div class="p-3 text-xs text-ink-500 border-t border-ink-200 space-y-1">
-        <p>Estimasi kas = modal kas + penjualan − pengeluaran. Beli peralatan baru memotong kas.</p>
+        <p>Estimasi kas = modal kas + penjualan lunas − pengeluaran. Piutang belum masuk estimasi kas.</p>
+        <p>Beli peralatan baru memotong kas.</p>
         <p>
           Aset peralatan {{ formatIDR(summary.equipmentAssets) }} adalah alat yang sudah dimiliki — bukan kas, tidak dijumlah ke estimasi kas.
         </p>
