@@ -367,6 +367,27 @@
       "breakpoints": true
     },
     {
+      "idx": 52,
+      "version": "7",
+      "when": 1789600000010,
+      "tag": "0052_drop_tuya",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1789600000011,
+      "tag": "0053_erp_project_total_value",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1789600000012,
+      "tag": "0054_project_status_pending",
+      "breakpoints": true
+    },
+    {
       "idx": 55,
       "version": "7",
       "when": 1789600000013,
