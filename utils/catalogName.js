@@ -58,3 +58,10 @@ export function catalogDisplayName(item) {
   const rest = stripBrandTokens(cleaned, brand)
   return rest ? `${brand} ${rest}` : brand
 }
+
+export function catalogItemKey(item) {
+  if (item?.id != null) return String(item.id)
+  if (item?.ref) return `ref:${item.ref}`
+  if (item?.code) return `code:${item.code}`
+  return String(item?.name || '')
+}
