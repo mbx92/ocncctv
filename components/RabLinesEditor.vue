@@ -45,11 +45,20 @@ function removeLine(index) {
   lines.value = lines.value.filter((_, i) => i !== index)
 }
 
+function findCatalogLineIndex(lines, item) {
+  return lines.findIndex((line) => {
+    if (line.lineType !== 'catalog') return false
+    if (item.id && line.catalogItemId === item.id) return true
+    if (!item.id && item.code && line.code === item.code && !line.catalogItemId) return true
+    return false
+  })
+}
+
 function addCatalogItems(items) {
   const next = [...lines.value]
   let added = 0
   for (const item of items) {
-    const existing = next.findIndex((l) => l.lineType === 'catalog' && l.catalogItemId === item.id)
+    const existing = findCatalogLineIndex(next, item)
     if (existing >= 0) {
       next[existing] = {
         ...next[existing],
@@ -59,7 +68,7 @@ function addCatalogItems(items) {
       const cost = Number(item.supplierPrice) || 0
       next.push({
         lineType: 'catalog',
-        catalogItemId: item.id,
+        catalogItemId: item.id || null,
         serviceId: null,
         packagingId: null,
         name: catalogDisplayName(item) || item.name,

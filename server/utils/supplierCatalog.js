@@ -46,9 +46,58 @@ export function mapStoredCatalogItem(row) {
     lastSyncedAt: row.lastSyncedAt ? new Date(row.lastSyncedAt).toISOString() : null,
     sheetKey: row.sheetKey,
     sheetLabel: row.sheetLabel,
-    supplierName: row.supplierName
+    supplierName: row.supplierName,
+    source: 'database'
   }
   return { ...item, name: catalogDisplayName(item) }
+}
+
+export function mapRemoteCatalogItem(item) {
+  const row = {
+    id: null,
+    ref: item.ref,
+    code: item.code,
+    name: item.name,
+    category: item.category || '',
+    unit: String(item.unit || '').trim() || 'pcs',
+    supplierPrice: Number(item.supplierPrice) || 0,
+    lastPrice: null,
+    lastSyncedAt: null,
+    sheetKey: item.sheetKey,
+    sheetLabel: item.sheetLabel,
+    supplierName: item.supplierName,
+    source: 'remote'
+  }
+  return { ...row, name: catalogDisplayName(row) }
+}
+
+function filterRemoteCatalogItems(items, { q = '', category = '' } = {}) {
+  let list = items
+  const cat = String(category || '').trim()
+  if (cat) list = list.filter((item) => item.category === cat)
+  const term = String(q || '').trim().toLowerCase()
+  if (term) {
+    list = list.filter((item) =>
+      `${item.code} ${item.name} ${item.category}`.toLowerCase().includes(term)
+    )
+  }
+  return list
+}
+
+async function remoteCatalogSearch(sheetKey, { q = '', category = '', limit = 30, offset = 0 } = {}) {
+  const remote = (await fetchRemoteItemsForSheet(sheetKey)).map(mapRemoteCatalogItem)
+  const categories = [...new Set(remote.map((item) => item.category).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b, 'id')
+  )
+  const filtered = filterRemoteCatalogItems(remote, { q, category })
+  const pageSize = Math.min(Math.max(Number(limit) || 30, 1), 100)
+  const skip = Math.max(Number(offset) || 0, 0)
+  return {
+    items: filtered.slice(skip, skip + pageSize),
+    total: filtered.length,
+    categories,
+    source: 'remote'
+  }
 }
 
 export async function lastCatalogSyncedAt(db) {
@@ -113,6 +162,15 @@ export async function searchCatalogItems(db, {
       .offset(skip)
   ])
 
+  const total = Number(totalRow?.total || 0)
+  if (total === 0 && sheet && findCatalogSheet(sheet)) {
+    try {
+      return await remoteCatalogSearch(sheet, { q: term, category: cat, limit: pageSize, offset: skip })
+    } catch {
+      return { items: [], total: 0, categories: [], source: 'database' }
+    }
+  }
+
   let categories = []
   if (sheet && findCatalogSheet(sheet)) {
     const catRows = await db
@@ -125,8 +183,9 @@ export async function searchCatalogItems(db, {
 
   return {
     items: rows.map(mapStoredCatalogItem),
-    total: Number(totalRow?.total || 0),
-    categories
+    total,
+    categories,
+    source: 'database'
   }
 }
 

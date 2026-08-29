@@ -134,7 +134,7 @@
     box-sizing: border-box;
     height: 2.5rem;
     min-height: 2.5rem;
-    line-height: 1.25;
+    line-height: 2.375rem;
     color-scheme: light;
     -webkit-appearance: none;
     appearance: none;
@@ -144,6 +144,7 @@
   .input[type='date']::-webkit-date-and-time-value {
     text-align: left;
     min-width: 0;
+    line-height: 2.375rem;
   }
 
   .input[type='date']::-webkit-datetime-edit,
@@ -151,14 +152,20 @@
   .input[type='time']::-webkit-datetime-edit,
   .input[type='month']::-webkit-datetime-edit {
     display: inline-flex;
+    align-items: center;
+    height: 2.375rem;
     min-width: 0;
     max-width: 100%;
     padding: 0;
     overflow: hidden;
+    line-height: 1;
   }
 
   .input[type='date']::-webkit-datetime-edit-fields-wrapper,
   .input[type='datetime-local']::-webkit-datetime-edit-fields-wrapper {
+    display: inline-flex;
+    align-items: center;
+    height: 100%;
     min-width: 0;
     max-width: 100%;
     padding: 0;
