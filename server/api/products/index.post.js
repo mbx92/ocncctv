@@ -16,8 +16,12 @@ export default defineEventHandler(async (event) => {
       status: 'waiting',
       seriesId: Number.isInteger(seriesId) && seriesId > 0 ? seriesId : null
     })
-
-    .returning()
+    .returning({
+      id: schema.products.id,
+      name: schema.products.name,
+      status: schema.products.status,
+      seriesId: schema.products.seriesId
+    })
   await logAudit(event, { action: 'create', entity: 'product', entityId: rows[0].id, summary: `Tambah proyek "${rows[0].name}"` })
   return rows[0]
 })

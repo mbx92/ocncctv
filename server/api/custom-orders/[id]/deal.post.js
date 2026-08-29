@@ -30,7 +30,11 @@ export default defineEventHandler(async (event) => {
           customerName: existing.customerName,
           status: 'waiting'
         })
-        .returning()
+        .returning({
+          id: schema.products.id,
+          name: schema.products.name,
+          status: schema.products.status
+        })
       const [updated] = await tx
         .update(schema.customOrders)
         .set({ status: 'deal', projectId: created.id })

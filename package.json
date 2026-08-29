@@ -7,7 +7,7 @@
     "build": "nuxt build",
     "preview": "nuxt preview",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
+    "db:migrate": "node scripts/migrate.js",
     "db:seed": "node scripts/seed.js",
     "db:seed:ops": "node scripts/seed-ops.js",
     "catalog:sync": "node scripts/sync-supplier-catalog.js",
