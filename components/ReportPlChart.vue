@@ -15,7 +15,7 @@ const segments = computed(() => {
   const profit = Number(props.netProfit) || 0
   const base = rev || cogs + opex + Math.abs(profit) || 1
   const items = [
-    { key: 'cogs', label: 'Modal barang', value: cogs, color: chartPalette.cogs },
+    { key: 'cogs', label: 'Biaya material', value: cogs, color: chartPalette.cogs },
     { key: 'opex', label: 'Operasional', value: opex, color: chartPalette.opex },
     {
       key: 'profit',

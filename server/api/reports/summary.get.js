@@ -5,8 +5,8 @@ import { isOperatingExpenseCategory } from '../../utils/expensePl.js'
 import { toDateStr } from '../../utils/dates.js'
 
 // Ringkasan laba rugi.
-// Perlengkapan (kategori material) dipotong dari laba: bukan bahan HPP kamera.
-// Pembelian peralatan (machine) tidak dipotong dari laba (aset), tetap memotong kas.
+// Laba kotor = revenue bersih − biaya material (HPP penjualan).
+// Laba bersih = laba kotor − biaya operasional (tanpa pembelian material/packaging & aset).
 export default defineEventHandler(async (event) => {
   const q = getQuery(event)
   const dateFrom = toDateStr(q.dateFrom)
