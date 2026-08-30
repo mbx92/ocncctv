@@ -25,6 +25,44 @@ function purchasableScopeLines(finance) {
   )
 }
 
+async function loadProjectPurchasedQty(db, schema, productId) {
+  const rows = await db
+    .select({
+      packagingId: schema.supplierPurchaseLines.packagingId,
+      quantity: schema.supplierPurchaseLines.quantity,
+      itemType: schema.supplierPurchaseLines.itemType
+    })
+    .from(schema.supplierPurchaseLines)
+    .innerJoin(
+      schema.supplierPurchases,
+      eq(schema.supplierPurchaseLines.purchaseId, schema.supplierPurchases.id)
+    )
+    .where(eq(schema.supplierPurchases.projectId, productId))
+
+  const map = new Map()
+  for (const row of rows) {
+    if (row.itemType !== 'packaging' || !row.packagingId) continue
+    const id = Number(row.packagingId)
+    map.set(id, (map.get(id) || 0) + Math.max(Math.round(Number(row.quantity) || 0), 0))
+  }
+  return map
+}
+
+async function loadRabPurchaseContext(db, schema, productId) {
+  const financeMap = await loadProjectFinanceMap(db, schema, [productId])
+  const finance = financeMap.get(productId)
+  const scopeLines = purchasableScopeLines(finance)
+  const packagingList = await db.select().from(schema.packaging)
+  const catalogMap = await loadCatalogMap(
+    db,
+    schema,
+    scopeLines.filter((line) => line.lineType === 'catalog').map((line) => line.catalogItemId)
+  )
+  const purchasedByPackaging = await loadProjectPurchasedQty(db, schema, productId)
+  const supplierName = defaultSupplierName()
+  return { scopeLines, packagingList, catalogMap, purchasedByPackaging, supplierName }
+}
+
 function defaultSupplierName() {
   return getSupplierCatalogSettings(useRuntimeConfig().supplierCatalog || {}).supplierName
 }
@@ -73,7 +111,7 @@ function groupKeyForLine(line, packaging) {
   return `new:${normalizeKey(line.name)}:${normalizeKey(line.code)}`
 }
 
-function planRabPurchase(scopeLines, packagingList, catalogMap, supplierName) {
+function planRabPurchase(scopeLines, packagingList, catalogMap, supplierName, purchasedByPackaging = new Map()) {
   const groups = new Map()
 
   for (const line of scopeLines) {
@@ -112,7 +150,11 @@ function planRabPurchase(scopeLines, packagingList, catalogMap, supplierName) {
     const stockAvailable = group.packaging
       ? Math.max(Math.round(Number(group.packaging.stockQuantity) || 0), 0)
       : 0
-    const purchaseQty = Math.max(group.requiredQty - stockAvailable, 0)
+    const alreadyPurchased = group.packaging?.id
+      ? Math.max(purchasedByPackaging.get(Number(group.packaging.id)) || 0, 0)
+      : 0
+    const coveredQty = stockAvailable + alreadyPurchased
+    const purchaseQty = Math.max(group.requiredQty - coveredQty, 0)
 
     if (purchaseQty <= 0) {
       skippedLines.push({
@@ -122,7 +164,8 @@ function planRabPurchase(scopeLines, packagingList, catalogMap, supplierName) {
         source: group.source,
         requiredQuantity: group.requiredQty,
         stockAvailable,
-        reason: 'stock_covered'
+        alreadyPurchased,
+        reason: alreadyPurchased > 0 ? 'already_purchased' : 'stock_covered'
       })
       continue
     }
@@ -138,6 +181,7 @@ function planRabPurchase(scopeLines, packagingList, catalogMap, supplierName) {
       unit: group.unit,
       requiredQuantity: group.requiredQty,
       stockAvailable,
+      alreadyPurchased,
       quantity: purchaseQty,
       unitPrice: group.unitPrice,
       matchStatus: group.packaging ? 'matched' : 'missing',
@@ -164,9 +208,32 @@ function emptyPurchaseMessage(scopeLines, skippedLines) {
     return 'Tidak ada barang katalog yang perlu dibeli untuk proyek ini'
   }
   if (skippedLines.length) {
-    return 'Semua barang sudah tersedia di gudang — tidak perlu pembelian'
+    return 'Semua barang proyek ini sudah dibeli atau tersedia di gudang'
   }
   return 'Tidak ada barang yang perlu dibeli untuk proyek ini'
+}
+
+export async function evaluateRabPurchaseNeed(db, schema, productId) {
+  const [project] = await db
+    .select({ id: schema.products.id })
+    .from(schema.products)
+    .where(eq(schema.products.id, productId))
+  if (!project) return { canPurchase: false, lineCount: 0, skippedCount: 0 }
+
+  const ctx = await loadRabPurchaseContext(db, schema, productId)
+  const { lines, skippedLines } = planRabPurchase(
+    ctx.scopeLines,
+    ctx.packagingList,
+    ctx.catalogMap,
+    ctx.supplierName,
+    ctx.purchasedByPackaging
+  )
+  return {
+    canPurchase: lines.length > 0,
+    lineCount: lines.length,
+    skippedCount: skippedLines.length,
+    scopeCount: ctx.scopeLines.length
+  }
 }
 
 export async function buildRabPurchaseDraft(db, schema, productId) {
@@ -176,48 +243,49 @@ export async function buildRabPurchaseDraft(db, schema, productId) {
     .where(eq(schema.products.id, productId))
   if (!project) throw createError({ statusCode: 404, statusMessage: 'Proyek tidak ditemukan' })
 
-  const financeMap = await loadProjectFinanceMap(db, schema, [productId])
-  const finance = financeMap.get(productId)
-  const scopeLines = purchasableScopeLines(finance)
-  const packagingList = await db.select().from(schema.packaging)
-  const catalogMap = await loadCatalogMap(
-    db,
-    schema,
-    scopeLines.filter((line) => line.lineType === 'catalog').map((line) => line.catalogItemId)
+  const ctx = await loadRabPurchaseContext(db, schema, productId)
+  const { lines, skippedLines } = planRabPurchase(
+    ctx.scopeLines,
+    ctx.packagingList,
+    ctx.catalogMap,
+    ctx.supplierName,
+    ctx.purchasedByPackaging
   )
-  const supplierName = defaultSupplierName()
-  const { lines, skippedLines } = planRabPurchase(scopeLines, packagingList, catalogMap, supplierName)
 
   if (!lines.length) {
-    throw createError({ statusCode: 400, statusMessage: emptyPurchaseMessage(scopeLines, skippedLines) })
+    throw createError({
+      statusCode: 400,
+      statusMessage: emptyPurchaseMessage(ctx.scopeLines, skippedLines)
+    })
   }
 
   return {
     projectId: project.id,
     projectName: project.name,
-    suggestedSupplier: supplierName,
+    suggestedSupplier: ctx.supplierName,
     lines,
     skippedLines
   }
 }
 
 export async function resolveRabPurchaseLines(tx, schema, productId, { createMissing = true } = {}) {
-  const financeMap = await loadProjectFinanceMap(tx, schema, [productId])
-  const finance = financeMap.get(productId)
-  const scopeLines = purchasableScopeLines(finance)
-  let packagingList = await tx.select().from(schema.packaging)
-  const catalogMap = await loadCatalogMap(
-    tx,
-    schema,
-    scopeLines.filter((line) => line.lineType === 'catalog').map((line) => line.catalogItemId)
+  const ctx = await loadRabPurchaseContext(tx, schema, productId)
+  let { lines, skippedLines } = planRabPurchase(
+    ctx.scopeLines,
+    ctx.packagingList,
+    ctx.catalogMap,
+    ctx.supplierName,
+    ctx.purchasedByPackaging
   )
-  const supplierName = defaultSupplierName()
-  let { lines, skippedLines } = planRabPurchase(scopeLines, packagingList, catalogMap, supplierName)
 
   if (!lines.length) {
-    throw createError({ statusCode: 400, statusMessage: emptyPurchaseMessage(scopeLines, skippedLines) })
+    throw createError({
+      statusCode: 400,
+      statusMessage: emptyPurchaseMessage(ctx.scopeLines, skippedLines)
+    })
   }
 
+  let packagingList = ctx.packagingList
   const resolved = []
 
   for (const line of lines) {
@@ -240,7 +308,7 @@ export async function resolveRabPurchaseLines(tx, schema, productId, { createMis
       })
     }
 
-    const values = line.suggestedPackaging || packagingValuesFromLine(line, null, supplierName)
+    const values = line.suggestedPackaging || packagingValuesFromLine(line, null, ctx.supplierName)
     const [created] = await tx.insert(schema.packaging).values(values).returning()
     packagingList = [...packagingList, created]
     resolved.push({

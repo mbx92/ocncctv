@@ -40,6 +40,9 @@ const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
 const { data: product, refresh } = await useFetch(`/api/products/${id}`)
 const { data: settings } = await useFetch('/api/settings')
 const { data: suppliers } = await useFetch('/api/suppliers')
+const { data: rabPurchaseStatus, refresh: refreshRabPurchaseStatus } = await useFetch(
+  `/api/products/${id}/rab-purchase-status`
+)
 
 const info = ref({
   name: product.value?.name,
@@ -189,7 +192,7 @@ const rabLive = computed(() =>
 )
 const scopeLines = computed(() => [...rabLive.value, ...extraDraft.value])
 const goods = computed(() => catalogLines(scopeLines.value))
-const catalogGoods = computed(() => goods.value.filter((line) => line.lineType !== 'product' && !line.omitted))
+const canRabPurchase = computed(() => !!rabPurchaseStatus.value?.canPurchase)
 const jasa = computed(() => serviceLines(scopeLines.value))
 const rabGoods = computed(() => catalogLines(rabLive.value))
 const rabJasa = computed(() => serviceLines(rabLive.value))
@@ -264,6 +267,7 @@ async function submitRabPurchase() {
       }
     })
     closeRabPurchase()
+    await refreshRabPurchaseStatus()
     useToast().success(`Pembelian tercatat · ${formatIDR(res.purchase?.totalAmount || 0)}`)
   } catch (e) {
     rabPurchaseError.value = e.data?.statusMessage || 'Gagal mencatat pembelian'
@@ -383,6 +387,7 @@ async function saveExtras() {
       }
     })
     await refresh()
+    await refreshRabPurchaseStatus()
     useToast().success('Lingkup proyek tersimpan')
   } catch (e) {
     extraError.value = e.data?.statusMessage || 'Gagal menyimpan item tambahan'
@@ -734,7 +739,7 @@ const tab = computed({
           <BanknotesIcon class="w-3.5 h-3.5" />Revenue
         </button>
         <button
-          v-if="catalogGoods.length"
+          v-if="canRabPurchase"
           type="button"
           class="btn-action"
           @click="openRabPurchase"
@@ -1027,7 +1032,7 @@ const tab = computed({
           </p>
           <div class="flex items-center gap-2 shrink-0">
             <button
-              v-if="catalogGoods.length"
+              v-if="canRabPurchase"
               type="button"
               class="btn-secondary"
               @click="openRabPurchase"
@@ -1172,7 +1177,7 @@ const tab = computed({
       <div v-else class="flex items-center justify-between gap-2">
         <p class="text-xs text-ink-500">Proyek ini tidak punya RAB. Item di bawah ini hanya tambahan lapangan.</p>
         <button
-          v-if="catalogGoods.length"
+          v-if="canRabPurchase"
           type="button"
           class="btn-secondary shrink-0"
           @click="openRabPurchase"
@@ -1346,7 +1351,7 @@ const tab = computed({
           <div class="flex flex-wrap items-center gap-2">
             <span class="badge bg-white/80 text-sky-800 border border-sky-200">{{ rabPurchaseDraft.lines.length }} perlu dibeli</span>
             <span v-if="rabPurchaseSkippedCount" class="badge bg-white/80 text-emerald-800 border border-emerald-200">
-              {{ rabPurchaseSkippedCount }} cukup stok
+              {{ rabPurchaseSkippedCount }} sudah terpenuhi
             </span>
             <span v-if="rabPurchaseNewCount" class="badge bg-white/80 text-sky-800 border border-sky-200">
               {{ rabPurchaseNewCount }} produk baru
@@ -1399,6 +1404,7 @@ const tab = computed({
                       class="text-[11px] text-ink-400 font-sans normal-case mt-0.5"
                     >
                       perlu {{ formatNumber(line.requiredQuantity) }}
+                      <span v-if="line.alreadyPurchased"> · beli {{ formatNumber(line.alreadyPurchased) }}</span>
                       <span v-if="line.stockAvailable"> · stok {{ formatNumber(line.stockAvailable) }}</span>
                     </div>
                   </td>
@@ -1424,13 +1430,14 @@ const tab = computed({
           v-if="rabPurchaseDraft?.skippedLines?.length"
           class="rounded-panel border border-emerald-200 bg-emerald-50/60 px-3 py-2.5 text-xs text-emerald-900"
         >
-          <div class="font-semibold mb-1">{{ rabPurchaseDraft.skippedLines.length }} barang sudah cukup di gudang</div>
+          <div class="font-semibold mb-1">{{ rabPurchaseDraft.skippedLines.length }} barang sudah terpenuhi</div>
           <ul class="space-y-0.5 text-emerald-800/90">
             <li v-for="(line, i) in rabPurchaseDraft.skippedLines" :key="i">
               {{ line.name }}
               <span class="text-emerald-700/80">
                 · perlu {{ formatNumber(line.requiredQuantity) }}{{ line.unit ? ` ${line.unit}` : '' }}
-                · stok {{ formatNumber(line.stockAvailable) }}
+                <span v-if="line.alreadyPurchased"> · sudah beli {{ formatNumber(line.alreadyPurchased) }}</span>
+                <span v-if="line.stockAvailable"> · stok {{ formatNumber(line.stockAvailable) }}</span>
               </span>
             </li>
           </ul>
