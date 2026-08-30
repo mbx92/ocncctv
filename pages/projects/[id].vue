@@ -39,7 +39,7 @@ const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
 
 const { data: product, refresh } = await useFetch(`/api/products/${id}`)
 const { data: settings } = await useFetch('/api/settings')
-const { data: suppliers } = await useFetch('/api/suppliers')
+const { data: suppliers, refresh: refreshSuppliers } = await useFetch('/api/suppliers')
 const { data: rabPurchaseStatus, refresh: refreshRabPurchaseStatus } = await useFetch(
   `/api/products/${id}/rab-purchase-status`
 )
@@ -198,6 +198,7 @@ const rabGoods = computed(() => catalogLines(rabLive.value))
 const rabJasa = computed(() => serviceLines(rabLive.value))
 
 const showRabPurchase = ref(false)
+const showRabSuppliers = ref(false)
 const rabPurchaseDraft = ref(null)
 const rabPurchaseLoading = ref(false)
 const rabPurchaseSaving = ref(false)
@@ -209,6 +210,50 @@ const rabPurchaseForm = ref({
   shippingFee: 0,
   platformFee: 0
 })
+const rabSupplierForm = ref({ name: '', notes: '' })
+const rabSupplierError = ref('')
+const rabSupplierSaving = ref(false)
+
+function pickRabSupplier(preferred) {
+  const list = suppliers.value || []
+  if (preferred && list.some((s) => s.name === preferred)) return preferred
+  return list[0]?.name || preferred || ''
+}
+
+function openRabSuppliers() {
+  rabSupplierForm.value = { name: '', notes: '' }
+  rabSupplierError.value = ''
+  showRabSuppliers.value = true
+}
+
+async function saveRabSupplier() {
+  rabSupplierError.value = ''
+  rabSupplierSaving.value = true
+  try {
+    const created = await $fetch('/api/suppliers', { method: 'POST', body: rabSupplierForm.value })
+    await refreshSuppliers()
+    rabPurchaseForm.value.supplier = created.name
+    rabSupplierForm.value = { name: '', notes: '' }
+    useToast().success(`Supplier "${created.name}" ditambahkan.`)
+  } catch (e) {
+    rabSupplierError.value = e.data?.statusMessage || 'Gagal menambah supplier'
+  } finally {
+    rabSupplierSaving.value = false
+  }
+}
+
+async function removeRabSupplier(s) {
+  if (!(await useConfirm().confirm(`Hapus supplier "${s.name}"? Pembelian lama tetap tersimpan.`))) return
+  try {
+    await $fetch(`/api/suppliers/${s.id}`, { method: 'DELETE' })
+    await refreshSuppliers()
+    if (rabPurchaseForm.value.supplier === s.name) {
+      rabPurchaseForm.value.supplier = pickRabSupplier(rabPurchaseDraft.value?.suggestedSupplier)
+    }
+  } catch (e) {
+    useToast().error(e.data?.statusMessage || 'Gagal menghapus')
+  }
+}
 
 const rabPurchaseGoodsTotal = computed(() =>
   (rabPurchaseDraft.value?.lines || []).reduce(
@@ -235,7 +280,7 @@ async function openRabPurchase() {
     rabPurchaseDraft.value = draft
     rabPurchaseForm.value = {
       date: todayStr(),
-      supplier: draft.suggestedSupplier || suppliers.value?.[0]?.name || '',
+      supplier: pickRabSupplier(draft.suggestedSupplier),
       notes: `Kebutuhan proyek · ${draft.projectName || product.value?.name || ''}`,
       shippingFee: 0,
       platformFee: 0
@@ -1448,12 +1493,17 @@ const tab = computed({
             <label class="label">Tanggal</label>
             <input v-model="rabPurchaseForm.date" type="date" class="input" required />
           </div>
-          <div>
+          <div class="min-w-0">
             <label class="label">Supplier</label>
-            <input v-model="rabPurchaseForm.supplier" class="input" required list="rab-purchase-suppliers" />
-            <datalist id="rab-purchase-suppliers">
-              <option v-for="s in suppliers || []" :key="s.id" :value="s.name" />
-            </datalist>
+            <div class="flex gap-2 min-w-0">
+              <select v-model="rabPurchaseForm.supplier" class="input min-w-0" required>
+                <option value="" disabled>Pilih supplier...</option>
+                <option v-for="s in suppliers" :key="s.id" :value="s.name">{{ s.name }}</option>
+              </select>
+              <button type="button" class="btn-secondary shrink-0" title="Kelola supplier" @click="openRabSuppliers">
+                <PlusIcon class="w-4 h-4" />
+              </button>
+            </div>
           </div>
           <div>
             <label class="label">Ongkir</label>
@@ -1502,6 +1552,43 @@ const tab = computed({
           </button>
         </div>
       </form>
+    </AppModal>
+
+    <AppModal v-if="showRabSuppliers" title="Supplier" nested @close="showRabSuppliers = false">
+      <div class="space-y-4">
+        <form class="space-y-3" @submit.prevent="saveRabSupplier">
+          <div>
+            <label class="label">Nama supplier baru</label>
+            <input v-model="rabSupplierForm.name" class="input" required placeholder="PL TUNAS JAYA ELEKTRONIK" />
+          </div>
+          <div>
+            <label class="label">Catatan</label>
+            <input v-model="rabSupplierForm.notes" class="input" placeholder="opsional" />
+          </div>
+          <p v-if="rabSupplierError" class="text-sm text-red-600">{{ rabSupplierError }}</p>
+          <div class="flex justify-end">
+            <button type="submit" class="btn-primary" :disabled="rabSupplierSaving">
+              <CheckIcon class="w-4 h-4" />{{ rabSupplierSaving ? 'Menyimpan...' : 'Tambah' }}
+            </button>
+          </div>
+        </form>
+
+        <div>
+          <div class="label">Daftar supplier</div>
+          <ul v-if="suppliers?.length" class="border border-ink-200 rounded-panel divide-y divide-ink-100 max-h-56 overflow-y-auto">
+            <li v-for="s in suppliers" :key="s.id" class="flex items-center gap-2 px-3 py-2">
+              <div class="min-w-0 flex-1">
+                <div class="font-medium text-sm truncate">{{ s.name }}</div>
+                <div v-if="s.notes" class="text-xs text-ink-400 truncate">{{ s.notes }}</div>
+              </div>
+              <button type="button" class="btn-action-danger" @click="removeRabSupplier(s)">
+                <TrashIcon class="w-3.5 h-3.5" />
+              </button>
+            </li>
+          </ul>
+          <p v-else class="text-sm text-ink-500 py-3 text-center">Belum ada supplier. Tambahkan lewat form di atas.</p>
+        </div>
+      </div>
     </AppModal>
 
     <AppModal v-if="renameTarget" title="Rename file" @close="closeRename">
