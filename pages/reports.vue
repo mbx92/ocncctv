@@ -191,7 +191,7 @@ const expenseCategoryBars = computed(() =>
               <td class="num text-teal-600">{{ formatIDR(summary?.netRevenue) }}</td>
             </tr>
             <tr>
-              <td class="pl-6 text-ink-500">− Modal barang</td>
+              <td class="pl-6 text-ink-500">− Biaya material</td>
               <td class="num text-red-600">{{ formatIDR(summary?.cogs) }}</td>
             </tr>
             <tr class="bg-ink-50 font-medium">
@@ -213,7 +213,7 @@ const expenseCategoryBars = computed(() =>
         <div class="p-3 space-y-2 border-t border-ink-200 text-xs text-ink-500">
           <p>
             Pembelian perlengkapan periode ini <span class="font-mono">{{ formatIDR(summary?.materialPurchases) }}</span>
-            dipotong dari laba dan estimasi kas (bukan HPP kamera).
+            tercatat di kas keluar. Biaya material proyek sudah dihitung di HPP penjualan (baris di atas).
           </p>
           <p>
             Pembelian peralatan <span class="font-mono">{{ formatIDR(summary?.machinePurchases) }}</span>
@@ -309,7 +309,7 @@ const expenseCategoryBars = computed(() =>
               <th class="text-right">Transaksi</th>
               <th class="text-right">Nilai rata²</th>
               <th class="text-right">Revenue bersih</th>
-              <th class="text-right">Modal</th>
+              <th class="text-right">Biaya material</th>
               <th class="text-right">Margin bersih</th>
               <th class="text-right">Margin %</th>
             </tr>
@@ -442,7 +442,7 @@ const expenseCategoryBars = computed(() =>
               <th>Bulan</th>
               <th class="text-right">Unit</th>
               <th class="text-right">Revenue bersih</th>
-              <th class="text-right">Modal</th>
+              <th class="text-right">Biaya material</th>
               <th class="text-right">Operasional</th>
               <th class="text-right">Laba bersih</th>
             </tr>
