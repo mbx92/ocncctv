@@ -82,7 +82,7 @@ function formatQuoteQty(item) {
       {{ quote.docLabel ? 'Dokumen ini adalah daftar harga paket, bukan invoice.' : 'Dokumen ini adalah penawaran harga, bukan invoice.' }}
     </p>
     <p v-if="quote.notes" class="mt-3 text-xs text-ink-500">Catatan: {{ quote.notes }}</p>
-    <p class="mt-8 text-sm text-ink-600 whitespace-pre-line">{{ quote.business.footer }}</p>
+    <p v-if="quote.business.footer" class="mt-8 text-sm text-ink-600 whitespace-pre-line">{{ quote.business.footer }}</p>
   </article>
 </template>
 

@@ -21,6 +21,70 @@ const serviceList = computed(() => services.value || [])
 const showCatalog = ref(false)
 const showServicePicker = ref(false)
 const showStock = ref(false)
+const serviceBtn = ref(null)
+const serviceMenu = ref(null)
+const serviceMenuStyle = ref({})
+
+function placeServiceMenu() {
+  const el = serviceBtn.value
+  if (!el || !import.meta.client) return
+  const r = el.getBoundingClientRect()
+  const width = Math.min(288, window.innerWidth - 16)
+  const left = Math.min(Math.max(8, r.right - width), window.innerWidth - width - 8)
+  const gap = 4
+  const spaceBelow = window.innerHeight - r.bottom - 8
+  const spaceAbove = r.top - 8
+  const openUp = spaceBelow < 180 && spaceAbove > spaceBelow
+  const available = openUp ? spaceAbove : spaceBelow
+  const maxH = Math.min(256, Math.max(96, available))
+  serviceMenuStyle.value = {
+    position: 'fixed',
+    zIndex: 80,
+    left: `${left}px`,
+    width: `${width}px`,
+    maxHeight: `${maxH}px`,
+    ...(openUp
+      ? { bottom: `${window.innerHeight - r.top + gap}px`, top: 'auto' }
+      : { top: `${r.bottom + gap}px`, bottom: 'auto' })
+  }
+}
+
+function onServicePickerPointerDown(e) {
+  if (!showServicePicker.value) return
+  const t = e.target
+  if (serviceBtn.value?.contains(t) || serviceMenu.value?.contains(t)) return
+  showServicePicker.value = false
+}
+
+function onServicePickerKey(e) {
+  if (e.key === 'Escape') showServicePicker.value = false
+}
+
+function onServicePickerReposition() {
+  if (showServicePicker.value) placeServiceMenu()
+}
+
+function bindServicePickerListeners(open) {
+  if (!import.meta.client) return
+  if (open) {
+    window.addEventListener('pointerdown', onServicePickerPointerDown, true)
+    window.addEventListener('keydown', onServicePickerKey)
+    window.addEventListener('resize', onServicePickerReposition)
+    window.addEventListener('scroll', onServicePickerReposition, true)
+  } else {
+    window.removeEventListener('pointerdown', onServicePickerPointerDown, true)
+    window.removeEventListener('keydown', onServicePickerKey)
+    window.removeEventListener('resize', onServicePickerReposition)
+    window.removeEventListener('scroll', onServicePickerReposition, true)
+  }
+}
+
+watch(showServicePicker, (open) => {
+  bindServicePickerListeners(open)
+  if (open) nextTick(placeServiceMenu)
+})
+
+onUnmounted(() => bindServicePickerListeners(false))
 
 function patch(index, fields) {
   const next = lines.value.map((line, i) => (i === index ? { ...line, ...fields } : line))
@@ -87,9 +151,17 @@ function addCatalogItems(items) {
 }
 
 function addServiceFromMaster(item) {
-  lines.value = [
-    ...lines.value,
-    {
+  const next = [...lines.value]
+  const existing = next.findIndex(
+    (line) => line.lineType === 'service' && item.id && line.serviceId === item.id
+  )
+  if (existing >= 0) {
+    next[existing] = {
+      ...next[existing],
+      quantity: qtyInt(next[existing].quantity) + 1
+    }
+  } else {
+    next.push({
       lineType: 'service',
       catalogItemId: null,
       serviceId: item.id,
@@ -100,8 +172,9 @@ function addServiceFromMaster(item) {
       quantity: 1,
       costPrice: 0,
       salePrice: Number(item.salePrice) || 0
-    }
-  ]
+    })
+  }
+  lines.value = next
   showServicePicker.value = false
 }
 
@@ -186,37 +259,47 @@ const totals = computed(() => {
       <button type="button" class="btn-secondary flex-1" @click="showStock = true">
         <MagnifyingGlassIcon class="w-4 h-4" />Dari produk
       </button>
-      <div class="relative shrink-0">
-        <button type="button" class="btn-secondary w-full sm:w-auto" @click="toggleServicePicker">
+      <div class="shrink-0">
+        <button
+          ref="serviceBtn"
+          type="button"
+          class="btn-secondary w-full sm:w-auto"
+          :aria-expanded="showServicePicker"
+          @click="toggleServicePicker"
+        >
           <PlusIcon class="w-4 h-4" />Jasa
         </button>
-        <div
-          v-if="showServicePicker"
-          class="absolute z-20 right-0 mt-1 w-72 max-w-[calc(100vw-2rem)] max-h-64 overflow-y-auto rounded-panel border border-ink-200 bg-white shadow-lg"
-        >
-          <button
-            v-for="item in serviceList"
-            :key="item.id"
-            type="button"
-            class="w-full text-left px-3 py-2 text-sm hover:bg-purple-50 border-b border-ink-100"
-            @click="addServiceFromMaster(item)"
+        <Teleport to="body">
+          <div
+            v-if="showServicePicker"
+            ref="serviceMenu"
+            class="overflow-y-auto rounded-panel border border-ink-200 bg-white shadow-lg"
+            :style="serviceMenuStyle"
           >
-            <div class="font-medium break-words">{{ item.name }}</div>
-            <div class="text-xs text-ink-400">
-              {{ item.unit }} · {{ formatIDR(item.salePrice) }}
-            </div>
-          </button>
-          <button
-            type="button"
-            class="w-full text-left px-3 py-2 text-sm text-ink-600 hover:bg-ink-50 border-b border-ink-100"
-            @click="addCustomService"
-          >
-            Ketik jasa lain…
-          </button>
-          <NuxtLink to="/jasa" class="block px-3 py-2 text-xs text-accent-600 hover:underline">
-            Kelola master jasa
-          </NuxtLink>
-        </div>
+            <button
+              v-for="item in serviceList"
+              :key="item.id"
+              type="button"
+              class="w-full text-left px-3 py-2 text-sm hover:bg-purple-50 border-b border-ink-100"
+              @click="addServiceFromMaster(item)"
+            >
+              <div class="font-medium break-words">{{ item.name }}</div>
+              <div class="text-xs text-ink-400">
+                {{ item.unit }} · {{ formatIDR(item.salePrice) }}
+              </div>
+            </button>
+            <button
+              type="button"
+              class="w-full text-left px-3 py-2 text-sm text-ink-600 hover:bg-ink-50 border-b border-ink-100"
+              @click="addCustomService"
+            >
+              Ketik jasa lain…
+            </button>
+            <NuxtLink to="/jasa" class="block px-3 py-2 text-xs text-accent-600 hover:underline">
+              Kelola master jasa
+            </NuxtLink>
+          </div>
+        </Teleport>
       </div>
     </div>
     <p v-if="!disabled" class="text-xs text-ink-500">

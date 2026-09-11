@@ -1,6 +1,22 @@
 <script setup>
 import { CheckIcon, ArrowPathIcon } from '@heroicons/vue/24/outline'
 import { suggestedSalePrice } from '~/utils/rab.js'
+import { QUOTE_OFFICIAL_DEFAULTS } from '~/utils/quoteOfficial.js'
+
+const quotePlaceholders = ['{{pekerjaan}}', '{{pelanggan}}', '{{perusahaan}}', '{{tipe}}', '{{nomor}}']
+
+function officialFormFields(row = {}) {
+  return {
+    quoteOfficialTitle: row.quoteOfficialTitle || QUOTE_OFFICIAL_DEFAULTS.title,
+    quoteOfficialGreeting: row.quoteOfficialGreeting || QUOTE_OFFICIAL_DEFAULTS.greeting,
+    quoteOfficialIntro: row.quoteOfficialIntro || QUOTE_OFFICIAL_DEFAULTS.intro,
+    quoteOfficialTerms: row.quoteOfficialTerms || QUOTE_OFFICIAL_DEFAULTS.terms,
+    quoteOfficialClosing: row.quoteOfficialClosing || QUOTE_OFFICIAL_DEFAULTS.closing,
+    quoteOfficialSignOff: row.quoteOfficialSignOff || QUOTE_OFFICIAL_DEFAULTS.signOff,
+    quoteOfficialSigner: row.quoteOfficialSigner || '',
+    quoteOfficialSignHint: row.quoteOfficialSignHint || QUOTE_OFFICIAL_DEFAULTS.signHint
+  }
+}
 
 const { data: settings, refresh } = await useFetch('/api/settings')
 const form = ref({
@@ -12,7 +28,8 @@ const form = ref({
   invoiceShareTtlDays: 7,
   defaultMarginPercent: 40,
   salePriceRounding: 500,
-  ...settings.value
+  ...settings.value,
+  ...officialFormFields(settings.value)
 })
 const savedMsg = ref('')
 const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
@@ -45,7 +62,7 @@ const tab = computed({
 async function save() {
   await $fetch('/api/settings', { method: 'PUT', body: form.value })
   await refresh()
-  Object.assign(form.value, settings.value)
+  Object.assign(form.value, settings.value, officialFormFields(settings.value))
   savedMsg.value = 'Pengaturan tersimpan.'
   setTimeout(() => (savedMsg.value = ''), 3000)
 }
@@ -113,7 +130,7 @@ async function saveErp() {
       }
     })
     await refresh()
-    Object.assign(form.value, settings.value)
+    Object.assign(form.value, settings.value, officialFormFields(settings.value))
     erpForm.value.erpSyncApiKey = ''
     erpMsg.value = saved.erpSyncApiKeySet ? 'Integrasi ERP tersimpan.' : 'URL tersimpan. Isi API key untuk sync.'
     setTimeout(() => (erpMsg.value = ''), 3000)
@@ -203,7 +220,7 @@ async function confirmErpSync(projectIds) {
     <h1 class="text-xl font-bold">Pengaturan</h1>
     <p v-if="!isAdmin" class="text-xs text-ink-500">Read-only — hanya admin yang bisa mengubah pengaturan.</p>
 
-    <div class="flex gap-1 overflow-x-auto border-b border-ink-200 -mb-px">
+    <div class="flex gap-1 overflow-x-auto no-scrollbar border-b border-ink-200 -mb-px">
       <button
         v-for="t in tabs"
         :key="t.id"
@@ -257,8 +274,74 @@ async function confirmErpSync(projectIds) {
             :disabled="!isAdmin"
             placeholder="Terima kasih atas kepercayaannya.&#10;Penawaran berlaku 14 hari."
           ></textarea>
-          <p class="text-xs text-ink-500 mt-1">Tampil di bawah total penawaran RAB. Terpisah dari catatan invoice.</p>
+          <p class="text-xs text-ink-500 mt-1">Opsional. Tampil di tampilan Ringkas. Kosong = tidak ditampilkan.</p>
         </div>
+
+        <div class="border-t border-ink-100 pt-4 space-y-3">
+          <div>
+            <div class="text-sm font-semibold text-ink-800">Penawaran resmi</div>
+            <p class="text-xs text-ink-500 mt-0.5">
+              Teks surat pada tampilan Resmi. Placeholder:
+              <span v-for="(token, i) in quotePlaceholders" :key="token">
+                <span class="font-mono">{{ token }}</span><span v-if="i < quotePlaceholders.length - 1">, </span>
+              </span>.
+            </p>
+          </div>
+          <div>
+            <label class="label">Judul dokumen</label>
+            <input v-model="form.quoteOfficialTitle" class="input" :disabled="!isAdmin" :placeholder="QUOTE_OFFICIAL_DEFAULTS.title" />
+          </div>
+          <div>
+            <label class="label">Sapaan</label>
+            <input v-model="form.quoteOfficialGreeting" class="input" :disabled="!isAdmin" :placeholder="QUOTE_OFFICIAL_DEFAULTS.greeting" />
+          </div>
+          <div>
+            <label class="label">Kalimat pembuka</label>
+            <textarea
+              v-model="form.quoteOfficialIntro"
+              class="input min-h-[4.5rem]"
+              rows="3"
+              :disabled="!isAdmin"
+              :placeholder="QUOTE_OFFICIAL_DEFAULTS.intro"
+            />
+          </div>
+          <div>
+            <label class="label">Keterangan / syarat</label>
+            <textarea
+              v-model="form.quoteOfficialTerms"
+              class="input min-h-[5.5rem]"
+              rows="4"
+              :disabled="!isAdmin"
+              :placeholder="QUOTE_OFFICIAL_DEFAULTS.terms"
+            />
+            <p class="text-xs text-ink-500 mt-1">Satu baris = satu poin. Catatan RAB tetap ditambahkan otomatis di bawahnya.</p>
+          </div>
+          <div>
+            <label class="label">Kalimat penutup</label>
+            <textarea
+              v-model="form.quoteOfficialClosing"
+              class="input min-h-[4.5rem]"
+              rows="3"
+              :disabled="!isAdmin"
+              :placeholder="QUOTE_OFFICIAL_DEFAULTS.closing"
+            />
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="label">Salam penutup</label>
+              <input v-model="form.quoteOfficialSignOff" class="input" :disabled="!isAdmin" :placeholder="QUOTE_OFFICIAL_DEFAULTS.signOff" />
+            </div>
+            <div>
+              <label class="label">Nama penandatangan</label>
+              <input v-model="form.quoteOfficialSigner" class="input" :disabled="!isAdmin" placeholder="kosong = nama usaha" />
+            </div>
+          </div>
+          <div>
+            <label class="label">Teks di bawah tanda tangan</label>
+            <input v-model="form.quoteOfficialSignHint" class="input" :disabled="!isAdmin" :placeholder="QUOTE_OFFICIAL_DEFAULTS.signHint" />
+          </div>
+        </div>
+
         <div>
           <label class="label">Umur tautan bagikan (hari)</label>
           <input
@@ -286,7 +369,7 @@ async function confirmErpSync(projectIds) {
             <div class="font-semibold">{{ form.invoiceBusinessName || 'OCN' }}</div>
             <div v-if="form.invoiceAddress" class="text-ink-600 whitespace-pre-line text-xs">{{ form.invoiceAddress }}</div>
             <div v-if="form.invoicePhone" class="text-ink-600 text-xs">{{ form.invoicePhone }}</div>
-            <div class="text-ink-500 text-xs pt-2 whitespace-pre-line">{{ form.rabFooter || form.invoiceFooter || 'Terima kasih atas kepercayaannya.' }}</div>
+            <div class="text-ink-500 text-xs pt-2 whitespace-pre-line">{{ form.rabFooter || '—' }}</div>
           </div>
         </div>
       </template>

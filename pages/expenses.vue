@@ -1,6 +1,7 @@
 <script setup>
 import { PlusIcon, PencilSquareIcon, TrashIcon, CheckIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 import { categoryBadgeClass, categoryNameOf } from '~/utils/expenseCategory.js'
+import { findProjectWageForTechnician } from '~/utils/projectWages.js'
 
 const filters = ref({ category: '', productId: '', dateFrom: '', dateTo: '' })
 
@@ -35,6 +36,67 @@ const errorMsg = ref('')
 const categoryForm = ref({ name: '' })
 const categoryError = ref('')
 const savingCategory = ref(false)
+const projectWageDraft = ref(null)
+const loadingProjectWages = ref(false)
+
+function isTechnicianExpense() {
+  return form.value.category === 'technician'
+}
+
+function projectNameById(productId) {
+  return (products.value || []).find((p) => String(p.id) === String(productId))?.name || ''
+}
+
+async function loadProjectWageOptions() {
+  const productId = form.value.relatedProductId
+  if (!productId || !isTechnicianExpense()) {
+    projectWageDraft.value = null
+    return
+  }
+  loadingProjectWages.value = true
+  try {
+    projectWageDraft.value = await $fetch(`/api/products/${productId}/wages`)
+  } catch {
+    projectWageDraft.value = null
+  } finally {
+    loadingProjectWages.value = false
+  }
+}
+
+function applyProjectWage(row) {
+  if (!row) return
+  form.value.category = 'technician'
+  form.value.relatedProductId = projectWageDraft.value?.projectId || form.value.relatedProductId
+  form.value.technicianId = row.technicianId != null ? String(row.technicianId) : ''
+  form.value.amount = row.amount
+  const projectName = projectWageDraft.value?.projectName || projectNameById(form.value.relatedProductId)
+  form.value.description = `Upah ${row.name}${projectName ? ` · ${projectName}` : ''}`
+}
+
+function syncAmountFromProjectWage() {
+  if (editing.value || !isTechnicianExpense() || !form.value.relatedProductId || !form.value.technicianId) return
+  const match = findProjectWageForTechnician(projectWageDraft.value?.wages, form.value.technicianId)
+  if (!match) return
+  form.value.amount = match.amount
+  const projectName = projectWageDraft.value?.projectName || projectNameById(form.value.relatedProductId)
+  if (!form.value.description || /^Upah /.test(form.value.description)) {
+    form.value.description = `Upah ${match.name}${projectName ? ` · ${projectName}` : ''}`
+  }
+}
+
+watch(
+  () => [form.value.relatedProductId, form.value.category],
+  () => {
+    loadProjectWageOptions()
+  }
+)
+
+watch(
+  () => [form.value.technicianId, form.value.relatedProductId, form.value.category],
+  () => {
+    syncAmountFromProjectWage()
+  }
+)
 
 function openAdd() {
   editing.value = null
@@ -46,6 +108,7 @@ function openAdd() {
     relatedProductId: '',
     technicianId: ''
   }
+  projectWageDraft.value = null
   errorMsg.value = ''
   showForm.value = true
 }
@@ -56,8 +119,10 @@ function openEdit(e) {
     relatedProductId: e.relatedProductId || '',
     technicianId: e.technicianId != null ? String(e.technicianId) : ''
   }
+  projectWageDraft.value = null
   errorMsg.value = ''
   showForm.value = true
+  loadProjectWageOptions()
 }
 function openTechnicians() {
   showTechnicians.value = true
@@ -70,12 +135,24 @@ function closeTechnicians() {
 function onExpenseTechnician() {
   const t = (technicians.value || []).find((x) => String(x.id) === String(form.value.technicianId))
   if (!t) return
-  if (!form.value.description || /^Upah /.test(form.value.description)) {
-    form.value.description = `Upah ${t.name}`
-  }
   if (!editing.value && (form.value.category === 'material' || form.value.category === 'technician')) {
     form.value.category = 'technician'
   }
+  syncAmountFromProjectWage()
+  if (!form.value.description || /^Upah /.test(form.value.description)) {
+    const projectName = projectWageDraft.value?.projectName || projectNameById(form.value.relatedProductId)
+    form.value.description = `Upah ${t.name}${projectName ? ` · ${projectName}` : ''}`
+  }
+}
+
+function onExpenseCategoryChange() {
+  if (isTechnicianExpense()) loadProjectWageOptions()
+  else projectWageDraft.value = null
+}
+
+function onExpenseProjectChange() {
+  loadProjectWageOptions()
+  syncAmountFromProjectWage()
 }
 
 async function onTechnicianCreated(created) {
@@ -149,7 +226,7 @@ async function remove(e) {
       Pembelian perlengkapan ke toko sebaiknya dicatat lewat tombol <strong>Beli</strong> di
       <NuxtLink to="/materials" class="text-accent-600 hover:underline">Perlengkapan</NuxtLink>
       atau menu <NuxtLink to="/purchases" class="text-accent-600 hover:underline">Pembelian</NuxtLink>
-      agar stok dan kas ikut. Upah teknisi: pilih nama dari daftar, kategori <strong>Upah teknisi</strong>.
+      agar stok dan kas ikut. Upah teknisi: pilih proyek lalu ambil nominal dari pembagian di tab Revenue proyek, atau pilih teknisi manual.
       Halaman ini juga untuk pengeluaran lain (listrik, bensin).
     </p>
 
@@ -284,7 +361,7 @@ async function remove(e) {
           <div class="min-w-0">
             <label class="label">Kategori</label>
             <div class="flex gap-2 min-w-0">
-              <select v-model="form.category" class="input min-w-0" required>
+              <select v-model="form.category" class="input min-w-0" required @change="onExpenseCategoryChange">
                 <option v-for="c in categories" :key="c.key" :value="c.key">{{ c.name }}</option>
               </select>
               <button type="button" class="btn-secondary shrink-0" title="Kelola kategori" @click="openCategories">
@@ -309,18 +386,41 @@ async function remove(e) {
           <label class="label">Deskripsi</label>
           <input v-model="form.description" class="input" required placeholder="Upah Andi / Beli PLA 2 roll" />
         </div>
+        <div>
+          <label class="label">Proyek terkait (opsional)</label>
+          <select v-model="form.relatedProductId" class="input" @change="onExpenseProjectChange">
+            <option value="">—</option>
+            <option v-for="p in products" :key="p.id" :value="p.id">{{ p.name }}</option>
+          </select>
+          <p class="text-xs text-ink-400 mt-1">
+            Untuk upah teknisi, pilih proyek dulu — nominal bisa diambil otomatis dari tab Revenue proyek.
+          </p>
+        </div>
+        <div
+          v-if="isTechnicianExpense() && form.relatedProductId"
+          class="rounded-panel border border-emerald-200 bg-emerald-50/60 px-3 py-2.5 space-y-2"
+        >
+          <div class="text-xs font-semibold text-emerald-900">Ambil dari upah proyek</div>
+          <p v-if="loadingProjectWages" class="text-xs text-emerald-800/80">Memuat pembagian upah…</p>
+          <p v-else-if="!(projectWageDraft?.wages || []).length" class="text-xs text-emerald-800/80">
+            Belum ada upah tersimpan di proyek ini. Atur dulu di tab Revenue proyek.
+          </p>
+          <div v-else class="flex flex-wrap gap-2">
+            <button
+              v-for="row in projectWageDraft.wages"
+              :key="row.id || `${row.technicianId}-${row.name}`"
+              type="button"
+              class="btn-secondary text-xs"
+              @click="applyProjectWage(row)"
+            >
+              {{ row.name }} · {{ formatIDR(row.amount) }}
+            </button>
+          </div>
+        </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="label">Jumlah</label>
             <IdrInput v-model="form.amount" required />
-          </div>
-          <div>
-            <label class="label">Proyek terkait (opsional)</label>
-            <select v-model="form.relatedProductId" class="input">
-              <option value="">—</option>
-              <option v-for="p in products" :key="p.id" :value="p.id">{{ p.name }}</option>
-            </select>
-            <p class="text-xs text-ink-400 mt-1">Untuk R&amp;D / alokasi ke proyek. Pembelian supplier menampilkan barang yang dibeli.</p>
           </div>
         </div>
         <p v-if="errorMsg" class="text-sm text-red-600">{{ errorMsg }}</p>

@@ -46,7 +46,7 @@ async function logout() {
               <XMarkIcon class="w-5 h-5" />
             </button>
           </div>
-          <div class="flex-1 overflow-y-auto">
+          <div class="flex-1 overflow-y-auto scrollbar-sidebar">
             <AppSidebarNav />
           </div>
           <div class="border-t border-ink-700">
@@ -85,7 +85,7 @@ async function logout() {
         <span class="font-bold tracking-wide">OCN</span>
         <span class="text-[10px] uppercase tracking-widest text-ink-400 ml-auto">Workshop</span>
       </div>
-      <div class="flex-1 overflow-y-auto min-h-0">
+      <div class="flex-1 overflow-y-auto min-h-0 scrollbar-sidebar">
         <AppSidebarNav />
       </div>
       <div class="shrink-0 bg-ink-900 border-t border-ink-700">

@@ -1,6 +1,7 @@
 import { useDb, schema } from '../../db/index.js'
 import { requireAdmin } from '../../utils/rbac.js'
 import { logAudit } from '../../utils/audit.js'
+import { parseJobType } from '../../utils/jobType.js'
 
 export default defineEventHandler(async (event) => {
   requireAdmin(event)
@@ -14,6 +15,7 @@ export default defineEventHandler(async (event) => {
       name: body.name,
       description: body.description || null,
       status: 'waiting',
+      jobType: parseJobType(body.jobType, { required: true }),
       seriesId: Number.isInteger(seriesId) && seriesId > 0 ? seriesId : null
     })
     .returning({

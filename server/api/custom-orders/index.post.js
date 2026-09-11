@@ -4,7 +4,7 @@ import { parseCustomOrderBody, replaceRabLines, withRabTotals } from '../../util
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
-  const { header, lines } = parseCustomOrderBody(body, { allowEmptyLines: true })
+  const { header, lines } = parseCustomOrderBody(body, { allowEmptyLines: true, requireJobType: true })
   const db = useDb()
   const row = await db.transaction(async (tx) => {
     const [created] = await tx

@@ -1,12 +1,15 @@
 import { and, desc, eq, gte, lte } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
 import { loadRabLines, withRabTotals } from '../../utils/customOrders.js'
+import { normalizeJobType } from '../../utils/jobType.js'
 
 export default defineEventHandler(async (event) => {
   const q = getQuery(event)
   const db = useDb()
   const conds = []
   if (q.status) conds.push(eq(schema.customOrders.status, q.status))
+  const jobType = normalizeJobType(q.jobType)
+  if (jobType) conds.push(eq(schema.customOrders.jobType, jobType))
   if (q.dateFrom) conds.push(gte(schema.customOrders.date, q.dateFrom))
   if (q.dateTo) conds.push(lte(schema.customOrders.date, q.dateTo))
 

@@ -28,7 +28,8 @@ export default defineEventHandler(async (event) => {
           name: existing.title,
           description,
           customerName: existing.customerName,
-          status: 'waiting'
+          status: 'waiting',
+          jobType: existing.jobType || null
         })
         .returning({
           id: schema.products.id,

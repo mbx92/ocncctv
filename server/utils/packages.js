@@ -225,7 +225,7 @@ export function toPackageQuotePayload(pkg, lines, settings) {
       name: settings.invoiceBusinessName || 'OCN',
       address: settings.invoiceAddress || null,
       phone: settings.invoicePhone || null,
-      footer: settings.rabFooter || settings.invoiceFooter || 'Terima kasih atas kepercayaannya.'
+      footer: settings.rabFooter || null
     }
   }
 }

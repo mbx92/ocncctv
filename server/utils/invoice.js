@@ -117,46 +117,77 @@ export async function loadSaleInvoiceRow(tx, schema, id) {
   return row || null
 }
 
+function invoiceLineType(line) {
+  return line.lineType === 'service' ? 'service' : line.lineType === 'product' ? 'product' : 'catalog'
+}
+
+function invoiceMergeKey(line, unitPrice) {
+  const unit = String(line.unit || '').trim()
+  if (line.lineType === 'service') {
+    if (line.serviceId) return `service:${line.serviceId}:${unit}:${unitPrice}`
+    return `service:${String(line.name || '').trim().toLowerCase()}:${unit}:${unitPrice}`
+  }
+  if (line.lineType === 'product' && line.packagingId) {
+    return `product:${line.packagingId}:${unit}:${unitPrice}`
+  }
+  if (line.catalogItemId) return `catalog:${line.catalogItemId}:${unit}:${unitPrice}`
+  return `name:${invoiceLineType(line)}:${String(line.name || '').trim().toLowerCase()}:${line.code || ''}:${unit}:${unitPrice}`
+}
+
 function itemsFromRabLines(lines) {
-  return (lines || [])
-    .map((line) => {
-      const quantity = Math.max(Math.round(Number(line.quantity) || 0), 0)
-      const unitPrice = Math.max(Math.round(Number(line.salePrice) || 0), 0)
-      return {
-        name: String(line.name || '').trim() || 'Item',
-        code: line.code || '',
-        lineType:
-          line.lineType === 'service' ? 'service' : line.lineType === 'product' ? 'product' : 'catalog',
-        quantity,
-        unit: String(line.unit || '').trim(),
-        unitPrice,
-        amount: quantity * unitPrice
-      }
-    })
-    .filter((item) => item.quantity > 0)
+  const merged = []
+  const index = new Map()
+  for (const line of lines || []) {
+    const quantity = Math.max(Math.round(Number(line.quantity) || 0), 0)
+    if (quantity <= 0) continue
+    const unitPrice = Math.max(Math.round(Number(line.salePrice) || 0), 0)
+    const key = invoiceMergeKey(line, unitPrice)
+    const existing = index.get(key)
+    if (existing) {
+      existing.quantity += quantity
+      existing.amount = existing.quantity * existing.unitPrice
+      continue
+    }
+    const item = {
+      name: String(line.name || '').trim() || 'Item',
+      code: line.code || '',
+      lineType: invoiceLineType(line),
+      quantity,
+      unit: String(line.unit || '').trim() || (line.lineType === 'service' ? 'titik' : ''),
+      unitPrice,
+      amount: quantity * unitPrice
+    }
+    index.set(key, item)
+    merged.push(item)
+  }
+  return merged
 }
 
 function buildInvoiceItems(row, lines) {
-  const qty = row.quantity
-  const unitPrice = row.salePricePerUnit
-  const amount = qty * unitPrice
-  const fallback = [
-    {
-      name: row.productName || row.customTitle || 'Proyek',
-      code: '',
-      lineType: 'catalog',
-      quantity: qty,
-      unit: '',
-      unitPrice,
-      amount
-    }
-  ]
+  const recordedQty = Math.max(Math.round(Number(row.quantity) || 0), 0)
+  const recordedUnitPrice = Math.max(Math.round(Number(row.salePricePerUnit) || 0), 0)
+  const recorded = recordedQty * recordedUnitPrice
   const lineItems = itemsFromRabLines(lines)
-  if (!lineItems.length) return { items: fallback, subtotal: amount }
+  if (!lineItems.length) {
+    return {
+      items: [
+        {
+          name: row.productName || row.customTitle || 'Proyek',
+          code: '',
+          lineType: 'catalog',
+          quantity: recordedQty || 1,
+          unit: '',
+          unitPrice: recordedUnitPrice,
+          amount: recorded
+        }
+      ],
+      subtotal: recorded
+    }
+  }
 
   const lineSum = lineItems.reduce((sum, item) => sum + item.amount, 0)
   const items = [...lineItems]
-  const diff = amount - lineSum
+  const diff = recorded - lineSum
   if (diff !== 0) {
     items.push({
       name: 'Penyesuaian',
@@ -168,7 +199,7 @@ function buildInvoiceItems(row, lines) {
       amount: diff
     })
   }
-  return { items, subtotal: amount }
+  return { items, subtotal: recorded }
 }
 
 export function toInvoicePayload(row, settings, lines = []) {
@@ -225,25 +256,24 @@ export async function buildInvoicePayload(db, schema, row, settings) {
       .limit(1)
     orderId = rab?.id || null
   }
-  let lines = []
+  let rabLines = []
   if (orderId) {
     const map = await loadRabLines(db, [orderId])
-    let rabLines = presentRabLines(map.get(orderId) || [])
-    if (row.productId) {
-      const productId = row.productId
-      const [adjMap, extraMap] = await Promise.all([
-        loadProjectRabAdjustments(db, schema, [productId]),
-        loadProjectExtraLines(db, schema, [productId])
-      ])
-      rabLines = applyRabAdjustments(rabLines, adjMap.get(productId) || []).filter(
-        (line) => !line.omitted && (Number(line.quantity) || 0) > 0
-      )
-      lines = [...rabLines, ...(extraMap.get(productId) || [])]
-    } else {
-      lines = rabLines
-    }
+    rabLines = presentRabLines(map.get(orderId) || [])
   }
-  return toInvoicePayload(row, settings, lines)
+  let extraLines = []
+  if (row.productId) {
+    const productId = row.productId
+    const [adjMap, extraMap] = await Promise.all([
+      loadProjectRabAdjustments(db, schema, [productId]),
+      loadProjectExtraLines(db, schema, [productId])
+    ])
+    rabLines = applyRabAdjustments(rabLines, adjMap.get(productId) || []).filter(
+      (line) => !line.omitted && (Number(line.quantity) || 0) > 0
+    )
+    extraLines = extraMap.get(productId) || []
+  }
+  return toInvoicePayload(row, settings, [...rabLines, ...extraLines])
 }
 
 export function newShareToken() {

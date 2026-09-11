@@ -12,6 +12,7 @@ import {
   DocumentTextIcon
 } from '@heroicons/vue/24/outline'
 import { rabStatusLabel, rabStatusBadge, rabIsLocked, rabLineTypeBadge, rabLineTypeLabel, lineAmount } from '~/utils/rab.js'
+import { jobTypeLabel, jobTypeClass } from '~/utils/jobType.js'
 
 const route = useRoute()
 const id = route.params.id
@@ -62,7 +63,8 @@ function startEdit() {
     date: o.date,
     customerName: o.customerName,
     title: o.title,
-    notes: o.notes || ''
+    notes: o.notes || '',
+    jobType: o.jobType || 'install'
   }
   errorMsg.value = ''
   editing.value = true
@@ -93,6 +95,7 @@ async function persistLines() {
         customerName: order.value.customerName,
         title: order.value.title,
         notes: order.value.notes || '',
+        jobType: order.value.jobType || null,
         lines: lineDraft.value
       }
     })
@@ -217,7 +220,10 @@ async function deleteFile(f) {
         <h1 class="text-xl font-bold break-words">{{ order.title }}</h1>
         <p class="text-sm text-ink-500">{{ order.customerName }} · {{ formatDate(order.date) }}</p>
       </div>
-      <span class="badge shrink-0" :class="rabStatusBadge[order.status]">{{ rabStatusLabel[order.status] }}</span>
+      <div class="flex flex-col items-end gap-1 shrink-0">
+        <span v-if="order.jobType" class="badge" :class="jobTypeClass(order.jobType)">{{ jobTypeLabel[order.jobType] }}</span>
+        <span class="badge" :class="rabStatusBadge[order.status]">{{ rabStatusLabel[order.status] }}</span>
+      </div>
     </div>
 
     <div class="flex flex-wrap gap-2">
@@ -271,6 +277,7 @@ async function deleteFile(f) {
           <label class="label">Judul pekerjaan</label>
           <input v-model="form.title" class="input" required />
         </div>
+        <JobTypePicker v-model="form.jobType" />
         <div>
           <label class="label">Catatan</label>
           <input v-model="form.notes" class="input" />
@@ -287,6 +294,11 @@ async function deleteFile(f) {
       <div v-else class="p-4 space-y-1 text-sm">
         <div class="flex justify-between gap-2"><span class="text-ink-500">Pelanggan</span><span>{{ order.customerName }}</span></div>
         <div class="flex justify-between gap-2"><span class="text-ink-500">Tanggal</span><span class="font-mono">{{ formatDate(order.date) }}</span></div>
+        <div class="flex justify-between gap-2">
+          <span class="text-ink-500">Tipe</span>
+          <span v-if="order.jobType" class="badge" :class="jobTypeClass(order.jobType)">{{ jobTypeLabel[order.jobType] }}</span>
+          <span v-else class="text-ink-400">—</span>
+        </div>
         <p v-if="order.notes" class="text-ink-500 pt-2">{{ order.notes }}</p>
       </div>
     </div>

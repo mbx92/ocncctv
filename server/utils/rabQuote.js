@@ -3,6 +3,8 @@ import { useDb, schema } from '../db/index.js'
 import { getSettings } from './settings.js'
 import { loadRabLines, presentRabLines } from './customOrders.js'
 import { catalogDisplayName } from './catalogName.js'
+import { jobTypeLabelOf } from './jobType.js'
+import { resolveOfficialQuoteCopy } from './quoteOfficial.js'
 
 export function quoteNumberFor(id) {
   const n = Math.max(Math.round(Number(id) || 0), 0)
@@ -47,19 +49,31 @@ export function toRabQuotePayload(order, lines, settings) {
     ]
   }
   const total = items.reduce((sum, item) => sum + item.amount, 0)
+  const quoteNumber = quoteNumberFor(order.id)
+  const businessName = settings.invoiceBusinessName || 'OCN'
+  const jobTypeLabel = jobTypeLabelOf(order.jobType)
   return {
-    quoteNumber: quoteNumberFor(order.id),
+    quoteNumber,
     date: order.date,
     customerName: order.customerName,
     title: order.title,
     notes: order.notes || null,
     items,
     total,
+    jobType: order.jobType || null,
+    jobTypeLabel,
+    official: resolveOfficialQuoteCopy(settings, {
+      title: order.title || 'pekerjaan ini',
+      customerName: order.customerName || 'Pelanggan',
+      businessName,
+      jobTypeLabel: jobTypeLabel || '',
+      quoteNumber
+    }),
     business: {
-      name: settings.invoiceBusinessName || 'OCN',
+      name: businessName,
       address: settings.invoiceAddress || null,
       phone: settings.invoicePhone || null,
-      footer: settings.rabFooter || settings.invoiceFooter || 'Terima kasih atas kepercayaannya.'
+      footer: settings.rabFooter || null
     }
   }
 }

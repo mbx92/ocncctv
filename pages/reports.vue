@@ -132,7 +132,7 @@ const expenseCategoryBars = computed(() =>
     </div>
 
     <!-- Tab -->
-    <div class="flex gap-1 overflow-x-auto border-b border-ink-200">
+    <div class="flex gap-1 overflow-x-auto no-scrollbar border-b border-ink-200">
       <button
         v-for="t in tabs"
         :key="t.key"

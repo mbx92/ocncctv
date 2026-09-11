@@ -421,6 +421,20 @@
       "when": 1789600000017,
       "tag": "0059_ensure_schema_gaps",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1789600000018,
+      "tag": "0060_job_type",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1789600000019,
+      "tag": "0061_quote_official_copy",
+      "breakpoints": true
     }
   ]
 }

@@ -1,10 +1,22 @@
 <script setup>
 import { ArrowLeftIcon, PrinterIcon, ArrowDownTrayIcon, ShareIcon, ClipboardDocumentIcon } from '@heroicons/vue/24/outline'
+import { parseQuoteStyle } from '~/utils/quoteStyle.js'
 
 definePageMeta({ layout: 'print' })
 
 const route = useRoute()
+const router = useRouter()
 const { data: quote, error } = await useFetch(`/api/custom-orders/${route.params.id}/quote`)
+
+const quoteStyle = computed({
+  get: () => parseQuoteStyle(route.query.tampilan),
+  set(value) {
+    const query = { ...route.query }
+    if (value === 'resmi') query.tampilan = 'resmi'
+    else delete query.tampilan
+    router.replace({ query })
+  }
+})
 
 useHead({
   title: computed(() => (quote.value ? `Penawaran ${quote.value.quoteNumber}` : 'Penawaran'))
@@ -41,7 +53,8 @@ async function shareQuote() {
   shareBusy.value = true
   try {
     const res = await $fetch(`/api/custom-orders/${route.params.id}/share`, { method: 'POST' })
-    const url = `${window.location.origin}${res.path}`
+    const qs = quoteStyle.value === 'resmi' ? '?tampilan=resmi' : ''
+    const url = `${window.location.origin}${res.path}${qs}`
     shareInfo.value = { url, expiresAt: res.expiresAt, reused: res.reused }
     if (navigator.share) {
       try {
@@ -84,6 +97,7 @@ async function copyShareUrl() {
         <ArrowLeftIcon class="w-4 h-4" /> RAB
       </NuxtLink>
       <div class="flex flex-wrap items-center gap-2">
+        <QuoteStyleToggle v-model="quoteStyle" />
         <button class="btn-secondary !text-ink-800" type="button" @click="printQuote">
           <PrinterIcon class="w-4 h-4" />Cetak
         </button>
@@ -91,7 +105,7 @@ async function copyShareUrl() {
           class="btn-secondary !text-ink-800"
           type="button"
           :disabled="pdfBusy || !quote"
-          @click="downloadPdf(`/api/custom-orders/${route.params.id}/quote/pdf`, `${quote?.quoteNumber || 'penawaran'}.pdf`)"
+          @click="downloadPdf(`/api/custom-orders/${route.params.id}/quote/pdf${quoteStyle === 'resmi' ? '?tampilan=resmi' : ''}`, `${quote?.quoteNumber || 'penawaran'}.pdf`)"
         >
           <ArrowDownTrayIcon class="w-4 h-4" />{{ pdfBusy ? 'Mengunduh…' : 'PDF' }}
         </button>
@@ -114,6 +128,7 @@ async function copyShareUrl() {
       </div>
     </div>
 
-    <RabQuoteSheet v-if="quote" :quote="quote" />
+    <RabQuoteOfficialSheet v-if="quote && quoteStyle === 'resmi'" :quote="quote" />
+    <RabQuoteSheet v-else-if="quote" :quote="quote" />
   </div>
 </template>

@@ -8,6 +8,7 @@ import {
   MagnifyingGlassIcon
 } from '@heroicons/vue/24/outline'
 import { PRODUCT_STATUSES, productStatusLabel, productStatusClass, normalizeProductStatus } from '~/utils/productStatus.js'
+import { JOB_TYPES, jobTypeLabel, jobTypeClass } from '~/utils/jobType.js'
 
 const { data: products, refresh } = await useFetch('/api/products')
 const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
@@ -16,6 +17,7 @@ const statusLabel = productStatusLabel
 
 const search = ref('')
 const statusFilter = ref('')
+const jobTypeFilter = ref('')
 
 function ymd(value) {
   const raw = String(value || '').slice(0, 10)
@@ -46,6 +48,7 @@ const filteredProducts = computed(() => {
   const q = search.value.trim().toLowerCase()
   const list = (products.value || []).filter((p) => {
     if (statusFilter.value && p.status !== statusFilter.value) return false
+    if (jobTypeFilter.value && p.jobType !== jobTypeFilter.value) return false
     if (!q) return true
     return (
       p.name.toLowerCase().includes(q) ||
@@ -68,7 +71,7 @@ const { page, pageSize, paged, total, totalPages, rangeStart, rangeEnd, reset } 
   filteredProducts,
   10
 )
-watch([search, statusFilter], reset)
+watch([search, statusFilter, jobTypeFilter], reset)
 
 const pagedRows = computed(() =>
   (paged.value || []).map((p) => ({ ...p, schedule: projectDate(p) }))
@@ -78,7 +81,7 @@ const showForm = ref(false)
 const form = ref({})
 const errorMsg = ref('')
 function openAdd() {
-  form.value = { name: '', description: '' }
+  form.value = { name: '', description: '', jobType: 'install' }
   errorMsg.value = ''
   showForm.value = true
 }
@@ -133,6 +136,10 @@ async function remove(p) {
         <option value="">Semua status</option>
         <option v-for="s in PRODUCT_STATUSES" :key="s" :value="s">{{ statusLabel[s] }}</option>
       </select>
+      <select v-model="jobTypeFilter" class="input w-full sm:w-44">
+        <option value="">Semua tipe</option>
+        <option v-for="t in JOB_TYPES" :key="t" :value="t">{{ jobTypeLabel[t] }}</option>
+      </select>
     </div>
 
     <!-- Tabel (desktop) -->
@@ -159,6 +166,9 @@ async function remove(p) {
                   {{ p.customerName || p.description }}
                 </div>
                 <div v-if="p.erpProjectId" class="text-[10px] uppercase tracking-wide text-ink-400 mt-0.5">Dari ERP</div>
+                <div v-if="p.jobType" class="mt-0.5">
+                  <span class="badge" :class="jobTypeClass(p.jobType)">{{ jobTypeLabel[p.jobType] }}</span>
+                </div>
               </td>
               <td class="whitespace-nowrap">
                 <div class="font-mono text-xs">{{ p.schedule.date ? formatDate(p.schedule.date) : '—' }}</div>
@@ -186,7 +196,7 @@ async function remove(p) {
             </tr>
             <tr v-if="!total">
               <td colspan="6" class="text-center text-ink-500 py-6">
-                {{ search || statusFilter ? 'Tidak ada proyek yang cocok.' : 'Belum ada proyek.' }}
+                {{ search || statusFilter || jobTypeFilter ? 'Tidak ada proyek yang cocok.' : 'Belum ada proyek.' }}
               </td>
             </tr>
           </tbody>
@@ -209,6 +219,9 @@ async function remove(p) {
           <NuxtLink :to="`/projects/${p.id}`" class="font-medium break-words hover:text-accent-600">{{ p.name }}</NuxtLink>
           <span class="badge shrink-0" :class="productStatusClass(p.status)">{{ statusLabel[p.status] }}</span>
         </div>
+        <div v-if="p.jobType" class="text-xs">
+          <span class="badge" :class="jobTypeClass(p.jobType)">{{ jobTypeLabel[p.jobType] }}</span>
+        </div>
         <div v-if="p.schedule.date" class="text-xs text-ink-500">
           <span class="font-mono">{{ formatDate(p.schedule.date) }}</span>
           <span v-if="p.schedule.kind" class="text-ink-400"> · {{ p.schedule.kind }}</span>
@@ -227,7 +240,7 @@ async function remove(p) {
         </div>
       </div>
       <p v-if="!total" class="panel p-6 text-center text-sm text-ink-500">
-        {{ search || statusFilter ? 'Tidak ada proyek yang cocok.' : 'Belum ada proyek.' }}
+        {{ search || statusFilter || jobTypeFilter ? 'Tidak ada proyek yang cocok.' : 'Belum ada proyek.' }}
       </p>
       <div v-else class="panel">
         <AppPagination
@@ -247,6 +260,7 @@ async function remove(p) {
           <label class="label">Nama</label>
           <input v-model="form.name" class="input" required placeholder="Pemasangan 4 kamera rumah…" />
         </div>
+        <JobTypePicker v-model="form.jobType" />
         <div>
           <label class="label">Deskripsi</label>
           <input v-model="form.description" class="input" placeholder="opsional" />

@@ -22,6 +22,14 @@ export default defineEventHandler(async (event) => {
     invoicePhone: String(body.invoicePhone || '').trim() || null,
     invoiceFooter: String(body.invoiceFooter || '').replace(/\r\n/g, '\n').trim() || null,
     rabFooter: String(body.rabFooter || '').replace(/\r\n/g, '\n').trim() || null,
+    quoteOfficialTitle: String(body.quoteOfficialTitle || '').replace(/\r\n/g, '\n').trim() || null,
+    quoteOfficialGreeting: String(body.quoteOfficialGreeting || '').replace(/\r\n/g, '\n').trim() || null,
+    quoteOfficialIntro: String(body.quoteOfficialIntro || '').replace(/\r\n/g, '\n').trim() || null,
+    quoteOfficialTerms: String(body.quoteOfficialTerms || '').replace(/\r\n/g, '\n').trim() || null,
+    quoteOfficialClosing: String(body.quoteOfficialClosing || '').replace(/\r\n/g, '\n').trim() || null,
+    quoteOfficialSignOff: String(body.quoteOfficialSignOff || '').replace(/\r\n/g, '\n').trim() || null,
+    quoteOfficialSigner: String(body.quoteOfficialSigner || '').replace(/\r\n/g, '\n').trim() || null,
+    quoteOfficialSignHint: String(body.quoteOfficialSignHint || '').replace(/\r\n/g, '\n').trim() || null,
     invoiceShareTtlDays: clampShareTtlDays(body.invoiceShareTtlDays)
   }
   if (Object.prototype.hasOwnProperty.call(body, 'erpSyncBaseUrl')) {

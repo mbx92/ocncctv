@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
 import { requireAdmin } from '../../utils/rbac.js'
 import { logAudit } from '../../utils/audit.js'
+import { parseJobType } from '../../utils/jobType.js'
 
 export default defineEventHandler(async (event) => {
   requireAdmin(event)
@@ -11,6 +12,9 @@ export default defineEventHandler(async (event) => {
   const patch = {
     name: body.name,
     description: body.description || null
+  }
+  if ('jobType' in body) {
+    patch.jobType = parseJobType(body.jobType)
   }
   if ('seriesId' in body) {
     const seriesId = body.seriesId === '' || body.seriesId == null ? null : Number(body.seriesId)

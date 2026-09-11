@@ -22,6 +22,7 @@ import {
   TruckIcon
 } from '@heroicons/vue/24/outline'
 import { productStatusLabel, productStatusClass, normalizeProductStatus } from '~/utils/productStatus.js'
+import { jobTypeLabel, jobTypeClass } from '~/utils/jobType.js'
 import {
   catalogLines,
   serviceLines,
@@ -32,6 +33,7 @@ import {
   rabStatusBadge,
   summarizeProjectRevenue
 } from '~/utils/rab.js'
+import { distributeWagesFromServiceSale, wageAllocationLeft } from '~/utils/projectWages.js'
 
 const route = useRoute()
 const id = route.params.id
@@ -46,7 +48,8 @@ const { data: rabPurchaseStatus, refresh: refreshRabPurchaseStatus } = await use
 
 const info = ref({
   name: product.value?.name,
-  description: product.value?.description
+  description: product.value?.description,
+  jobType: product.value?.jobType || 'install'
 })
 const savingInfo = ref(false)
 const plannedStartDate = ref(product.value?.plannedStartDate || '')
@@ -54,12 +57,13 @@ const actingStatus = ref('')
 const projectPhase = computed(() => normalizeProductStatus(product.value?.status))
 
 watch(
-  () => product.value && `${product.value.name}|${product.value.description}|${product.value.plannedStartDate}|${product.value.status}`,
+  () => product.value && `${product.value.name}|${product.value.description}|${product.value.jobType}|${product.value.plannedStartDate}|${product.value.status}`,
   () => {
     if (!product.value || savingInfo.value) return
     info.value = {
       name: product.value.name,
-      description: product.value.description
+      description: product.value.description,
+      jobType: product.value.jobType || 'install'
     }
     if (!actingStatus.value) plannedStartDate.value = product.value.plannedStartDate || ''
   }
@@ -82,7 +86,8 @@ async function saveInfo() {
       method: 'PUT',
       body: {
         name: info.value.name,
-        description: info.value.description
+        description: info.value.description,
+        jobType: info.value.jobType
       }
     })
     await refresh()
@@ -391,6 +396,8 @@ async function onTechnicianCreated(created) {
 }
 
 const liveFinance = computed(() => summarizeProjectRevenue(scopeLines.value, wageRows.value))
+const jasaLines = computed(() => serviceLines(scopeLines.value).filter((line) => (Number(line.quantity) || 0) > 0))
+const wageUnallocated = computed(() => wageAllocationLeft(liveFinance.value.serviceSale, wageRows.value))
 const financeMargin = computed(() => {
   const revenue = liveFinance.value.revenue
   if (!revenue) return null
@@ -415,6 +422,21 @@ async function saveWages() {
   } finally {
     savingWages.value = false
   }
+}
+
+function autoDivideWages() {
+  const eligible = wageRows.value.filter((row) => row.technicianId)
+  if (!eligible.length) {
+    useToast().error('Tambah teknisi dulu sebelum bagi otomatis.')
+    return
+  }
+  if (!liveFinance.value.serviceSale) {
+    useToast().error('Belum ada pendapatan jasa di RAB proyek ini.')
+    return
+  }
+  wageRows.value = distributeWagesFromServiceSale(liveFinance.value.serviceSale, wageRows.value)
+  wageMsg.value = `Upah dibagi rata dari jasa ${formatIDR(liveFinance.value.serviceSale)}.`
+  setTimeout(() => (wageMsg.value = ''), 4000)
 }
 
 async function saveExtras() {
@@ -639,7 +661,7 @@ const tab = computed({
       </template>
     </div>
 
-    <div class="flex gap-1 overflow-x-auto border-b border-ink-200 -mb-px">
+    <div class="flex gap-1 overflow-x-auto no-scrollbar border-b border-ink-200 -mb-px">
       <button
         v-for="t in tabs"
         :key="t.id"
@@ -663,6 +685,9 @@ const tab = computed({
             </div>
             <div class="min-w-0 flex-1">
               <div class="flex flex-wrap items-center gap-1.5 mb-1">
+                <span v-if="product.jobType" class="badge" :class="jobTypeClass(product.jobType)">
+                  {{ jobTypeLabel[product.jobType] }}
+                </span>
                 <span class="badge" :class="productStatusClass(product.status)">
                   {{ productStatusLabel[product.status] || product.status }}
                 </span>
@@ -847,6 +872,7 @@ const tab = computed({
               <label class="label">Nama</label>
               <input v-model="info.name" class="input" required :disabled="!isAdmin" />
             </div>
+            <JobTypePicker v-model="info.jobType" :disabled="!isAdmin" />
             <div>
               <label class="label">Deskripsi</label>
               <textarea v-model="info.description" class="input" rows="3" :disabled="!isAdmin" placeholder="Ringkas lokasi, paket, atau catatan lapangan" />
@@ -1231,7 +1257,7 @@ const tab = computed({
         </button>
       </div>
 
-      <div class="panel overflow-hidden">
+      <div class="panel">
         <div class="panel-header">
           <span class="panel-title">Tambahan di luar RAB</span>
         </div>
@@ -1274,6 +1300,18 @@ const tab = computed({
             </div>
             <div class="num text-sm">{{ formatIDR(liveFinance.serviceSale) }}</div>
           </div>
+          <div v-if="jasaLines.length" class="px-3 py-2 border-t border-ink-100 bg-ink-50/50">
+            <div class="text-[11px] uppercase font-semibold tracking-wide text-ink-400 mb-1.5">Rincian jasa</div>
+            <ul class="space-y-1 text-xs text-ink-600">
+              <li v-for="line in jasaLines" :key="line.id || line.name" class="flex justify-between gap-3">
+                <span class="min-w-0 truncate">
+                  {{ line.name }}
+                  <span class="text-ink-400">· {{ formatNumber(line.quantity) }}{{ line.unit ? ` ${line.unit}` : '' }}</span>
+                </span>
+                <span class="num shrink-0">{{ formatIDR(lineAmount(line)) }}</span>
+              </li>
+            </ul>
+          </div>
           <div class="px-3 py-2.5 flex items-center justify-between gap-3 font-medium bg-ink-50">
             <span>Total pendapatan</span>
             <span class="num">{{ formatIDR(liveFinance.revenue) }}</span>
@@ -1288,7 +1326,10 @@ const tab = computed({
           <div class="px-3 py-2.5 flex items-start justify-between gap-3">
             <div>
               <div class="text-sm">Upah teknisi</div>
-              <div class="text-xs text-ink-400">Pembagian di panel kanan</div>
+              <div class="text-xs text-ink-400">
+                Pembagian di panel kanan
+                <span v-if="liveFinance.serviceSale"> · sisa jasa {{ formatIDR(wageUnallocated) }}</span>
+              </div>
             </div>
             <div class="num text-sm">− {{ formatIDR(liveFinance.wageTotal) }}</div>
           </div>
@@ -1313,13 +1354,25 @@ const tab = computed({
       <div class="panel overflow-hidden">
         <div class="panel-header !flex-wrap gap-2">
           <span class="panel-title">Upah teknisi</span>
-          <button v-if="isAdmin" type="button" class="btn-secondary shrink-0" @click="addWageRow">
-            <PlusIcon class="w-3.5 h-3.5" />Teknisi
-          </button>
+          <div v-if="isAdmin" class="flex flex-wrap items-center gap-2 ml-auto">
+            <button
+              v-if="liveFinance.serviceSale"
+              type="button"
+              class="btn-secondary shrink-0"
+              title="Bagi rata pendapatan jasa ke teknisi yang sudah dipilih"
+              @click="autoDivideWages"
+            >
+              Bagi otomatis
+            </button>
+            <button type="button" class="btn-secondary shrink-0" @click="addWageRow">
+              <PlusIcon class="w-3.5 h-3.5" />Teknisi
+            </button>
+          </div>
         </div>
         <div class="p-3 sm:p-4 space-y-3">
           <p class="text-xs text-ink-500">
-            Pilih teknisi dari daftar. Tidak otomatis tercatat di Pengeluaran — catat kas terpisah jika sudah dibayar.
+            Pilih teknisi lalu klik <strong>Bagi otomatis</strong> untuk membagi rata pendapatan jasa
+            ({{ formatIDR(liveFinance.serviceSale) }}). Simpan pembagian di sini; catat kas di Pengeluaran saat sudah dibayar.
           </p>
           <div v-for="(row, i) in wageRows" :key="i" class="flex items-start gap-2">
             <div class="flex-1 min-w-0 space-y-2 sm:space-y-0 sm:grid sm:grid-cols-2 sm:gap-2">

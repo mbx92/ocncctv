@@ -1,8 +1,9 @@
 <script setup>
 import { PlusIcon, TrashIcon, CheckIcon, XMarkIcon, EyeIcon, DocumentTextIcon } from '@heroicons/vue/24/outline'
 import { RAB_STATUSES, rabStatusLabel, rabStatusBadge } from '~/utils/rab.js'
+import { JOB_TYPES, jobTypeLabel, jobTypeClass } from '~/utils/jobType.js'
 
-const filters = ref({ status: '', dateFrom: '', dateTo: '' })
+const filters = ref({ status: '', jobType: '', dateFrom: '', dateTo: '' })
 const query = computed(() => {
   const q = {}
   for (const [k, v] of Object.entries(filters.value)) if (v) q[k] = v
@@ -26,7 +27,8 @@ function openAdd() {
     date: todayStr(),
     customerName: '',
     title: '',
-    notes: ''
+    notes: '',
+    jobType: 'install'
   }
   errorMsg.value = ''
   showForm.value = true
@@ -75,12 +77,19 @@ async function remove(row) {
       </button>
     </div>
 
-    <div class="panel p-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+    <div class="panel p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
       <div>
         <label class="label">Status</label>
         <select v-model="filters.status" class="input">
           <option value="">Semua</option>
           <option v-for="s in RAB_STATUSES" :key="s" :value="s">{{ rabStatusLabel[s] }}</option>
+        </select>
+      </div>
+      <div>
+        <label class="label">Tipe</label>
+        <select v-model="filters.jobType" class="input">
+          <option value="">Semua</option>
+          <option v-for="t in JOB_TYPES" :key="t" :value="t">{{ jobTypeLabel[t] }}</option>
         </select>
       </div>
       <div>
@@ -100,6 +109,9 @@ async function remove(row) {
           <span class="badge shrink-0" :class="rabStatusBadge[row.status]">{{ rabStatusLabel[row.status] }}</span>
         </div>
         <div class="text-xs text-ink-500">{{ row.customerName }} · {{ formatDate(row.date) }}</div>
+        <div v-if="row.jobType" class="text-xs">
+          <span class="badge" :class="jobTypeClass(row.jobType)">{{ jobTypeLabel[row.jobType] }}</span>
+        </div>
         <div class="text-xs font-mono text-ink-400">{{ formatIDR(row.totalSale) }}</div>
       </NuxtLink>
       <p v-if="!total" class="panel p-6 text-center text-sm text-ink-500">Belum ada RAB.</p>
@@ -134,6 +146,9 @@ async function remove(row) {
               <td>{{ row.customerName }}</td>
               <td>
                 <NuxtLink :to="`/rab/${row.id}`" class="font-medium hover:underline">{{ row.title }}</NuxtLink>
+                <div v-if="row.jobType" class="mt-0.5">
+                  <span class="badge" :class="jobTypeClass(row.jobType)">{{ jobTypeLabel[row.jobType] }}</span>
+                </div>
               </td>
               <td class="num">{{ formatIDR(row.totalSale) }}</td>
               <td><span class="badge" :class="rabStatusBadge[row.status]">{{ rabStatusLabel[row.status] }}</span></td>
@@ -184,6 +199,7 @@ async function remove(row) {
           <label class="label">Judul pekerjaan</label>
           <input v-model="form.title" class="input" required placeholder="mis. pasang CCTV 8 channel gudang" />
         </div>
+        <JobTypePicker v-model="form.jobType" />
         <div>
           <label class="label">Catatan</label>
           <input v-model="form.notes" class="input" placeholder="opsional" />

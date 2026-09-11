@@ -56,6 +56,7 @@ export const customOrderLineTypeEnum = pgEnum('custom_order_line_type', [
   'service',
   'product'
 ])
+export const jobTypeEnum = pgEnum('job_type', ['install', 'maintenance'])
 
 // Master jasa RAB. Tidak ada stok. Nama & harga jual disalin ke baris penawaran.
 export const services = pgTable('services', {
@@ -184,6 +185,7 @@ export const products = pgTable('products', {
   customerName: text('customer_name'),
   erpProjectId: text('erp_project_id'),
   erpTotalValue: integer('erp_total_value'),
+  jobType: jobTypeEnum('job_type'),
   createdAt: timestamp('created_at').notNull().defaultNow()
 }, (t) => ({
   erpProjectUniq: uniqueIndex('products_erp_project_id_uidx').on(t.erpProjectId)
@@ -351,6 +353,7 @@ export const customOrders = pgTable(
     printTimeMinutes: integer('print_time_minutes').notNull().default(0),
     notes: text('notes'),
     status: customOrderStatusEnum('status').notNull().default('draft'),
+    jobType: jobTypeEnum('job_type'),
     projectId: integer('project_id').references(() => products.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at').notNull().defaultNow()
   },
@@ -498,6 +501,14 @@ export const appSettings = pgTable('app_settings', {
   invoicePhone: text('invoice_phone'),
   invoiceFooter: text('invoice_footer'),
   rabFooter: text('rab_footer'),
+  quoteOfficialTitle: text('quote_official_title'),
+  quoteOfficialGreeting: text('quote_official_greeting'),
+  quoteOfficialIntro: text('quote_official_intro'),
+  quoteOfficialTerms: text('quote_official_terms'),
+  quoteOfficialClosing: text('quote_official_closing'),
+  quoteOfficialSignOff: text('quote_official_sign_off'),
+  quoteOfficialSigner: text('quote_official_signer'),
+  quoteOfficialSignHint: text('quote_official_sign_hint'),
   invoiceShareTtlDays: integer('invoice_share_ttl_days').notNull().default(7),
   erpSyncBaseUrl: text('erp_sync_base_url'),
   erpSyncApiKey: text('erp_sync_api_key'),

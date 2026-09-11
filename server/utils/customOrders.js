@@ -3,6 +3,7 @@ import { useDb, schema } from '../db/index.js'
 import { computeHpp } from './hpp.js'
 import { getSettings } from './settings.js'
 import { catalogDisplayName } from './catalogName.js'
+import { parseJobType } from './jobType.js'
 
 export const RAB_OPEN_STATUSES = ['draft', 'sent', 'open', 'ready']
 export const RAB_LOCKED_STATUSES = ['deal', 'lost', 'delivered', 'cancelled']
@@ -66,7 +67,7 @@ export function parseRabLines(raw) {
   })
 }
 
-export function parseCustomOrderBody(body, { allowEmptyLines = false } = {}) {
+export function parseCustomOrderBody(body, { allowEmptyLines = false, requireJobType = false } = {}) {
   if (!body.date || !String(body.customerName || '').trim() || !String(body.title || '').trim()) {
     throw createError({ statusCode: 400, statusMessage: 'Tanggal, nama pelanggan, dan judul wajib diisi' })
   }
@@ -91,6 +92,9 @@ export function parseCustomOrderBody(body, { allowEmptyLines = false } = {}) {
     machineId: Number.isInteger(machineId) && machineId > 0 ? machineId : null,
     printTimeMinutes: Math.max(Math.round(Number(body.printTimeMinutes) || 0), 0),
     notes: body.notes || null
+  }
+  if ('jobType' in body || requireJobType) {
+    header.jobType = parseJobType(body.jobType, { required: requireJobType })
   }
   if (hasLines) header.pricePerUnit = totals.totalSale
   return { header, lines, totals }
