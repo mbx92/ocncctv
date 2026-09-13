@@ -54,7 +54,7 @@ async function downloadPdf() {
 
 <template>
   <div class="min-h-screen bg-ink-100 print:bg-white">
-    <div class="no-print sticky top-0 z-10 flex flex-wrap items-center justify-end gap-2 px-3 py-2.5 sm:px-4 sm:py-3 bg-ink-900 text-ink-100 print:hidden">
+    <DocToolbar title="Penawaran">
       <QuoteStyleToggle v-model="quoteStyle" />
       <button class="btn-secondary !text-ink-800" type="button" @click="printQuote">
         <PrinterIcon class="w-4 h-4" />Cetak
@@ -62,7 +62,7 @@ async function downloadPdf() {
       <button class="btn-primary" type="button" :disabled="pdfBusy || !quote" @click="downloadPdf">
         <ArrowDownTrayIcon class="w-4 h-4" />{{ pdfBusy ? 'Mengunduh…' : 'PDF' }}
       </button>
-    </div>
+    </DocToolbar>
     <p v-if="error" class="p-6 text-sm text-red-600">{{ error.data?.statusMessage || 'Tautan tidak valid atau sudah kedaluwarsa' }}</p>
     <RabQuoteOfficialSheet v-if="quote && quoteStyle === 'resmi'" :quote="quote" />
     <RabQuoteSheet v-else-if="quote" :quote="quote" />

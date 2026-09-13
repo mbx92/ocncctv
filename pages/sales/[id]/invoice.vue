@@ -79,27 +79,27 @@ async function copyShareUrl() {
 
 <template>
   <div class="min-h-screen bg-ink-100 print:bg-white">
-    <div class="no-print sticky top-0 z-10 flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-4 sm:py-3 bg-ink-900 text-ink-100 print:hidden">
-      <NuxtLink to="/sales" class="inline-flex items-center gap-1 text-sm hover:text-white">
-        <ArrowLeftIcon class="w-4 h-4" /> Penjualan
-      </NuxtLink>
-      <div class="flex flex-wrap items-center gap-2">
-        <button class="btn-secondary !text-ink-800" type="button" @click="printInvoice">
-          <PrinterIcon class="w-4 h-4" />Cetak
-        </button>
-        <button
-          class="btn-secondary !text-ink-800"
-          type="button"
-          :disabled="pdfBusy || !invoice"
-          @click="downloadPdf(`/api/sales/${route.params.id}/pdf`, `${invoice?.invoiceNumber || 'invoice'}.pdf`)"
-        >
-          <ArrowDownTrayIcon class="w-4 h-4" />{{ pdfBusy ? 'Mengunduh…' : 'PDF' }}
-        </button>
-        <button class="btn-primary" type="button" :disabled="shareBusy || !invoice" @click="shareInvoice">
-          <ShareIcon class="w-4 h-4" />{{ shareBusy ? 'Membuat…' : 'Bagikan' }}
-        </button>
-      </div>
-    </div>
+    <DocToolbar title="Invoice">
+      <template #nav>
+        <NuxtLink to="/sales" class="inline-flex items-center gap-1 text-sm hover:text-white">
+          <ArrowLeftIcon class="w-4 h-4" /> Penjualan
+        </NuxtLink>
+      </template>
+      <button class="btn-secondary !text-ink-800" type="button" @click="printInvoice">
+        <PrinterIcon class="w-4 h-4" />Cetak
+      </button>
+      <button
+        class="btn-secondary !text-ink-800"
+        type="button"
+        :disabled="pdfBusy || !invoice"
+        @click="downloadPdf(`/api/sales/${route.params.id}/pdf`, `${invoice?.invoiceNumber || 'invoice'}.pdf`)"
+      >
+        <ArrowDownTrayIcon class="w-4 h-4" />{{ pdfBusy ? 'Mengunduh…' : 'PDF' }}
+      </button>
+      <button class="btn-primary" type="button" :disabled="shareBusy || !invoice" @click="shareInvoice">
+        <ShareIcon class="w-4 h-4" />{{ shareBusy ? 'Membuat…' : 'Bagikan' }}
+      </button>
+    </DocToolbar>
 
     <p v-if="error" class="p-6 text-sm text-red-600">{{ error.data?.statusMessage || 'Invoice tidak ditemukan' }}</p>
 
