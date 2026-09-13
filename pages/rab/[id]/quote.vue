@@ -92,7 +92,7 @@ async function copyShareUrl() {
 
 <template>
   <div class="min-h-screen bg-ink-100 print:bg-white">
-    <div class="no-print sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 px-4 py-3 bg-ink-900 text-ink-100 print:hidden">
+    <div class="no-print sticky top-0 z-10 flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-4 sm:py-3 bg-ink-900 text-ink-100 print:hidden">
       <NuxtLink :to="`/rab/${route.params.id}`" class="inline-flex items-center gap-1 text-sm hover:text-white">
         <ArrowLeftIcon class="w-4 h-4" /> RAB
       </NuxtLink>
@@ -117,7 +117,7 @@ async function copyShareUrl() {
 
     <p v-if="error" class="p-6 text-sm text-red-600">{{ error.data?.statusMessage || 'Penawaran tidak ditemukan' }}</p>
 
-    <div v-if="shareInfo" class="no-print mx-auto mt-4 w-[210mm] max-w-full px-4 print:hidden">
+    <div v-if="shareInfo" class="no-print mx-auto mt-4 w-full sm:w-[210mm] max-w-full px-4 print:hidden">
       <div class="rounded-panel border border-ink-200 bg-white p-3 text-sm space-y-2">
         <div class="text-xs font-semibold uppercase tracking-wide text-ink-500">Tautan publik</div>
         <div class="flex gap-2">

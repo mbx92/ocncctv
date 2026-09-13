@@ -39,7 +39,7 @@ async function downloadPdf() {
 
 <template>
   <div class="min-h-screen bg-ink-100 print:bg-white">
-    <div class="no-print sticky top-0 z-10 flex items-center justify-end gap-2 px-4 py-3 bg-ink-900 text-ink-100 print:hidden">
+    <div class="no-print sticky top-0 z-10 flex flex-wrap items-center justify-end gap-2 px-3 py-2.5 sm:px-4 sm:py-3 bg-ink-900 text-ink-100 print:hidden">
       <button class="btn-secondary !text-ink-800" type="button" @click="printInvoice">
         <PrinterIcon class="w-4 h-4" />Cetak
       </button>
