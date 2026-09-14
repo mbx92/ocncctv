@@ -1,6 +1,6 @@
 import { useDb, schema } from '../../db/index.js'
 import { logAudit } from '../../utils/audit.js'
-import { uniqueCategoryKey } from '../../utils/expenseCategory.js'
+import { nextCategoryColor, uniqueCategoryKey } from '../../utils/expenseCategory.js'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
@@ -8,9 +8,10 @@ export default defineEventHandler(async (event) => {
   if (!name) throw createError({ statusCode: 400, statusMessage: 'Nama kategori wajib diisi' })
   const db = useDb()
   const key = await uniqueCategoryKey(db, schema, name)
+  const color = await nextCategoryColor(db, schema)
   const rows = await db
     .insert(schema.expenseCategories)
-    .values({ key, name, isSystem: false, sortOrder: 200 })
+    .values({ key, name, color, isSystem: false, sortOrder: 200 })
     .returning()
   await logAudit(event, {
     action: 'create',

@@ -435,6 +435,13 @@
       "when": 1789600000019,
       "tag": "0061_quote_official_copy",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1789600000020,
+      "tag": "0062_expense_category_color",
+      "breakpoints": true
     }
   ]
 }

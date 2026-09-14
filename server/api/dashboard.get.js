@@ -76,6 +76,7 @@ export default defineEventHandler(async () => {
         date: schema.expenses.date,
         category: schema.expenses.category,
         categoryName: schema.expenseCategories.name,
+        categoryColor: schema.expenseCategories.color,
         description: schema.expenses.description,
         amount: schema.expenses.amount
       })
@@ -94,7 +95,14 @@ export default defineEventHandler(async () => {
   const catMap = new Map()
   for (const e of expenseRows) {
     const key = e.category || 'other'
-    const agg = catMap.get(key) || { category: key, name: e.categoryName || key, amount: 0, count: 0 }
+    const agg = catMap.get(key) || {
+      category: key,
+      name: e.categoryName || key,
+      color: e.categoryColor || null,
+      amount: 0,
+      count: 0
+    }
+    if (!agg.color && e.categoryColor) agg.color = e.categoryColor
     agg.amount += e.amount
     agg.count += 1
     catMap.set(key, agg)
@@ -138,6 +146,7 @@ export default defineEventHandler(async () => {
       description: e.description,
       category: e.category,
       categoryName: e.categoryName,
+      categoryColor: e.categoryColor,
       amount: e.amount
     }))
 

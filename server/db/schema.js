@@ -205,6 +205,7 @@ export const expenseCategories = pgTable('expense_categories', {
   id: serial('id').primaryKey(),
   key: text('key').notNull().unique(),
   name: text('name').notNull(),
+  color: text('color'),
   isSystem: boolean('is_system').notNull().default(false),
   sortOrder: integer('sort_order').notNull().default(100),
   createdAt: timestamp('created_at').notNull().defaultNow()

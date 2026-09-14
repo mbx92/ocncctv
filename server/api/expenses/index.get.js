@@ -33,6 +33,7 @@ export default defineEventHandler(async (event) => {
       date: schema.expenses.date,
       category: schema.expenses.category,
       categoryName: schema.expenseCategories.name,
+      categoryColor: schema.expenseCategories.color,
       description: schema.expenses.description,
       amount: schema.expenses.amount,
       relatedProductId: schema.expenses.relatedProductId,

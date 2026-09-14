@@ -18,6 +18,7 @@ export default defineEventHandler(async (event) => {
       date: schema.expenses.date,
       category: schema.expenses.category,
       categoryName: schema.expenseCategories.name,
+      categoryColor: schema.expenseCategories.color,
       description: schema.expenses.description,
       amount: schema.expenses.amount
     })
@@ -33,10 +34,12 @@ export default defineEventHandler(async (event) => {
     const agg = perCategory.get(key) || {
       category: key,
       name: r.categoryName || key,
+      color: r.categoryColor || null,
       count: 0,
       amount: 0
     }
     if (!agg.name && r.categoryName) agg.name = r.categoryName
+    if (!agg.color && r.categoryColor) agg.color = r.categoryColor
     agg.count += 1
     agg.amount += Number(r.amount) || 0
     perCategory.set(key, agg)
@@ -56,6 +59,7 @@ export default defineEventHandler(async (event) => {
       date: toDateStr(r.date) || r.date,
       category: r.category,
       categoryName: r.categoryName || r.category,
+      categoryColor: r.categoryColor || null,
       description: r.description,
       amount: Number(r.amount) || 0
     }))

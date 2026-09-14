@@ -17,7 +17,9 @@ export const chartPalette = {
 
 const extra = ['#e11d48', '#ea580c', '#65a30d', '#0891b2', '#4f46e5', '#c026d3']
 
-export function categoryChartColor(key, index = 0) {
+export function categoryChartColor(key, index = 0, stored) {
+  const hex = String(stored || '').trim()
+  if (/^#[0-9a-f]{6}$/i.test(hex)) return hex.toLowerCase()
   if (chartPalette[key]) return chartPalette[key]
   let h = index
   for (const ch of String(key || '')) h = (h + ch.charCodeAt(0)) % extra.length

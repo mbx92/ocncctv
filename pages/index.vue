@@ -1,6 +1,6 @@
 <script setup>
 import { ArrowPathIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon, ChartBarIcon } from '@heroicons/vue/24/outline'
-import { categoryBadgeClass } from '~/utils/expenseCategory.js'
+import { categoryBadgeProps } from '~/utils/expenseCategory.js'
 
 const { data, refresh, status } = await useFetch('/api/dashboard')
 
@@ -149,11 +149,14 @@ function signedPct(n) {
         <div v-if="data?.expensesByCategory?.length" class="p-4 space-y-3">
           <div v-for="c in data.expensesByCategory" :key="c.category" class="space-y-1">
             <div class="flex items-center justify-between text-sm gap-2 min-w-0">
-              <span class="badge min-w-0 truncate" :class="categoryBadgeClass(c.category)">{{ c.name }}</span>
+              <span v-bind="categoryBadgeProps(c.category, c.color)" class="min-w-0 truncate">{{ c.name }}</span>
               <span class="font-mono text-xs shrink-0">{{ formatIDR(c.amount) }} · {{ c.count }}x</span>
             </div>
             <div class="h-2 rounded-full bg-ink-100 overflow-hidden">
-              <div class="h-full bg-red-400/80 rounded-full" :style="{ width: Math.max(4, c.percent) + '%' }" />
+              <div
+                class="h-full rounded-full"
+                :style="{ width: Math.max(4, c.percent) + '%', background: c.color || '#f87171' }"
+              />
             </div>
           </div>
         </div>
@@ -255,8 +258,8 @@ function signedPct(n) {
                 <td class="w-full max-w-0">
                   <div class="truncate" :title="e.description">{{ e.description }}</div>
                   <span
-                    class="badge mt-0.5 max-w-full truncate align-bottom"
-                    :class="categoryBadgeClass(e.category)"
+                    v-bind="categoryBadgeProps(e.category, e.categoryColor)"
+                    class="mt-0.5 max-w-full truncate align-bottom"
                     :title="e.categoryName || e.category"
                   >{{ e.categoryName || e.category }}</span>
                 </td>

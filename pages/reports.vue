@@ -1,6 +1,6 @@
 <script setup>
 import { CalendarDaysIcon, ArrowPathIcon } from '@heroicons/vue/24/outline'
-import { categoryBadgeClass, categoryNameOf } from '~/utils/expenseCategory.js'
+import { categoryBadgeProps, categoryNameOf } from '~/utils/expenseCategory.js'
 import { categoryChartColor, chartPalette } from '~/utils/chartColors.js'
 
 const filters = ref({ dateFrom: monthStartStr(), dateTo: todayStr() })
@@ -87,7 +87,7 @@ const expenseDonutSegments = computed(() =>
   (byExpense.value?.categories || []).map((c, i) => ({
     label: c.name || expenseCatName(c.category),
     value: c.amount,
-    color: categoryChartColor(c.category, i)
+    color: categoryChartColor(c.category, i, c.color)
   }))
 )
 
@@ -103,7 +103,7 @@ const expenseCategoryBars = computed(() =>
   (byExpense.value?.categories || []).slice(0, 8).map((c, i) => ({
     label: c.name || expenseCatName(c.category),
     value: c.amount,
-    color: categoryChartColor(c.category, i)
+    color: categoryChartColor(c.category, i, c.color)
   }))
 )
 </script>
@@ -390,7 +390,7 @@ const expenseCategoryBars = computed(() =>
               <tr v-for="e in expensePager.paged.value" :key="e.id">
                 <td class="whitespace-nowrap font-mono text-xs">{{ formatDate(e.date) }}</td>
                 <td>
-                  <span class="badge" :class="categoryBadgeClass(e.category)">{{ e.categoryName || expenseCatName(e.category) }}</span>
+                  <span v-bind="categoryBadgeProps(e.category, e.categoryColor)">{{ e.categoryName || expenseCatName(e.category) }}</span>
                 </td>
                 <td class="min-w-0 max-w-[14rem]"><div class="truncate" :title="e.description">{{ e.description }}</div></td>
                 <td class="num text-red-600">{{ formatIDR(e.amount) }}</td>

@@ -1,6 +1,6 @@
 <script setup>
 import { PlusIcon, PencilSquareIcon, TrashIcon, CheckIcon, XMarkIcon } from '@heroicons/vue/24/outline'
-import { categoryBadgeClass, categoryNameOf } from '~/utils/expenseCategory.js'
+import { categoryBadgeProps, categoryColorFromList, categoryNameOf } from '~/utils/expenseCategory.js'
 import { findProjectWageForTechnician } from '~/utils/projectWages.js'
 
 const filters = ref({ category: '', productId: '', dateFrom: '', dateTo: '' })
@@ -25,6 +25,9 @@ watch(query, reset, { deep: true })
 
 function catName(key) {
   return categoryNameOf(categories.value, key)
+}
+function catBadge(key, color) {
+  return categoryBadgeProps(key, color || categoryColorFromList(categories.value, key))
 }
 
 const showForm = ref(false)
@@ -273,7 +276,7 @@ async function remove(e) {
           <span class="font-mono font-semibold shrink-0">{{ formatIDR(e.amount) }}</span>
         </div>
         <div class="flex items-center gap-2 flex-wrap">
-          <span class="badge" :class="categoryBadgeClass(e.category)">{{ e.categoryName || catName(e.category) }}</span>
+          <span v-bind="catBadge(e.category, e.categoryColor)">{{ e.categoryName || catName(e.category) }}</span>
           <span class="font-mono text-xs text-ink-500">{{ formatDate(e.date) }}</span>
         </div>
         <div v-if="e.productName" class="text-xs text-ink-400">Item: {{ e.productName }}</div>
@@ -312,7 +315,7 @@ async function remove(e) {
           <tbody>
             <tr v-for="e in paged" :key="e.id">
               <td class="whitespace-nowrap font-mono text-xs">{{ formatDate(e.date) }}</td>
-              <td><span class="badge" :class="categoryBadgeClass(e.category)">{{ e.categoryName || catName(e.category) }}</span></td>
+              <td><span v-bind="catBadge(e.category, e.categoryColor)">{{ e.categoryName || catName(e.category) }}</span></td>
               <td>{{ e.description }}</td>
               <td class="text-ink-500">{{ e.productName || '-' }}</td>
               <td class="num">{{ formatIDR(e.amount) }}</td>
@@ -457,7 +460,7 @@ async function remove(e) {
           <div class="label">Daftar kategori</div>
           <ul v-if="categories?.length" class="border border-ink-200 rounded-panel divide-y divide-ink-100 max-h-56 overflow-y-auto">
             <li v-for="c in categories" :key="c.id" class="flex items-center gap-2 px-3 py-2">
-              <span class="badge" :class="categoryBadgeClass(c.key)">{{ c.name }}</span>
+              <span v-bind="catBadge(c.key, c.color)">{{ c.name }}</span>
               <span v-if="c.isSystem" class="text-xs text-ink-400">bawaan</span>
               <button
                 v-if="!c.isSystem"
