@@ -1,6 +1,13 @@
 <script setup>
-import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/vue/24/outline'
+import { ChevronLeftIcon, ChevronRightIcon, PlusIcon, TrashIcon, CheckIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 import { productStatusLabel, productStatusClass, normalizeProductStatus } from '~/utils/productStatus.js'
+import {
+  CALENDAR_EVENT_KINDS,
+  calendarEventKindLabel,
+  calendarEventKindClass,
+  calendarEventKindDot,
+  normalizeCalendarEventKind
+} from '~/utils/calendarEvent.js'
 
 const MONTHS_LONG = [
   'Januari',
@@ -19,11 +26,19 @@ const MONTHS_LONG = [
 const WEEKDAYS = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min']
 
 const { data: products } = await useFetch('/api/products')
+const { data: visits, refresh: refreshVisits } = await useFetch('/api/calendar-events')
 const today = todayStr()
 const now = new Date()
 const cursor = ref({ year: now.getFullYear(), month: now.getMonth() })
 const selectedDate = ref(today)
 const statusFilter = ref('')
+
+const showForm = ref(false)
+const editing = ref(null)
+const form = ref({})
+const errorMsg = ref('')
+const saving = ref(false)
+const acting = ref('')
 
 function toYmd(value) {
   const raw = String(value || '').slice(0, 10)
@@ -66,29 +81,84 @@ function statusDot(status) {
   return 'bg-amber-400'
 }
 
+function itemTone(item) {
+  return item.source === 'visit' ? calendarEventKindClass(item.kind) : statusTone(item.status)
+}
+
+function itemDot(item) {
+  return item.source === 'visit' ? calendarEventKindDot(item.kind) : statusDot(item.status)
+}
+
+function visitItem(v) {
+  const kind = normalizeCalendarEventKind(v.kind)
+  return {
+    source: 'visit',
+    id: `visit-${v.id}`,
+    visitId: v.id,
+    name: v.title,
+    customerName: v.customerName,
+    calendarKind: calendarEventKindLabel[kind] || 'Jadwal',
+    kind,
+    date: toYmd(v.date),
+    notes: v.notes,
+    customOrderId: v.customOrderId,
+    productId: v.productId
+  }
+}
+
+function projectItem(p, event) {
+  return {
+    source: 'project',
+    id: `project-${p.id}`,
+    projectId: p.id,
+    name: p.name,
+    customerName: p.customerName,
+    calendarKind: event.kind,
+    status: p.status,
+    date: event.date
+  }
+}
+
 const visibleProjects = computed(() =>
   (products.value || []).filter((p) => {
-    if (statusFilter.value && normalizeProductStatus(p.status) !== statusFilter.value) return false
+    if (statusFilter.value && statusFilter.value !== 'visit' && normalizeProductStatus(p.status) !== statusFilter.value) {
+      return false
+    }
     return true
   })
 )
 
-const unscheduled = computed(() => visibleProjects.value.filter((p) => !projectEvent(p)))
+const visibleVisits = computed(() => {
+  if (statusFilter.value && statusFilter.value !== 'visit') return []
+  return (visits.value || []).map(visitItem).filter((v) => v.date)
+})
+
+const unscheduled = computed(() =>
+  statusFilter.value === 'visit' ? [] : visibleProjects.value.filter((p) => !projectEvent(p))
+)
 
 const eventsByDate = computed(() => {
   const { year, month } = cursor.value
   const monthStart = ymd(year, month, 1)
   const monthEnd = ymd(year, month, new Date(year, month + 1, 0).getDate())
   const map = {}
-  const seen = new Set()
-  for (const p of visibleProjects.value) {
-    const event = projectEvent(p)
-    if (!event) continue
-    if (event.date < monthStart || event.date > monthEnd) continue
-    if (seen.has(p.id)) continue
-    seen.add(p.id)
-    if (!map[event.date]) map[event.date] = []
-    map[event.date].push({ ...p, calendarKind: event.kind })
+  function add(item) {
+    if (!item.date || item.date < monthStart || item.date > monthEnd) return
+    if (!map[item.date]) map[item.date] = []
+    map[item.date].push(item)
+  }
+  if (statusFilter.value !== 'visit') {
+    for (const p of visibleProjects.value) {
+      const event = projectEvent(p)
+      if (event) add(projectItem(p, event))
+    }
+  }
+  for (const v of visibleVisits.value) add(v)
+  for (const list of Object.values(map)) {
+    list.sort((a, b) => {
+      if (a.source !== b.source) return a.source === 'visit' ? -1 : 1
+      return String(a.name).localeCompare(String(b.name), 'id')
+    })
   }
   return map
 })
@@ -118,14 +188,14 @@ const monthCells = computed(() => {
   return cells
 })
 
-const selectedProjects = computed(() => eventsByDate.value[selectedDate.value] || [])
+const selectedItems = computed(() => eventsByDate.value[selectedDate.value] || [])
 
 const monthLabel = computed(() => `${MONTHS_LONG[cursor.value.month]} ${cursor.value.year}`)
 
 const monthCount = computed(() => {
   const ids = new Set()
   for (const list of Object.values(eventsByDate.value)) {
-    for (const p of list) ids.add(p.id)
+    for (const item of list) ids.add(item.id)
   }
   return ids.size
 })
@@ -146,6 +216,100 @@ function goToday() {
 function selectDay(date) {
   if (date) selectedDate.value = date
 }
+
+function openAdd(date = selectedDate.value) {
+  editing.value = null
+  form.value = {
+    date: date || today,
+    kind: 'survey',
+    customerName: '',
+    title: '',
+    notes: ''
+  }
+  errorMsg.value = ''
+  showForm.value = true
+}
+
+function openEdit(item) {
+  if (item.source !== 'visit') return
+  editing.value = item
+  form.value = {
+    date: item.date,
+    kind: item.kind || 'survey',
+    customerName: item.customerName || '',
+    title: item.name || '',
+    notes: item.notes || ''
+  }
+  errorMsg.value = ''
+  showForm.value = true
+}
+
+async function saveVisit() {
+  errorMsg.value = ''
+  saving.value = true
+  try {
+    if (editing.value) {
+      await $fetch(`/api/calendar-events/${editing.value.visitId}`, { method: 'PUT', body: form.value })
+    } else {
+      await $fetch('/api/calendar-events', { method: 'POST', body: form.value })
+    }
+    selectedDate.value = form.value.date
+    showForm.value = false
+    await refreshVisits()
+    useToast().success(editing.value ? 'Jadwal diperbarui.' : 'Jadwal tersimpan.')
+  } catch (e) {
+    errorMsg.value = e.data?.statusMessage || 'Gagal menyimpan jadwal'
+  } finally {
+    saving.value = false
+  }
+}
+
+async function removeVisit() {
+  if (!editing.value) return
+  if (!(await useConfirm().confirm(`Hapus jadwal "${editing.value.name}"?`))) return
+  acting.value = 'delete'
+  try {
+    await $fetch(`/api/calendar-events/${editing.value.visitId}`, { method: 'DELETE' })
+    showForm.value = false
+    await refreshVisits()
+    useToast().success('Jadwal dihapus.')
+  } catch (e) {
+    errorMsg.value = e.data?.statusMessage || 'Gagal menghapus'
+  } finally {
+    acting.value = ''
+  }
+}
+
+async function createRabFromVisit() {
+  if (!editing.value) return
+  if (!String(form.value.customerName || '').trim()) {
+    errorMsg.value = 'Isi nama pelanggan dulu sebelum buat RAB'
+    return
+  }
+  acting.value = 'rab'
+  errorMsg.value = ''
+  try {
+    if (editing.value.name !== form.value.title || editing.value.customerName !== form.value.customerName || editing.value.notes !== form.value.notes || editing.value.date !== form.value.date || editing.value.kind !== form.value.kind) {
+      await $fetch(`/api/calendar-events/${editing.value.visitId}`, { method: 'PUT', body: form.value })
+    }
+    const created = await $fetch(`/api/calendar-events/${editing.value.visitId}/rab`, {
+      method: 'POST',
+      body: {
+        customerName: form.value.customerName,
+        title: form.value.title,
+        notes: form.value.notes
+      }
+    })
+    await refreshVisits()
+    showForm.value = false
+    useToast().success('RAB draft dibuat dari jadwal ini.')
+    await navigateTo(`/rab/${created.rab.id}`)
+  } catch (e) {
+    errorMsg.value = e.data?.statusMessage || 'Gagal membuat RAB'
+  } finally {
+    acting.value = ''
+  }
+}
 </script>
 
 <template>
@@ -153,7 +317,9 @@ function selectDay(date) {
     <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div>
         <h1 class="text-xl font-bold">Kalender</h1>
-        <p class="text-xs text-ink-500 mt-0.5">Jadwal proyek pemasangan.</p>
+        <p class="text-xs text-ink-500 mt-0.5">
+          Jadwal cek lokasi dan meeting sebelum RAB, plus tanggal proyek.
+        </p>
       </div>
       <div class="flex gap-1 overflow-x-auto no-scrollbar">
         <button
@@ -163,6 +329,14 @@ function selectDay(date) {
           @click="statusFilter = ''"
         >
           Semua
+        </button>
+        <button
+          type="button"
+          class="shrink-0 h-9 px-3 rounded-full text-xs font-semibold border"
+          :class="statusFilter === 'visit' ? 'bg-orange-600 text-white border-orange-600' : 'bg-white text-ink-600 border-ink-200'"
+          @click="statusFilter = 'visit'"
+        >
+          Jadwal
         </button>
         <button
           type="button"
@@ -207,7 +381,7 @@ function selectDay(date) {
           </button>
           <div class="flex-1 text-center min-w-0">
             <div class="font-semibold leading-tight">{{ monthLabel }}</div>
-            <div class="text-[11px] text-ink-400 mt-0.5">{{ monthCount }} proyek</div>
+            <div class="text-[11px] text-ink-400 mt-0.5">{{ monthCount }} jadwal</div>
           </div>
           <button type="button" class="btn-secondary px-2.5" aria-label="Bulan berikutnya" @click="shiftMonth(1)">
             <ChevronRightIcon class="w-4 h-4" />
@@ -264,12 +438,12 @@ function selectDay(date) {
 
               <div class="hidden sm:flex flex-col gap-0.5 min-h-0">
                 <span
-                  v-for="p in cell.items.slice(0, 3)"
-                  :key="p.id"
+                  v-for="item in cell.items.slice(0, 3)"
+                  :key="item.id"
                   class="block truncate rounded px-1 py-0.5 text-[11px] leading-snug font-medium"
-                  :class="statusTone(p.status)"
+                  :class="itemTone(item)"
                 >
-                  {{ p.name }}
+                  {{ item.name }}
                 </span>
                 <span v-if="cell.items.length > 3" class="text-[10px] text-ink-400 px-1">
                   +{{ cell.items.length - 3 }}
@@ -278,10 +452,10 @@ function selectDay(date) {
 
               <div v-if="cell.items.length" class="sm:hidden flex gap-0.5 mt-auto pb-0.5">
                 <span
-                  v-for="p in cell.items.slice(0, 3)"
-                  :key="p.id"
+                  v-for="item in cell.items.slice(0, 3)"
+                  :key="item.id"
                   class="w-1.5 h-1.5 rounded-full"
-                  :class="statusDot(p.status)"
+                  :class="itemDot(item)"
                 />
               </div>
             </button>
@@ -295,36 +469,57 @@ function selectDay(date) {
             <div>
               <div class="panel-title !normal-case !tracking-normal">{{ formatDate(selectedDate) }}</div>
               <div class="text-[11px] text-ink-400 mt-0.5">
-                {{ selectedProjects.length ? selectedProjects.length + ' proyek' : 'Tidak ada proyek' }}
+                {{ selectedItems.length ? selectedItems.length + ' jadwal' : 'Tidak ada jadwal' }}
               </div>
             </div>
+            <button type="button" class="btn-secondary !h-8 !min-h-8 px-2.5 text-xs" @click="openAdd(selectedDate)">
+              <PlusIcon class="w-3.5 h-3.5" />Tambah
+            </button>
           </div>
-          <div v-if="selectedProjects.length" class="divide-y divide-ink-100">
-            <NuxtLink
-              v-for="p in selectedProjects"
-              :key="p.id"
-              :to="`/projects/${p.id}`"
-              class="flex items-start gap-3 px-4 py-3 hover:bg-ink-50"
-            >
-              <span class="mt-1.5 w-2 h-2 rounded-full shrink-0" :class="statusDot(p.status)" />
-              <div class="min-w-0 flex-1">
-                <div class="font-medium text-sm break-words leading-snug">{{ p.name }}</div>
-                <div class="text-xs text-ink-500 mt-0.5">
-                  {{ p.calendarKind }}{{ p.customerName ? ` · ${p.customerName}` : '' }}
+          <div v-if="selectedItems.length" class="divide-y divide-ink-100">
+            <template v-for="item in selectedItems" :key="item.id">
+              <NuxtLink
+                v-if="item.source === 'project'"
+                :to="`/projects/${item.projectId}`"
+                class="flex items-start gap-3 px-4 py-3 hover:bg-ink-50 w-full text-left"
+              >
+                <span class="mt-1.5 w-2 h-2 rounded-full shrink-0" :class="itemDot(item)" />
+                <div class="min-w-0 flex-1">
+                  <div class="font-medium text-sm break-words leading-snug">{{ item.name }}</div>
+                  <div class="text-xs text-ink-500 mt-0.5">
+                    {{ item.calendarKind }}{{ item.customerName ? ` · ${item.customerName}` : '' }}
+                  </div>
                 </div>
-              </div>
-              <span class="badge shrink-0" :class="productStatusClass(p.status)">
-                {{ productStatusLabel[p.status] || p.status }}
-              </span>
-            </NuxtLink>
+                <span class="badge shrink-0" :class="productStatusClass(item.status)">
+                  {{ productStatusLabel[item.status] || item.status }}
+                </span>
+              </NuxtLink>
+              <button
+                v-else
+                type="button"
+                class="flex items-start gap-3 px-4 py-3 hover:bg-ink-50 w-full text-left"
+                @click="openEdit(item)"
+              >
+                <span class="mt-1.5 w-2 h-2 rounded-full shrink-0" :class="itemDot(item)" />
+                <div class="min-w-0 flex-1">
+                  <div class="font-medium text-sm break-words leading-snug">{{ item.name }}</div>
+                  <div class="text-xs text-ink-500 mt-0.5">
+                    {{ item.calendarKind }}{{ item.customerName ? ` · ${item.customerName}` : '' }}
+                  </div>
+                </div>
+                <span class="badge shrink-0" :class="calendarEventKindClass(item.kind)">
+                  {{ item.customOrderId ? 'RAB' : item.calendarKind }}
+                </span>
+              </button>
+            </template>
           </div>
-          <p v-else class="px-4 py-8 text-sm text-ink-400 text-center">Pilih tanggal di kalender.</p>
+          <p v-else class="px-4 py-8 text-sm text-ink-400 text-center">Belum ada jadwal di tanggal ini.</p>
         </div>
 
         <div v-if="unscheduled.length" class="panel overflow-hidden">
           <div class="panel-header">
             <div>
-              <div class="panel-title">Belum dijadwalkan</div>
+              <div class="panel-title">Proyek belum dijadwalkan</div>
               <div class="text-[11px] text-ink-400 mt-0.5">{{ unscheduled.length }} proyek</div>
             </div>
           </div>
@@ -344,5 +539,63 @@ function selectDay(date) {
         </div>
       </div>
     </div>
+
+    <AppModal :title="editing ? 'Ubah jadwal' : 'Tambah jadwal'" v-if="showForm" @close="showForm = false">
+      <form class="space-y-3" @submit.prevent="saveVisit">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="label">Tanggal</label>
+            <input v-model="form.date" type="date" class="input" required />
+          </div>
+          <div>
+            <label class="label">Jenis</label>
+            <select v-model="form.kind" class="input">
+              <option v-for="k in CALENDAR_EVENT_KINDS" :key="k" :value="k">{{ calendarEventKindLabel[k] }}</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="label">Nama pelanggan</label>
+          <input v-model="form.customerName" class="input" placeholder="opsional, wajib jika buat RAB" />
+        </div>
+        <div>
+          <label class="label">Judul</label>
+          <input v-model="form.title" class="input" required placeholder="bebas, mis. survey rumah Pak Budi" />
+        </div>
+        <div>
+          <label class="label">Catatan</label>
+          <textarea v-model="form.notes" class="input min-h-[4.5rem]" placeholder="alamat, yang perlu dicek, jam, dll." />
+        </div>
+        <p v-if="errorMsg" class="text-sm text-red-600">{{ errorMsg }}</p>
+        <div class="flex flex-wrap justify-end gap-2 pt-1">
+          <button v-if="editing" type="button" class="btn-action-danger mr-auto" :disabled="!!acting" @click="removeVisit">
+            <TrashIcon class="w-4 h-4" />Hapus
+          </button>
+          <button type="button" class="btn-secondary" @click="showForm = false">
+            <XMarkIcon class="w-4 h-4" />Batal
+          </button>
+          <button
+            v-if="editing?.customOrderId"
+            type="button"
+            class="btn-secondary"
+            @click="navigateTo(`/rab/${editing.customOrderId}`)"
+          >
+            Buka RAB
+          </button>
+          <button
+            v-else-if="editing"
+            type="button"
+            class="btn-secondary"
+            :disabled="!!acting || saving"
+            @click="createRabFromVisit"
+          >
+            {{ acting === 'rab' ? 'Membuat…' : 'Buat RAB' }}
+          </button>
+          <button type="submit" class="btn-primary" :disabled="saving || !!acting">
+            <CheckIcon class="w-4 h-4" />{{ saving ? 'Menyimpan…' : 'Simpan' }}
+          </button>
+        </div>
+      </form>
+    </AppModal>
   </div>
 </template>

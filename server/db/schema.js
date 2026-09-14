@@ -390,6 +390,25 @@ export const customOrderLines = pgTable(
   })
 )
 
+// Jadwal mandiri di kalender (cek lokasi, meeting, dll.) sebelum RAB/proyek ada.
+export const calendarEvents = pgTable(
+  'calendar_events',
+  {
+    id: serial('id').primaryKey(),
+    date: date('date').notNull(),
+    kind: text('kind').notNull().default('survey'),
+    title: text('title').notNull(),
+    customerName: text('customer_name'),
+    notes: text('notes'),
+    customOrderId: integer('custom_order_id').references(() => customOrders.id, { onDelete: 'set null' }),
+    productId: integer('product_id').references(() => products.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at').notNull().defaultNow()
+  },
+  (t) => ({
+    dateIdx: pgIndex('calendar_events_date_idx').on(t.date)
+  })
+)
+
 // Qty aktual baris RAB di proyek (boleh lebih kecil / 0). Penawaran RAB tidak diubah.
 export const projectRabAdjustments = pgTable(
   'project_rab_adjustments',
