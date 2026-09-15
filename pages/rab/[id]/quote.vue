@@ -92,28 +92,28 @@ async function copyShareUrl() {
 
 <template>
   <div class="min-h-screen bg-ink-100 print:bg-white">
-    <div class="no-print sticky top-0 z-10 flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-4 sm:py-3 bg-ink-900 text-ink-100 print:hidden">
-      <NuxtLink :to="`/rab/${route.params.id}`" class="inline-flex items-center gap-1 text-sm hover:text-white">
-        <ArrowLeftIcon class="w-4 h-4" /> RAB
-      </NuxtLink>
-      <div class="flex flex-wrap items-center gap-2">
-        <QuoteStyleToggle v-model="quoteStyle" />
-        <button class="btn-secondary !text-ink-800" type="button" @click="printQuote">
-          <PrinterIcon class="w-4 h-4" />Cetak
-        </button>
-        <button
-          class="btn-secondary !text-ink-800"
-          type="button"
-          :disabled="pdfBusy || !quote"
-          @click="downloadPdf(`/api/custom-orders/${route.params.id}/quote/pdf${quoteStyle === 'resmi' ? '?tampilan=resmi' : ''}`, `${quote?.quoteNumber || 'penawaran'}.pdf`)"
-        >
-          <ArrowDownTrayIcon class="w-4 h-4" />{{ pdfBusy ? 'Mengunduh…' : 'PDF' }}
-        </button>
-        <button class="btn-primary" type="button" :disabled="shareBusy || !quote" @click="shareQuote">
-          <ShareIcon class="w-4 h-4" />{{ shareBusy ? 'Membuat…' : 'Bagikan' }}
-        </button>
-      </div>
-    </div>
+    <DocToolbar title="Penawaran">
+      <template #nav>
+        <NuxtLink :to="`/rab/${route.params.id}`" class="inline-flex items-center gap-1 text-sm hover:text-white">
+          <ArrowLeftIcon class="w-4 h-4" /> RAB
+        </NuxtLink>
+      </template>
+      <QuoteStyleToggle v-model="quoteStyle" />
+      <button class="btn-secondary !text-ink-800" type="button" @click="printQuote">
+        <PrinterIcon class="w-4 h-4" />Cetak
+      </button>
+      <button
+        class="btn-secondary !text-ink-800"
+        type="button"
+        :disabled="pdfBusy || !quote"
+        @click="downloadPdf(`/api/custom-orders/${route.params.id}/quote/pdf${quoteStyle === 'resmi' ? '?tampilan=resmi' : ''}`, `${quote?.quoteNumber || 'penawaran'}.pdf`)"
+      >
+        <ArrowDownTrayIcon class="w-4 h-4" />{{ pdfBusy ? 'Mengunduh…' : 'PDF' }}
+      </button>
+      <button class="btn-primary" type="button" :disabled="shareBusy || !quote" @click="shareQuote">
+        <ShareIcon class="w-4 h-4" />{{ shareBusy ? 'Membuat…' : 'Bagikan' }}
+      </button>
+    </DocToolbar>
 
     <p v-if="error" class="p-6 text-sm text-red-600">{{ error.data?.statusMessage || 'Penawaran tidak ditemukan' }}</p>
 
