@@ -2,6 +2,7 @@
 import { ArrowPathIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon, ChartBarIcon } from '@heroicons/vue/24/outline'
 import { categoryBadgeProps } from '~/utils/expenseCategory.js'
 
+const { theme } = useTheme()
 const { data, refresh, status } = await useFetch('/api/dashboard')
 
 const monthLabel = computed(() => {
@@ -24,8 +25,9 @@ function signedPct(n) {
 </script>
 
 <template>
-  <div class="space-y-4">
-    <div class="flex items-center justify-between gap-2">
+  <div class="space-y-4" :class="{ 'network-dashboard': theme === 'professional' }">
+    <NetworkingDashboard v-if="theme === 'professional'" :data="data" :month="monthLabel" :loading="status === 'pending'" @refresh="refresh()" />
+    <div v-else class="flex items-center justify-between gap-2">
       <div>
         <h1 class="text-xl font-bold">Dashboard</h1>
         <p class="text-xs text-ink-500">
@@ -41,7 +43,7 @@ function signedPct(n) {
       </div>
     </div>
 
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+    <div v-if="theme !== 'professional'" class="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
       <div class="panel p-3 sm:p-4">
         <div class="text-xs font-semibold uppercase tracking-wide text-ink-500">Penjualan bersih</div>
         <div class="mt-1 text-lg sm:text-2xl font-mono font-semibold text-teal-700">{{ formatIDR(data?.pl?.netRevenue) }}</div>
@@ -82,7 +84,7 @@ function signedPct(n) {
       </div>
     </div>
 
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+    <div class="dashboard-secondary-metrics grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
       <div class="panel p-3">
         <div class="text-[10px] uppercase font-semibold text-ink-400">Omzet kotor</div>
         <div class="font-mono font-semibold">{{ formatIDR(data?.pl?.grossRevenue) }}</div>

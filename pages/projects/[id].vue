@@ -48,6 +48,7 @@ const { data: rabPurchaseStatus, refresh: refreshRabPurchaseStatus } = await use
 
 const info = ref({
   name: product.value?.name,
+  customerName: product.value?.rab?.customerName || product.value?.customerName || '',
   description: product.value?.description,
   jobType: product.value?.jobType || 'install'
 })
@@ -55,13 +56,17 @@ const savingInfo = ref(false)
 const plannedStartDate = ref(product.value?.plannedStartDate || '')
 const actingStatus = ref('')
 const projectPhase = computed(() => normalizeProductStatus(product.value?.status))
+const clientName = computed(() =>
+  String(product.value?.rab?.customerName || product.value?.customerName || '').trim()
+)
 
 watch(
-  () => product.value && `${product.value.name}|${product.value.description}|${product.value.jobType}|${product.value.plannedStartDate}|${product.value.status}`,
+  () => product.value && `${product.value.name}|${product.value.customerName}|${product.value.rab?.customerName}|${product.value.description}|${product.value.jobType}|${product.value.plannedStartDate}|${product.value.status}`,
   () => {
     if (!product.value || savingInfo.value) return
     info.value = {
       name: product.value.name,
+      customerName: product.value.rab?.customerName || product.value.customerName || '',
       description: product.value.description,
       jobType: product.value.jobType || 'install'
     }
@@ -80,12 +85,17 @@ function initials(name) {
 }
 
 async function saveInfo() {
+  if (product.value?.rab && !String(info.value.customerName || '').trim()) {
+    useToast().error('Nama pelanggan wajib karena proyek sudah punya RAB')
+    return
+  }
   savingInfo.value = true
   try {
     await $fetch(`/api/products/${id}`, {
       method: 'PUT',
       body: {
         name: info.value.name,
+        customerName: info.value.customerName,
         description: info.value.description,
         jobType: info.value.jobType
       }
@@ -681,7 +691,7 @@ const tab = computed({
             <div
               class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-accent-500 text-white flex items-center justify-center font-bold text-lg sm:text-xl shrink-0"
             >
-              {{ initials(product.rab?.customerName || product.customerName || product.name) }}
+              {{ initials(clientName || product.name) }}
             </div>
             <div class="min-w-0 flex-1">
               <div class="flex flex-wrap items-center gap-1.5 mb-1">
@@ -700,11 +710,8 @@ const tab = computed({
               <h2 class="text-lg sm:text-2xl font-bold text-white break-words leading-tight">{{ product.name }}</h2>
               <p v-if="product.description" class="mt-1 text-sm text-ink-300 break-words">{{ product.description }}</p>
               <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-300">
-                <span v-if="product.rab" class="inline-flex items-center gap-1.5">
-                  <UserIcon class="w-4 h-4 text-ink-400" />{{ product.rab.customerName }}
-                </span>
-                <span v-else-if="product.customerName" class="inline-flex items-center gap-1.5">
-                  <UserIcon class="w-4 h-4 text-ink-400" />{{ product.customerName }}
+                <span v-if="clientName" class="inline-flex items-center gap-1.5">
+                  <UserIcon class="w-4 h-4 text-ink-400" />{{ clientName }}
                 </span>
                 <span v-if="productPhase === 'waiting' && (plannedStartDate || product.plannedStartDate)" class="inline-flex items-center gap-1.5">
                   <CalendarDaysIcon class="w-4 h-4 text-ink-400" />Rencana {{ formatDate(plannedStartDate || product.plannedStartDate) }}
@@ -871,6 +878,16 @@ const tab = computed({
             <div>
               <label class="label">Nama</label>
               <input v-model="info.name" class="input" required :disabled="!isAdmin" />
+            </div>
+            <div>
+              <label class="label">Pelanggan</label>
+              <input
+                v-model="info.customerName"
+                class="input"
+                :required="Boolean(product.rab)"
+                :disabled="!isAdmin"
+                placeholder="nama klien / toko"
+              />
             </div>
             <JobTypePicker v-model="info.jobType" :disabled="!isAdmin" />
             <div>

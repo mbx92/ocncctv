@@ -1,72 +1,18 @@
 <script setup>
-import {
-  Squares2X2Icon,
-  CircleStackIcon,
-  WrenchScrewdriverIcon,
-  CubeIcon,
-  FolderIcon,
-  CalendarDaysIcon,
-  RectangleStackIcon,
-  ClipboardDocumentListIcon,
-  QueueListIcon,
-  BuildingStorefrontIcon,
-  BanknotesIcon,
-  ShoppingCartIcon,
-  TruckIcon,
-  ChartBarIcon,
-  WalletIcon,
-  Cog6ToothIcon,
-  ChevronDownIcon
-} from '@heroicons/vue/24/outline'
+import { ChevronDownIcon } from '@heroicons/vue/24/outline'
+import { navigationGroups } from '~/utils/navigation.js'
 
+const props = defineProps({ query: { type: String, default: '' } })
+defineEmits(['navigate'])
 const route = useRoute()
-
-const groups = [
-  {
-    id: 'utama',
-    label: 'Utama',
-    items: [
-      { to: '/', label: 'Dashboard', icon: Squares2X2Icon },
-      { to: '/calendar', label: 'Kalender', icon: CalendarDaysIcon }
-    ]
-  },
-  {
-    id: 'pekerjaan',
-    label: 'Pekerjaan',
-    items: [
-      { to: '/rab', label: 'RAB', icon: ClipboardDocumentListIcon },
-      { to: '/packages', label: 'Paket', icon: RectangleStackIcon },
-      { to: '/projects', label: 'Proyek', icon: FolderIcon },
-      { to: '/sales', label: 'Penjualan', icon: ShoppingCartIcon }
-    ]
-  },
-  {
-    id: 'persediaan',
-    label: 'Persediaan',
-    items: [
-      { to: '/products', label: 'Produk', icon: CubeIcon },
-      { to: '/materials', label: 'Perlengkapan', icon: CircleStackIcon },
-      { to: '/machines', label: 'Peralatan', icon: WrenchScrewdriverIcon },
-      { to: '/jasa', label: 'Jasa', icon: QueueListIcon },
-      { to: '/catalog', label: 'Katalog Supplier', icon: BuildingStorefrontIcon },
-      { to: '/purchases', label: 'Pembelian', icon: TruckIcon }
-    ]
-  },
-  {
-    id: 'keuangan',
-    label: 'Keuangan',
-    items: [
-      { to: '/expenses', label: 'Pengeluaran', icon: BanknotesIcon },
-      { to: '/capital', label: 'Modal Usaha', icon: WalletIcon },
-      { to: '/reports', label: 'Laporan', icon: ChartBarIcon }
-    ]
-  },
-  {
-    id: 'sistem',
-    label: 'Sistem',
-    items: [{ to: '/settings', label: 'Pengaturan', icon: Cog6ToothIcon }]
-  }
-]
+const groups = navigationGroups
+const visibleGroups = computed(() => {
+  const query = props.query.trim().toLocaleLowerCase('id')
+  return groups.map(group => ({
+    ...group,
+    items: group.items.filter(item => !query || `${group.label} ${item.label}`.toLocaleLowerCase('id').includes(query))
+  })).filter(group => group.items.length)
+})
 
 function isActive(to) {
   if (to === '/') return route.path === '/'
@@ -95,34 +41,36 @@ function toggle(id) {
 
 function linkClass(to) {
   return [
-    'flex items-center gap-2.5 pl-4 pr-3 py-2 text-sm border-l-2 transition-colors',
+    'app-nav-link flex items-center gap-2.5 pl-4 pr-3 py-2 text-sm border-l-2 transition-colors',
     isActive(to)
-      ? '!border-accent-500 !text-white bg-ink-800'
+      ? 'app-nav-link--active !border-accent-500 !text-white bg-ink-800'
       : 'border-transparent text-ink-300 hover:text-white hover:bg-ink-800'
   ]
 }
 </script>
 
 <template>
-  <nav class="flex flex-col py-1">
-    <section v-for="group in groups" :key="group.id" class="mb-0.5">
+  <nav class="app-nav flex flex-col py-1">
+    <section v-for="group in visibleGroups" :key="group.id" class="mb-0.5">
       <button
         type="button"
-        class="w-full flex items-center gap-2 px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-ink-500 hover:text-ink-200"
+        class="app-nav-group w-full flex items-center gap-2 px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-ink-500 hover:text-ink-200"
+        :aria-expanded="Boolean(query.trim()) || expanded[group.id]"
         @click="toggle(group.id)"
       >
         <span class="flex-1 text-left truncate">{{ group.label }}</span>
         <ChevronDownIcon
           class="w-3.5 h-3.5 shrink-0 transition-transform duration-150"
-          :class="expanded[group.id] ? '' : '-rotate-90'"
+          :class="query.trim() || expanded[group.id] ? '' : '-rotate-90'"
         />
       </button>
-      <div v-show="expanded[group.id]" class="flex flex-col pb-1">
-        <NuxtLink v-for="item in group.items" :key="item.to" :to="item.to" :class="linkClass(item.to)">
+      <div v-show="query.trim() || expanded[group.id]" class="flex flex-col pb-1">
+        <NuxtLink v-for="item in group.items" :key="item.to" :to="item.to" :class="linkClass(item.to)" @click="$emit('navigate')">
           <component :is="item.icon" class="w-5 h-5 shrink-0" />
           <span class="truncate">{{ item.label }}</span>
         </NuxtLink>
       </div>
     </section>
+    <p v-if="!visibleGroups.length" class="px-3 py-4 text-sm text-ink-400" role="status">Menu tidak ditemukan.</p>
   </nav>
 </template>

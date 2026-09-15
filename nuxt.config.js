@@ -2,7 +2,7 @@ export default defineNuxtConfig({
   compatibilityDate: '2024-11-01',
   devtools: { enabled: false },
   modules: ['@nuxtjs/tailwindcss', '@vite-pwa/nuxt'],
-  css: ['~/assets/css/main.css'],
+  css: ['~/assets/css/main.css', '~/assets/css/networking.css'],
   devServer: {
     host: '0.0.0.0',
     port: 3000

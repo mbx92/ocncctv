@@ -42,7 +42,7 @@ function onPageSize(e) {
 <template>
   <div
     v-if="total > 0"
-    class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 px-3 py-2.5 border-t border-ink-200"
+    class="app-pagination flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 px-3 py-2.5 border-t border-ink-200"
   >
     <div class="flex items-center gap-2 min-w-0 order-2 sm:order-1">
       <p class="text-xs text-ink-500 tabular-nums whitespace-nowrap">

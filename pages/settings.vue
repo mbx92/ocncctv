@@ -37,6 +37,7 @@ const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
 const tabs = computed(() => {
   const list = [
     { id: 'umum', label: 'Umum' },
+    { id: 'tampilan', label: 'Tampilan' },
     { id: 'integrasi', label: 'Integrasi' },
     { id: 'invoice', label: 'Dokumen' },
     { id: 'hpp', label: 'Harga' }
@@ -218,20 +219,23 @@ async function confirmErpSync(projectIds) {
 <template>
   <div class="space-y-4" :class="tab === 'user' || tab === 'audit' ? 'max-w-5xl' : 'max-w-3xl'">
     <h1 class="text-xl font-bold">Pengaturan</h1>
-    <p v-if="!isAdmin" class="text-xs text-ink-500">Read-only — hanya admin yang bisa mengubah pengaturan.</p>
+    <p v-if="!isAdmin && tab !== 'tampilan'" class="text-xs text-ink-500">Read-only — hanya admin yang bisa mengubah pengaturan usaha. Tema dapat diubah di tab Tampilan.</p>
 
-    <div class="flex gap-1 overflow-x-auto no-scrollbar border-b border-ink-200 -mb-px">
+    <div class="settings-tabs flex gap-1 overflow-x-auto no-scrollbar border-b border-ink-200 -mb-px">
       <button
         v-for="t in tabs"
         :key="t.id"
         type="button"
         class="shrink-0 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors"
         :class="tab === t.id ? 'border-accent-500 text-accent-700' : 'border-transparent text-ink-500 hover:text-ink-800'"
+        :aria-pressed="tab === t.id"
         @click="tab = t.id"
       >
         {{ t.label }}
       </button>
     </div>
+
+    <SettingsAppearance v-if="tab === 'tampilan'" />
 
     <form v-if="formTabs.has(tab)" class="panel p-4 space-y-4" @submit.prevent="save">
       <template v-if="tab === 'umum'">

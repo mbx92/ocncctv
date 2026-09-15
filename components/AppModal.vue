@@ -93,7 +93,7 @@ function onFocusIn(e) {
 <template>
   <Teleport to="body">
     <div
-      class="fixed flex items-end sm:items-center justify-center overflow-hidden overscroll-none right-0 bottom-0 sm:inset-0"
+      class="app-overlay fixed flex items-end sm:items-center justify-center overflow-hidden overscroll-none right-0 bottom-0 sm:inset-0"
       :class="zClass"
       :style="overlayBoxStyle"
     >

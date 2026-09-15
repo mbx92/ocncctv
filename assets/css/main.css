@@ -253,3 +253,79 @@
     @apply inline-block px-2 py-0.5 rounded text-xs font-semibold;
   }
 }
+
+/* Networking component treatments retain utility overrides and print styles. */
+@layer components {
+  @media screen {
+    :where(html[data-theme='professional'] :is(.app-shell, .app-overlay, .app-login)) .panel {
+      border-color: var(--workspace-border);
+      border-radius: 12px;
+      box-shadow: 0 3px 12px rgb(17 39 57 / 4%);
+    }
+
+    :where(html[data-theme='professional'] :is(.app-shell, .app-overlay, .app-login)) .panel-header {
+      padding: 18px 22px;
+      border-color: var(--workspace-border);
+    }
+
+    :where(html[data-theme='professional'] :is(.app-shell, .app-overlay, .app-login)) .panel-title {
+      color: var(--workspace-text);
+      text-transform: none;
+      letter-spacing: normal;
+    }
+
+    :where(html[data-theme='professional'] :is(.app-shell, .app-overlay, .app-login)) :is(.btn, .btn-primary, .btn-secondary, .btn-danger, .input, .input-num, .input-display) {
+      border-radius: 8px;
+    }
+
+    :where(html[data-theme='professional'] :is(.app-shell, .app-overlay, .app-login)) .btn-primary {
+      background-color: var(--workspace-accent);
+    }
+
+    :where(html[data-theme='professional'] :is(.app-shell, .app-overlay, .app-login)) .btn-primary:hover {
+      background-color: #294a6a;
+    }
+
+    :where(html[data-theme='professional'] :is(.app-shell, .app-overlay, .app-login)) .btn-secondary {
+      border-color: #cbd4df;
+      color: var(--workspace-text);
+    }
+
+    :where(html[data-theme='professional'] :is(.app-shell, .app-overlay, .app-login)) :is(.input, .input-num, .input-display) {
+      border-color: #cbd4df;
+    }
+
+    :where(html[data-theme='professional'] :is(.app-shell, .app-overlay, .app-login)) :is(.input, .input-num):focus {
+      border-color: #426a91;
+      --tw-ring-color: rgb(66 106 145 / 20%);
+    }
+
+    :where(html[data-theme='professional'] :is(.app-shell, .app-overlay, .app-login)) .label {
+      color: var(--workspace-muted);
+      text-transform: none;
+      letter-spacing: normal;
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+
+    :where(html[data-theme='professional'] :is(.app-shell, .app-overlay)) .table-std thead th {
+      background: #f8fafc;
+      color: var(--workspace-muted);
+      padding-top: 12px;
+      padding-bottom: 12px;
+      text-transform: none;
+      letter-spacing: normal;
+      border-color: var(--workspace-border);
+    }
+
+    :where(html[data-theme='professional'] :is(.app-shell, .app-overlay)) .table-std tbody td {
+      padding-top: 12px;
+      padding-bottom: 12px;
+      border-color: #edf1f6;
+    }
+
+    :where(html[data-theme='professional'] :is(.app-shell, .app-overlay)) .table-std tbody tr:hover {
+      background-color: #f8fafc;
+    }
+  }
+}

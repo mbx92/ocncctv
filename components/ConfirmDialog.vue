@@ -34,7 +34,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 
 <template>
   <Teleport to="body">
-    <div v-if="state.visible" class="fixed inset-0 z-[200] flex items-center justify-center p-4">
+    <div v-if="state.visible" class="app-overlay fixed inset-0 z-[200] flex items-center justify-center p-4">
       <div class="absolute inset-0 bg-ink-950/50" @click="respond(false)"></div>
       <div class="relative panel w-full max-w-sm">
         <div class="panel-header">

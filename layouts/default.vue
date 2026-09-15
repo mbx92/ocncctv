@@ -1,6 +1,7 @@
 <script setup>
 import { UserIcon, Bars3Icon, XMarkIcon, ArrowRightStartOnRectangleIcon } from '@heroicons/vue/24/outline'
 
+const { theme } = useTheme()
 const authUser = useState('authUser')
 const isAdmin = computed(() => authUser.value?.role === 'admin')
 const roleLabel = { admin: 'Admin', staff: 'Staff' }
@@ -23,9 +24,10 @@ async function logout() {
 </script>
 
 <template>
-  <div class="min-h-screen md:flex">
+  <NetworkingWorkspace v-if="theme === 'professional'"><slot /></NetworkingWorkspace>
+  <div v-else class="app-shell min-h-screen md:flex">
     <header
-      class="md:hidden sticky top-0 z-40 flex items-center gap-2 px-3 pt-safe min-h-topbar-safe bg-ink-900 text-ink-100 border-b border-ink-700"
+      class="app-topbar md:hidden sticky top-0 z-40 flex items-center gap-2 px-3 pt-safe min-h-topbar-safe bg-ink-900 text-ink-100 border-b border-ink-700"
     >
       <button class="p-2 -ml-2 rounded hover:bg-ink-800" aria-label="Buka menu" @click="drawerOpen = true">
         <Bars3Icon class="w-6 h-6" />
@@ -38,8 +40,8 @@ async function logout() {
     <Teleport to="body">
       <div v-if="drawerOpen" class="md:hidden fixed inset-0 z-50 flex">
         <div class="absolute inset-0 bg-ink-950/60" @click="drawerOpen = false"></div>
-        <aside class="relative bg-ink-900 text-ink-100 w-72 max-w-[85vw] h-full flex flex-col pt-safe pb-safe">
-          <div class="px-4 py-4 flex items-center gap-2 border-b border-ink-700">
+        <aside class="app-sidebar relative bg-ink-900 text-ink-100 w-72 max-w-[85vw] h-full flex flex-col pt-safe pb-safe">
+          <div class="app-brand px-4 py-4 flex items-center gap-2 border-b border-ink-700">
             <img src="/logo-mark.png" alt="" class="w-6 h-6 object-contain" />
             <span class="font-bold tracking-wide">OCN</span>
             <button class="ml-auto p-1 rounded hover:bg-ink-800" aria-label="Tutup menu" @click="drawerOpen = false">
@@ -49,7 +51,7 @@ async function logout() {
           <div class="flex-1 overflow-y-auto scrollbar-sidebar">
             <AppSidebarNav />
           </div>
-          <div class="border-t border-ink-700">
+          <div class="app-account border-t border-ink-700">
             <div v-if="authUser" class="flex items-center gap-3 px-4 py-3">
               <div
                 class="w-9 h-9 shrink-0 rounded-full bg-ink-800 border border-ink-700 flex items-center justify-center text-ink-300"
@@ -79,8 +81,8 @@ async function logout() {
       </div>
     </Teleport>
 
-    <aside class="hidden md:flex bg-ink-900 text-ink-100 w-56 h-screen sticky top-0 shrink-0 flex-col pt-safe pb-safe">
-      <div class="px-4 py-4 flex items-center gap-2 border-b border-ink-700">
+    <aside class="app-sidebar app-sidebar--desktop hidden md:flex bg-ink-900 text-ink-100 w-56 h-screen sticky top-0 shrink-0 flex-col pt-safe pb-safe">
+      <div class="app-brand px-4 py-4 flex items-center gap-2 border-b border-ink-700">
         <img src="/logo-mark.png" alt="" class="w-6 h-6 object-contain" />
         <span class="font-bold tracking-wide">OCN</span>
         <span class="text-[10px] uppercase tracking-widest text-ink-400 ml-auto">Workshop</span>
@@ -88,7 +90,7 @@ async function logout() {
       <div class="flex-1 overflow-y-auto min-h-0 scrollbar-sidebar">
         <AppSidebarNav />
       </div>
-      <div class="shrink-0 bg-ink-900 border-t border-ink-700">
+      <div class="app-account shrink-0 bg-ink-900 border-t border-ink-700">
         <div v-if="authUser" class="flex items-center gap-2 px-3 py-3">
           <div
             class="w-9 h-9 shrink-0 rounded-full bg-ink-800 border border-ink-700 flex items-center justify-center text-ink-300"
@@ -115,7 +117,7 @@ async function logout() {
       </div>
     </aside>
 
-    <main class="flex-1 w-full min-w-0 p-3 sm:p-4 md:p-6 pb-safe">
+    <main class="app-main flex-1 w-full min-w-0 p-3 sm:p-4 md:p-6 pb-safe">
       <slot />
     </main>
   </div>

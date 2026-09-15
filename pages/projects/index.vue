@@ -81,7 +81,7 @@ const showForm = ref(false)
 const form = ref({})
 const errorMsg = ref('')
 function openAdd() {
-  form.value = { name: '', description: '', jobType: 'install' }
+  form.value = { name: '', customerName: '', description: '', jobType: 'install' }
   errorMsg.value = ''
   showForm.value = true
 }
@@ -162,8 +162,9 @@ async function remove(p) {
                 <NuxtLink :to="`/projects/${p.id}`" class="font-medium text-ink-900 hover:text-accent-600">
                   {{ p.name }}
                 </NuxtLink>
-                <div v-if="p.customerName || p.description" class="text-xs text-ink-400">
-                  {{ p.customerName || p.description }}
+                <div v-if="p.customerName" class="text-xs text-ink-500">{{ p.customerName }}</div>
+                <div v-if="p.description && p.description !== p.customerName" class="text-xs text-ink-400">
+                  {{ p.description }}
                 </div>
                 <div v-if="p.erpProjectId" class="text-[10px] uppercase tracking-wide text-ink-400 mt-0.5">Dari ERP</div>
                 <div v-if="p.jobType" class="mt-0.5">
@@ -219,6 +220,7 @@ async function remove(p) {
           <NuxtLink :to="`/projects/${p.id}`" class="font-medium break-words hover:text-accent-600">{{ p.name }}</NuxtLink>
           <span class="badge shrink-0" :class="productStatusClass(p.status)">{{ statusLabel[p.status] }}</span>
         </div>
+        <div v-if="p.customerName" class="text-xs text-ink-500">{{ p.customerName }}</div>
         <div v-if="p.jobType" class="text-xs">
           <span class="badge" :class="jobTypeClass(p.jobType)">{{ jobTypeLabel[p.jobType] }}</span>
         </div>
@@ -259,6 +261,10 @@ async function remove(p) {
         <div>
           <label class="label">Nama</label>
           <input v-model="form.name" class="input" required placeholder="Pemasangan 4 kamera rumah…" />
+        </div>
+        <div>
+          <label class="label">Pelanggan</label>
+          <input v-model="form.customerName" class="input" placeholder="nama klien / toko" />
         </div>
         <JobTypePicker v-model="form.jobType" />
         <div>
