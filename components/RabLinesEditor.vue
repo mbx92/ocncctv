@@ -2,6 +2,7 @@
 import { MagnifyingGlassIcon, PlusIcon, MinusIcon, TrashIcon } from '@heroicons/vue/24/outline'
 import { lineAmount, lineCost, rabLineTypeBadge, rabLineTypeLabel, suggestedSalePrice } from '~/utils/rab.js'
 import { catalogDisplayName } from '~/utils/catalogName.js'
+import { cableRollInfo, formatRollHint } from '~/utils/cableRoll.js'
 
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
@@ -124,24 +125,43 @@ function addCatalogItems(items) {
   for (const item of items) {
     const existing = findCatalogLineIndex(next, item)
     if (existing >= 0) {
+      const roll = cableRollInfo(item)
+      const bump =
+        roll && String(next[existing].unit || '').toLowerCase() === 'meter' ? roll.metersPerRoll : 1
       next[existing] = {
         ...next[existing],
-        quantity: qtyInt(next[existing].quantity) + 1
+        quantity: qtyInt(next[existing].quantity) + bump
       }
     } else {
-      const cost = Number(item.supplierPrice) || 0
-      next.push({
-        lineType: 'catalog',
-        catalogItemId: item.id || null,
-        serviceId: null,
-        packagingId: null,
-        name: catalogDisplayName(item) || item.name,
-        code: item.code || '',
-        unit: item.unit || 'pcs',
-        quantity: 1,
-        costPrice: cost,
-        salePrice: suggestedSalePrice(cost, props.marginPercent, props.priceRounding)
-      })
+      const roll = cableRollInfo(item)
+      if (roll) {
+        next.push({
+          lineType: 'catalog',
+          catalogItemId: item.id || null,
+          serviceId: null,
+          packagingId: null,
+          name: catalogDisplayName(item) || item.name,
+          code: item.code || '',
+          unit: 'meter',
+          quantity: roll.metersPerRoll,
+          costPrice: roll.pricePerMeter,
+          salePrice: suggestedSalePrice(roll.pricePerMeter, props.marginPercent, props.priceRounding)
+        })
+      } else {
+        const cost = Number(item.supplierPrice) || 0
+        next.push({
+          lineType: 'catalog',
+          catalogItemId: item.id || null,
+          serviceId: null,
+          packagingId: null,
+          name: catalogDisplayName(item) || item.name,
+          code: item.code || '',
+          unit: item.unit || 'pcs',
+          quantity: 1,
+          costPrice: cost,
+          salePrice: suggestedSalePrice(cost, props.marginPercent, props.priceRounding)
+        })
+      }
     }
     added += 1
   }
@@ -229,6 +249,16 @@ function addStockProducts(items) {
   lines.value = next
   showStock.value = false
   if (added) useToast().success(added === 1 ? '1 produk ditambahkan.' : `${added} produk ditambahkan.`)
+}
+
+function lineRollHint(line) {
+  if (line?.lineType === 'service') return ''
+  const roll = cableRollInfo(line)
+  if (!roll) return ''
+  if (String(line.unit || '').toLowerCase() === 'meter' || String(line.unit || '').toLowerCase() === 'm') {
+    return formatRollHint(roll.metersPerRoll)
+  }
+  return ''
 }
 
 function toggleServicePicker() {
@@ -357,6 +387,9 @@ const totals = computed(() => {
             <div v-if="line.code" class="text-xs font-mono text-ink-400">{{ line.code }}</div>
             <div v-if="line.lineType === 'product'" class="text-xs text-emerald-700">
               Stok {{ formatNumber(line.stockQuantity ?? 0) }} {{ line.unit || 'pcs' }}
+            </div>
+            <div v-else-if="lineRollHint(line)" class="text-xs text-sky-800 mt-0.5">
+              {{ lineRollHint(line) }} · qty RAB dalam meter
             </div>
           </div>
           <button

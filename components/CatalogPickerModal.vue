@@ -194,9 +194,13 @@ function confirmAdd() {
                 <div class="text-[11px] text-ink-400 mt-0.5">
                   {{ item.sheetLabel }}
                   <span v-if="item.category"> · {{ item.category }}</span>
+                  <span v-if="item.metersPerRoll"> · 1 roll = {{ item.metersPerRoll }} m</span>
                 </div>
               </div>
-              <div class="shrink-0 font-mono text-sm font-semibold">{{ formatIDR(item.supplierPrice) }}</div>
+              <div class="shrink-0 text-right">
+                <div class="font-mono text-sm font-semibold">{{ formatIDR(item.supplierPrice) }}</div>
+                <div v-if="item.metersPerRoll" class="text-[11px] text-ink-400 font-normal">/roll</div>
+              </div>
             </label>
           </div>
           <div class="hidden md:block overflow-x-auto">
@@ -241,7 +245,12 @@ function confirmAdd() {
                     <span v-if="item.category" class="badge bg-ink-100 text-ink-600">{{ item.category }}</span>
                     <span v-else class="text-ink-300">—</span>
                   </td>
-                  <td class="num font-medium">{{ formatIDR(item.supplierPrice) }}</td>
+                  <td class="num font-medium">
+                    {{ formatIDR(item.supplierPrice) }}
+                    <div v-if="item.metersPerRoll" class="text-[11px] text-ink-400 font-normal">
+                      /roll · {{ item.metersPerRoll }} m
+                    </div>
+                  </td>
                 </tr>
               </tbody>
             </table>

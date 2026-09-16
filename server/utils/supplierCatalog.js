@@ -7,6 +7,20 @@ import {
 } from './supplierCatalogConfig.js'
 import { parseCsv } from './supplierCatalogParse.js'
 import { catalogDisplayName } from './catalogName.js'
+import { cableRollInfo } from './cableRoll.js'
+
+function withCableRoll(item) {
+  const roll = cableRollInfo(item)
+  if (!roll) return item
+  return {
+    ...item,
+    unit: item.unit && item.unit !== 'pcs' ? item.unit : 'roll',
+    contentQty: roll.metersPerRoll,
+    metersPerRoll: roll.metersPerRoll,
+    pricePerMeter: roll.pricePerMeter,
+    purchaseUnit: roll.purchaseUnit
+  }
+}
 
 function catalogConfigFromRuntime() {
   try {
@@ -41,6 +55,7 @@ export function mapStoredCatalogItem(row) {
     name: row.name,
     category: row.category || '',
     unit: String(row.unit || '').trim() || 'pcs',
+    contentQty: row.contentQty == null ? null : Number(row.contentQty) || null,
     supplierPrice: Number(row.supplierPrice) || 0,
     lastPrice: row.lastPrice == null ? null : Number(row.lastPrice),
     lastSyncedAt: row.lastSyncedAt ? new Date(row.lastSyncedAt).toISOString() : null,
@@ -49,7 +64,7 @@ export function mapStoredCatalogItem(row) {
     supplierName: row.supplierName,
     source: 'database'
   }
-  return { ...item, name: catalogDisplayName(item) }
+  return withCableRoll({ ...item, name: catalogDisplayName(item) })
 }
 
 export function mapRemoteCatalogItem(item) {
@@ -60,6 +75,7 @@ export function mapRemoteCatalogItem(item) {
     name: item.name,
     category: item.category || '',
     unit: String(item.unit || '').trim() || 'pcs',
+    contentQty: item.contentQty == null ? null : Number(item.contentQty) || null,
     supplierPrice: Number(item.supplierPrice) || 0,
     lastPrice: null,
     lastSyncedAt: null,
@@ -68,7 +84,7 @@ export function mapRemoteCatalogItem(item) {
     supplierName: item.supplierName,
     source: 'remote'
   }
-  return { ...row, name: catalogDisplayName(row) }
+  return withCableRoll({ ...row, name: catalogDisplayName(row) })
 }
 
 function filterRemoteCatalogItems(items, { q = '', category = '' } = {}) {
@@ -242,6 +258,7 @@ export async function syncSheet(db, sheetKey) {
             name: item.name,
             category: item.category,
             unit: String(item.unit || '').trim() || 'pcs',
+            contentQty: item.contentQty == null ? null : Number(item.contentQty) || null,
             supplierPrice: newPrice,
             lastPrice: newPrice !== currentPrice ? currentPrice : row.lastPrice,
             lastSyncedAt: syncedAt
@@ -258,6 +275,7 @@ export async function syncSheet(db, sheetKey) {
           name: item.name,
           category: item.category,
           unit: String(item.unit || '').trim() || 'pcs',
+          contentQty: item.contentQty == null ? null : Number(item.contentQty) || null,
           supplierPrice: item.supplierPrice,
           lastPrice: null,
           lastSyncedAt: syncedAt

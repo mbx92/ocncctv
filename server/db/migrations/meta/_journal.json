@@ -456,6 +456,13 @@
       "when": 1789600000022,
       "tag": "0064_catalog_sync_notice",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1789600000023,
+      "tag": "0065_cable_roll_meters",
+      "breakpoints": true
     }
   ]
 }

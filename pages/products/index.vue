@@ -34,7 +34,7 @@ const orphanSupplier = computed(() => {
 
 function openAdd() {
   editing.value = null
-  form.value = { name: '', unit: 'pcs', pricePerUnit: 0, stockQuantity: 0, supplier: '' }
+  form.value = { name: '', unit: 'pcs', purchaseUnit: '', unitsPerPurchase: 1, pricePerUnit: 0, stockQuantity: 0, supplier: '' }
   showForm.value = true
 }
 function openEdit(p) {
@@ -117,6 +117,9 @@ async function remove(p) {
           <div class="text-sm font-mono" :class="p.stockQuantity < 10 ? 'text-amber-600 font-semibold' : 'text-ink-500'">
             Stok {{ formatNumber(p.stockQuantity) }} {{ p.unit }}
           </div>
+          <div v-if="p.unitsPerPurchase > 1" class="text-xs text-sky-800">
+            1 {{ p.purchaseUnit || 'roll' }} = {{ formatNumber(p.unitsPerPurchase) }} {{ p.unit }}
+          </div>
           <div class="text-xs text-ink-400">{{ p.supplier || 'tanpa supplier' }}</div>
           <div v-if="isAdmin" class="btn-actions pt-1">
             <button class="btn-action" @click="openEdit(p)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
@@ -166,6 +169,9 @@ async function remove(p) {
               <td class="num">{{ formatIDR(p.pricePerUnit) }}/{{ p.unit }}</td>
               <td class="num" :class="p.stockQuantity < 10 ? 'text-amber-600 font-semibold' : ''">
                 {{ formatNumber(p.stockQuantity) }} {{ p.unit }}
+                <div v-if="p.unitsPerPurchase > 1" class="text-[11px] text-sky-800 font-sans font-normal">
+                  1 {{ p.purchaseUnit || 'roll' }} = {{ formatNumber(p.unitsPerPurchase) }} {{ p.unit }}
+                </div>
               </td>
               <td class="text-ink-500">{{ p.supplier || '-' }}</td>
               <td class="whitespace-nowrap text-right">
@@ -213,16 +219,27 @@ async function remove(p) {
         </div>
         <div class="grid grid-cols-3 gap-3">
           <div>
-            <label class="label">Unit</label>
+            <label class="label">Unit stok</label>
             <input v-model="form.unit" class="input" placeholder="pcs / meter" required />
           </div>
           <div>
-            <label class="label">Harga per unit</label>
+            <label class="label">Harga per unit stok</label>
             <IdrInput v-model="form.pricePerUnit" required />
           </div>
           <div>
             <label class="label">Stok</label>
             <input v-model.number="form.stockQuantity" type="number" min="0" step="1" class="input-num" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="label">Satuan beli</label>
+            <input v-model="form.purchaseUnit" class="input" placeholder="kosongkan jika sama" />
+          </div>
+          <div>
+            <label class="label">Isi per satuan beli</label>
+            <input v-model.number="form.unitsPerPurchase" type="number" min="1" step="1" class="input-num" />
+            <p class="text-[11px] text-ink-400 mt-0.5">Kabel: satuan beli roll, isi 305 meter.</p>
           </div>
         </div>
         <div>

@@ -1,3 +1,5 @@
+import { parseMetersPerRoll } from './cableRoll.js'
+
 function parseCsvLine(line) {
   const fields = []
   let field = ''
@@ -149,12 +151,15 @@ export function parseSheetRows(rows, sheet, supplierName) {
   for (let i = headerIndex + 1; i < rows.length; i++) {
     const parsed = parseDataRow(rows[i], columnMap, codeIdx)
     if (!parsed || parsed.code === '') continue
+    const metersPerRoll = parseMetersPerRoll(parsed)
+    const unit = String(parsed.unit || '').trim() || (metersPerRoll ? 'roll' : 'pcs')
     items.push({
       ref: `${sheetKey}:${parsed.code}`,
       code: parsed.code,
       name: parsed.name,
       category: parsed.category || sheetLabel,
-      unit: String(parsed.unit || '').trim() || 'pcs',
+      unit,
+      contentQty: metersPerRoll,
       supplierPrice: parsed.supplierPrice,
       sheetKey,
       sheetLabel,

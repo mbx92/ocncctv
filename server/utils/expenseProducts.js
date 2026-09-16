@@ -32,7 +32,9 @@ export async function purchaseItemLabelsByExpenseIds(tx, schema, expenseIds) {
       materialName: schema.materials.name,
       materialUnit: schema.materials.unit,
       packagingName: schema.packaging.name,
-      packagingUnit: schema.packaging.unit
+      packagingUnit: schema.packaging.unit,
+      packagingPurchaseUnit: schema.packaging.purchaseUnit,
+      packagingUnitsPerPurchase: schema.packaging.unitsPerPurchase
     })
     .from(schema.supplierPurchaseLines)
     .leftJoin(schema.materials, eq(schema.supplierPurchaseLines.materialId, schema.materials.id))
@@ -43,7 +45,12 @@ export async function purchaseItemLabelsByExpenseIds(tx, schema, expenseIds) {
     const expenseId = expenseByPurchase.get(line.purchaseId)
     if (!expenseId) continue
     const name = line.itemType === 'packaging' ? line.packagingName : line.materialName
-    const unit = line.itemType === 'packaging' ? line.packagingUnit : line.materialUnit
+    const unit =
+      line.itemType === 'packaging'
+        ? Number(line.packagingUnitsPerPurchase) > 1
+          ? line.packagingPurchaseUnit || 'roll'
+          : line.packagingUnit
+        : line.materialUnit
     const label = purchaseItemLabel(name || '(barang dihapus)', line.quantity, unit || '')
     const arr = map.get(expenseId) || []
     arr.push(label)

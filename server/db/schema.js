@@ -97,6 +97,8 @@ export const supplierCatalogItems = pgTable(
     name: text('name').notNull(),
     category: text('category'),
     unit: text('unit').notNull().default('pcs'),
+    // Panjang isi roll (meter). null = bukan kabel roll / belum diketahui.
+    contentQty: integer('content_qty'),
     supplierPrice: integer('supplier_price').notNull().default(0),
     lastPrice: integer('last_price'),
     lastSyncedAt: timestamp('last_synced_at'),
@@ -268,6 +270,10 @@ export const packaging = pgTable('packaging', {
   id: serial('id').primaryKey(),
   name: text('name').notNull(),
   unit: text('unit').notNull().default('pcs'),
+  // Satuan beli ke supplier (mis. roll) jika beda dengan satuan stok (meter).
+  purchaseUnit: text('purchase_unit'),
+  // Isi 1 satuan beli dalam satuan stok. 305 = 1 roll berisi 305 meter.
+  unitsPerPurchase: integer('units_per_purchase').notNull().default(1),
   pricePerUnit: integer('price_per_unit').notNull().default(0),
   stockQuantity: integer('stock_quantity').notNull().default(0),
   supplier: text('supplier'),

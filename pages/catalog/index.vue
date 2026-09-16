@@ -266,6 +266,7 @@ watch(
             </div>
             <div class="shrink-0 text-right pt-0.5">
               <div class="font-mono font-semibold text-sm whitespace-nowrap">{{ formatIDR(item.supplierPrice) }}</div>
+              <div v-if="item.metersPerRoll" class="text-[11px] text-ink-400">/roll · {{ item.metersPerRoll }} m</div>
               <div v-if="priceUp(item) || priceDown(item)" class="text-[11px] mt-0.5 whitespace-nowrap">
                 <span class="text-ink-400 line-through">{{ formatIDR(item.lastPrice) }}</span>
                 <span :class="priceUp(item) ? 'text-red-600' : 'text-teal-600'">
@@ -317,6 +318,9 @@ watch(
                 {{ formatIDR(item.supplierPrice) }}
                 <span v-if="priceUp(item)" class="text-red-600 text-xs font-normal"> ↑</span>
                 <span v-else-if="priceDown(item)" class="text-teal-600 text-xs font-normal"> ↓</span>
+                <div v-if="item.metersPerRoll" class="text-[11px] text-ink-400 font-normal">
+                  /roll · {{ item.metersPerRoll }} m
+                </div>
               </td>
               <td class="text-xs text-ink-500 whitespace-nowrap hidden lg:table-cell">
                 {{ formatDateTime(item.lastSyncedAt) }}

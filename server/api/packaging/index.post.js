@@ -2,21 +2,31 @@ import { useDb, schema } from '../../db/index.js'
 import { requireAdmin } from '../../utils/rbac.js'
 import { logAudit } from '../../utils/audit.js'
 
+function parseUnitsPerPurchase(body) {
+  const n = Math.round(Number(body.unitsPerPurchase) || 0)
+  return n > 1 ? n : 1
+}
+
+function packagingWriteValues(body) {
+  const unitsPerPurchase = parseUnitsPerPurchase(body)
+  const purchaseUnit = String(body.purchaseUnit || '').trim() || (unitsPerPurchase > 1 ? 'roll' : null)
+  return {
+    name: body.name,
+    unit: body.unit || 'pcs',
+    purchaseUnit,
+    unitsPerPurchase,
+    pricePerUnit: Math.round(Number(body.pricePerUnit) || 0),
+    stockQuantity: Math.max(Math.round(Number(body.stockQuantity) || 0), 0),
+    supplier: body.supplier || null
+  }
+}
+
 export default defineEventHandler(async (event) => {
   requireAdmin(event)
   const body = await readBody(event)
   if (!body.name) throw createError({ statusCode: 400, statusMessage: 'Nama wajib diisi' })
   const db = useDb()
-  const rows = await db
-    .insert(schema.packaging)
-    .values({
-      name: body.name,
-      unit: body.unit || 'pcs',
-      pricePerUnit: Math.round(Number(body.pricePerUnit) || 0),
-      stockQuantity: Math.max(Math.round(Number(body.stockQuantity) || 0), 0),
-      supplier: body.supplier || null
-    })
-    .returning()
+  const rows = await db.insert(schema.packaging).values(packagingWriteValues(body)).returning()
   await logAudit(event, { action: 'create', entity: 'packaging', entityId: rows[0].id, summary: `Tambah produk "${rows[0].name}"` })
   return rows[0]
 })

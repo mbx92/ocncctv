@@ -13,6 +13,8 @@ export default defineEventHandler(async (event) => {
     .set({
       name: body.name,
       unit: body.unit,
+      purchaseUnit: String(body.purchaseUnit || '').trim() || (Math.round(Number(body.unitsPerPurchase) || 0) > 1 ? 'roll' : null),
+      unitsPerPurchase: Math.max(Math.round(Number(body.unitsPerPurchase) || 0), 1),
       pricePerUnit: Math.round(Number(body.pricePerUnit) || 0),
       stockQuantity: Math.max(Math.round(Number(body.stockQuantity) || 0), 0),
       supplier: body.supplier || null

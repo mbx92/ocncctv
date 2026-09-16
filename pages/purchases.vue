@@ -1,6 +1,7 @@
 <script setup>
 import { PlusIcon, PencilSquareIcon, TrashIcon, CheckIcon, XMarkIcon, ClipboardDocumentIcon } from '@heroicons/vue/24/outline'
 import { sanitizeText } from '~/utils/sanitizeText.js'
+import { isMeterUnit } from '~/utils/cableRoll.js'
 
 const { data: purchases, refresh } = await useFetch('/api/purchases')
 const { data: materials } = await useFetch('/api/materials')
@@ -234,10 +235,21 @@ function onTypeChange(line) {
 function onItemChange(line) {
   const item = selectedItem(line)
   if (item) {
-    line.unitPrice = item.pricePerUnit
+    line.unitPrice = itemPurchasePrice(item)
     const known = (suppliers.value || []).some((s) => s.name === item.supplier)
     if (known && !form.value.supplier) form.value.supplier = item.supplier
   }
+}
+function itemPurchasePrice(item) {
+  if (!item) return 0
+  const n = Number(item.unitsPerPurchase || 0)
+  if (n > 1 && isMeterUnit(item.unit)) return Math.round((Number(item.pricePerUnit) || 0) * n)
+  return Math.round(Number(item.pricePerUnit) || 0)
+}
+function itemPurchaseUnit(item) {
+  if (!item) return 'unit'
+  if (Number(item.unitsPerPurchase) > 1) return item.purchaseUnit || 'roll'
+  return item.unit || 'unit'
 }
 function lineTotal(line) {
   return Math.round(purchaseQty(line.quantity) * (Number(line.unitPrice) || 0))
@@ -491,7 +503,7 @@ async function remove(p) {
             </div>
             <div class="grid grid-cols-12 gap-2">
               <div class="col-span-6 sm:col-span-3 min-w-0">
-                <label class="label">Qty beli ({{ selectedItem(line)?.unit || 'unit' }})</label>
+                <label class="label">Qty beli ({{ itemPurchaseUnit(selectedItem(line)) }})</label>
                 <input
                   v-model.number="line.quantity"
                   type="number"
@@ -513,11 +525,20 @@ async function remove(p) {
                   @input="line.stockQuantity = purchaseQty(line.stockQuantity)"
                 />
                 <p class="text-[11px] text-ink-400 mt-0.5">
-                  {{
-                    line.itemType === 'packaging'
-                      ? 'Sisa ke Produk'
-                      : 'Sisa ke Perlengkapan'
-                  }}{{ usedQty(line) ? ` · terpakai ${formatNumber(usedQty(line))}` : '' }}
+                  <template v-if="Number(selectedItem(line)?.unitsPerPurchase) > 1">
+                    Masuk stok {{ formatNumber(purchaseQty(line.stockQuantity) * Number(selectedItem(line).unitsPerPurchase)) }}
+                    {{ selectedItem(line).unit }}
+                    <span v-if="usedQty(line)">
+                      · beli {{ formatNumber(line.quantity) }} {{ itemPurchaseUnit(selectedItem(line)) }}
+                    </span>
+                  </template>
+                  <template v-else>
+                    {{
+                      line.itemType === 'packaging'
+                        ? 'Sisa ke Produk'
+                        : 'Sisa ke Perlengkapan'
+                    }}{{ usedQty(line) ? ` · terpakai ${formatNumber(usedQty(line))}` : '' }}
+                  </template>
                 </p>
               </div>
               <div class="col-span-6 sm:col-span-3 min-w-0">

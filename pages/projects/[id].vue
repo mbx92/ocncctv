@@ -225,6 +225,7 @@ const rabPurchaseForm = ref({
   shippingFee: 0,
   platformFee: 0
 })
+const rabPurchaseSelected = ref({})
 const rabSupplierForm = ref({ name: '', notes: '' })
 const rabSupplierError = ref('')
 const rabSupplierSaving = ref(false)
@@ -270,8 +271,18 @@ async function removeRabSupplier(s) {
   }
 }
 
+const rabPurchaseSelectedLines = computed(() =>
+  (rabPurchaseDraft.value?.lines || []).filter(
+    (line, index) => rabPurchaseSelected.value[line.key || `row:${index}`]
+  )
+)
+const rabPurchaseSelectedCount = computed(() => rabPurchaseSelectedLines.value.length)
+const rabPurchaseAllSelected = computed(() => {
+  const lines = rabPurchaseDraft.value?.lines || []
+  return lines.length > 0 && lines.every((line, index) => rabPurchaseSelected.value[line.key || `row:${index}`])
+})
 const rabPurchaseGoodsTotal = computed(() =>
-  (rabPurchaseDraft.value?.lines || []).reduce(
+  rabPurchaseSelectedLines.value.reduce(
     (sum, line) => sum + Math.round((Number(line.quantity) || 0) * (Number(line.unitPrice) || 0)),
     0
   )
@@ -282,9 +293,36 @@ const rabPurchaseGrandTotal = computed(() => {
   return rabPurchaseGoodsTotal.value + shipping + platform
 })
 const rabPurchaseNewCount = computed(
-  () => (rabPurchaseDraft.value?.lines || []).filter((line) => line.matchStatus === 'missing').length
+  () => rabPurchaseSelectedLines.value.filter((line) => line.matchStatus === 'missing').length
 )
 const rabPurchaseSkippedCount = computed(() => (rabPurchaseDraft.value?.skippedLines || []).length)
+
+function rabLineKey(line, index) {
+  return line.key || `row:${index}`
+}
+
+function initRabPurchaseSelection(draft) {
+  const next = {}
+  for (const [index, line] of (draft?.lines || []).entries()) {
+    next[rabLineKey(line, index)] = true
+  }
+  rabPurchaseSelected.value = next
+}
+
+function toggleRabPurchaseLine(line, index, checked) {
+  rabPurchaseSelected.value = {
+    ...rabPurchaseSelected.value,
+    [rabLineKey(line, index)]: checked
+  }
+}
+
+function selectAllRabPurchaseLines(on) {
+  const next = {}
+  for (const [index, line] of (rabPurchaseDraft.value?.lines || []).entries()) {
+    next[rabLineKey(line, index)] = on
+  }
+  rabPurchaseSelected.value = next
+}
 
 async function openRabPurchase() {
   rabPurchaseError.value = ''
@@ -293,6 +331,7 @@ async function openRabPurchase() {
   try {
     const draft = await $fetch(`/api/products/${id}/rab-purchase-draft`)
     rabPurchaseDraft.value = draft
+    initRabPurchaseSelection(draft)
     rabPurchaseForm.value = {
       date: todayStr(),
       supplier: pickRabSupplier(draft.suggestedSupplier),
@@ -311,24 +350,51 @@ async function openRabPurchase() {
 function closeRabPurchase() {
   showRabPurchase.value = false
   rabPurchaseDraft.value = null
+  rabPurchaseSelected.value = {}
   rabPurchaseError.value = ''
 }
 
 async function submitRabPurchase() {
   rabPurchaseError.value = ''
+  const selectedKeys = (rabPurchaseDraft.value?.lines || [])
+    .map((line, index) => (rabPurchaseSelected.value[rabLineKey(line, index)] ? rabLineKey(line, index) : null))
+    .filter(Boolean)
+  if (!selectedKeys.length) {
+    rabPurchaseError.value = 'Centang minimal satu barang untuk pesanan ini.'
+    return
+  }
   rabPurchaseSaving.value = true
   try {
     const res = await $fetch(`/api/products/${id}/purchases/from-rab`, {
       method: 'POST',
       body: {
         ...rabPurchaseForm.value,
+        selectedKeys,
         createMissingPackaging: true,
         category: 'packaging'
       }
     })
-    closeRabPurchase()
     await refreshRabPurchaseStatus()
-    useToast().success(`Pembelian tercatat · ${formatIDR(res.purchase?.totalAmount || 0)}`)
+    try {
+      const draft = await $fetch(`/api/products/${id}/rab-purchase-draft`)
+      rabPurchaseDraft.value = draft
+      initRabPurchaseSelection(draft)
+      rabPurchaseForm.value = {
+        ...rabPurchaseForm.value,
+        shippingFee: 0,
+        platformFee: 0,
+        notes: `Kebutuhan proyek · ${draft.projectName || product.value?.name || ''}`
+      }
+      const left = draft.lines?.length || 0
+      useToast().success(
+        left
+          ? `Pembelian tercatat · ${formatIDR(res.purchase?.totalAmount || 0)}. ${left} barang tersisa untuk pesanan berikutnya.`
+          : `Pembelian tercatat · ${formatIDR(res.purchase?.totalAmount || 0)}`
+      )
+    } catch {
+      useToast().success(`Pembelian tercatat · ${formatIDR(res.purchase?.totalAmount || 0)}`)
+      closeRabPurchase()
+    }
   } catch (e) {
     rabPurchaseError.value = e.data?.statusMessage || 'Gagal mencatat pembelian'
   } finally {
@@ -1464,27 +1530,50 @@ const tab = computed({
           class="rounded-panel border border-sky-200 bg-sky-50 px-3 py-2.5 text-xs text-sky-900 space-y-1"
         >
           <div class="flex flex-wrap items-center gap-2">
-            <span class="badge bg-white/80 text-sky-800 border border-sky-200">{{ rabPurchaseDraft.lines.length }} perlu dibeli</span>
+            <span class="badge bg-white/80 text-sky-800 border border-sky-200">
+              {{ rabPurchaseSelectedCount }}/{{ rabPurchaseDraft.lines.length }} dipilih
+            </span>
             <span v-if="rabPurchaseSkippedCount" class="badge bg-white/80 text-emerald-800 border border-emerald-200">
               {{ rabPurchaseSkippedCount }} sudah terpenuhi
             </span>
             <span v-if="rabPurchaseNewCount" class="badge bg-white/80 text-sky-800 border border-sky-200">
               {{ rabPurchaseNewCount }} produk baru
             </span>
-            <span class="text-sky-800/75">Qty beli langsung terpakai proyek · tidak masuk stok</span>
+            <span class="text-sky-800/75">Centang barang untuk pesanan ini. Sisanya bisa dibeli ke supplier lain.</span>
           </div>
-          <p class="text-sky-800/70">Simpan perubahan item dulu jika qty tambahan belum disimpan.</p>
+          <p class="text-sky-800/70">
+            Kabel roll dibeli utuh; sisa meter masuk stok gudang. Simpan perubahan item dulu jika qty tambahan belum disimpan.
+          </p>
         </div>
 
         <div v-if="rabPurchaseDraft?.lines?.length" class="panel overflow-hidden">
           <div class="panel-header">
             <span class="panel-title">Daftar barang</span>
-            <span class="text-xs font-mono text-ink-500">{{ formatIDR(rabPurchaseGoodsTotal) }}</span>
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                class="text-xs text-accent-700 hover:underline"
+                @click="selectAllRabPurchaseLines(!rabPurchaseAllSelected)"
+              >
+                {{ rabPurchaseAllSelected ? 'Kosongkan' : 'Pilih semua' }}
+              </button>
+              <span class="text-xs font-mono text-ink-500">{{ formatIDR(rabPurchaseGoodsTotal) }}</span>
+            </div>
           </div>
           <div class="overflow-x-auto max-h-[min(52vh,22rem)] overflow-y-auto">
             <table class="table-std text-sm">
               <thead class="sticky top-0 z-10 bg-ink-50">
                 <tr>
+                  <th class="w-10">
+                    <span class="sr-only">Pilih</span>
+                    <input
+                      type="checkbox"
+                      class="h-4 w-4 rounded border-ink-300 accent-teal-600"
+                      :checked="rabPurchaseAllSelected"
+                      :indeterminate="rabPurchaseSelectedCount > 0 && !rabPurchaseAllSelected"
+                      @change="selectAllRabPurchaseLines($event.target.checked)"
+                    />
+                  </th>
                   <th class="min-w-[11rem]">Item</th>
                   <th class="text-right w-28">Beli</th>
                   <th class="text-right w-28">Harga</th>
@@ -1494,9 +1583,19 @@ const tab = computed({
               <tbody>
                 <tr
                   v-for="(line, i) in rabPurchaseDraft.lines"
-                  :key="i"
+                  :key="rabLineKey(line, i)"
                   class="even:bg-ink-50/50 align-top"
+                  :class="rabPurchaseSelected[rabLineKey(line, i)] ? '' : 'opacity-50'"
                 >
+                  <td class="py-3 w-10">
+                    <input
+                      type="checkbox"
+                      class="h-4 w-4 rounded border-ink-300 accent-teal-600 mt-1"
+                      :checked="Boolean(rabPurchaseSelected[rabLineKey(line, i)])"
+                      :aria-label="`Pilih ${line.name}`"
+                      @change="toggleRabPurchaseLine(line, i, $event.target.checked)"
+                    />
+                  </td>
                   <td class="py-3">
                     <div class="flex flex-wrap items-center gap-1.5 mb-1">
                       <span
@@ -1512,13 +1611,15 @@ const tab = computed({
                     <div v-if="line.code" class="text-[11px] font-mono text-ink-400 mt-0.5">{{ line.code }}</div>
                   </td>
                   <td class="num whitespace-nowrap py-3">
-                    <div class="font-mono text-ink-900">{{ formatNumber(line.quantity) }}</div>
-                    <div v-if="line.unit" class="text-[11px] text-ink-400 font-sans normal-case">{{ line.unit }}</div>
+                    <div class="font-mono text-ink-900">{{ formatNumber(line.quantity) }} {{ line.unit }}</div>
+                    <div v-if="line.conversionHint" class="text-[11px] text-sky-800 font-sans normal-case mt-0.5">
+                      {{ line.conversionHint }}
+                    </div>
                     <div
-                      v-if="line.requiredQuantity != null && line.requiredQuantity !== line.quantity"
+                      v-if="line.requiredQuantity != null"
                       class="text-[11px] text-ink-400 font-sans normal-case mt-0.5"
                     >
-                      perlu {{ formatNumber(line.requiredQuantity) }}
+                      perlu {{ formatNumber(line.requiredQuantity) }} {{ line.requiredUnit || line.stockUnit || '' }}
                       <span v-if="line.alreadyPurchased"> · beli {{ formatNumber(line.alreadyPurchased) }}</span>
                       <span v-if="line.stockAvailable"> · stok {{ formatNumber(line.stockAvailable) }}</span>
                     </div>
@@ -1531,7 +1632,7 @@ const tab = computed({
               </tbody>
               <tfoot class="sticky bottom-0 bg-ink-100 border-t border-ink-200">
                 <tr>
-                  <td colspan="3" class="py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-ink-500">
+                  <td colspan="4" class="py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-ink-500">
                     Subtotal barang
                   </td>
                   <td class="num py-2.5 font-semibold text-ink-900">{{ formatIDR(rabPurchaseGoodsTotal) }}</td>
@@ -1616,9 +1717,15 @@ const tab = computed({
           <button
             type="submit"
             class="btn-primary"
-            :disabled="rabPurchaseSaving || !rabPurchaseDraft?.lines?.length"
+            :disabled="rabPurchaseSaving || !rabPurchaseSelectedCount"
           >
-            <CheckIcon class="w-4 h-4" />{{ rabPurchaseSaving ? 'Mencatat…' : 'Catat pembelian' }}
+            <CheckIcon class="w-4 h-4" />{{
+              rabPurchaseSaving
+                ? 'Mencatat…'
+                : rabPurchaseSelectedCount
+                  ? `Catat ${rabPurchaseSelectedCount} barang`
+                  : 'Pilih barang'
+            }}
           </button>
         </div>
       </form>

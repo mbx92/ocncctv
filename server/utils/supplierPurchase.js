@@ -3,6 +3,7 @@ import { assertExpenseCategory } from './expenseCategory.js'
 import { setExpenseProducts } from './expenseProducts.js'
 import { applyMaterialStockDelta } from './materialStock.js'
 import { sanitizeText } from './sanitizeText.js'
+import { isMeterUnit, parseMetersPerRoll, purchaseStockMultiplier } from './cableRoll.js'
 
 function lineAmount(qty, unitPrice) {
   return Math.round((Number(qty) || 0) * (Number(unitPrice) || 0))
@@ -114,14 +115,34 @@ async function assertProject(tx, schema, projectId) {
   if (!project) throw createError({ statusCode: 400, statusMessage: 'Proyek tidak ditemukan' })
 }
 
+function packagingMeterMultiplier(packaging) {
+  const stored = purchaseStockMultiplier(packaging)
+  if (stored > 1) return stored
+  if (isMeterUnit(packaging?.unit)) return 1
+  const parsed = parseMetersPerRoll(packaging)
+  return parsed > 1 ? parsed : 1
+}
+
+function packagingStockDelta(packaging, stockQuantity) {
+  const qty = Math.max(Math.round(Number(stockQuantity) || 0), 0)
+  return qty * packagingMeterMultiplier(packaging)
+}
+
+async function loadPackagingRow(tx, schema, packagingId) {
+  const [row] = await tx.select().from(schema.packaging).where(eq(schema.packaging.id, packagingId))
+  return row || null
+}
+
 export async function revertPurchaseLineStock(tx, schema, line) {
-  const delta = Number(line.stockQuantity ?? line.quantity) || 0
-  if (!delta) return
+  const raw = Number(line.stockQuantity ?? line.quantity) || 0
+  if (!raw) return
   if (line.itemType === 'material' && line.materialId) {
-    await applyMaterialStockDelta(tx, schema, { id: line.materialId, delta: -delta })
+    await applyMaterialStockDelta(tx, schema, { id: line.materialId, delta: -raw })
     return
   }
   if (line.itemType === 'packaging' && line.packagingId) {
+    const packaging = await loadPackagingRow(tx, schema, line.packagingId)
+    const delta = packagingStockDelta(packaging, raw)
     await tx
       .update(schema.packaging)
       .set({ stockQuantity: sql`GREATEST(${schema.packaging.stockQuantity} - ${delta}, 0)` })
@@ -162,26 +183,25 @@ async function insertPricedLines(tx, schema, purchaseId, priced) {
       if (!row) throw createError({ statusCode: 400, statusMessage: 'Perlengkapan tidak ditemukan' })
       names.push(`${row.name} ${line.quantity} ${row.unit}`)
     } else {
-      let row
+      const packaging = await loadPackagingRow(tx, schema, line.packagingId)
+      if (!packaging) throw createError({ statusCode: 400, statusMessage: 'Produk tidak ditemukan' })
+      const multiplier = packagingMeterMultiplier(packaging)
+      const purchaseUnit = packaging.purchaseUnit || (multiplier > 1 ? 'roll' : packaging.unit)
       if (line.stockQuantity > 0) {
+        const delta = packagingStockDelta(packaging, line.stockQuantity)
+        const meterPrice =
+          multiplier > 1 ? Math.max(Math.round(Number(line.landedUnit || 0) / multiplier), 0) : line.landedUnit
         const [updated] = await tx
           .update(schema.packaging)
           .set({
-            stockQuantity: sql`${schema.packaging.stockQuantity} + ${line.stockQuantity}`,
-            pricePerUnit: line.landedUnit
+            stockQuantity: sql`${schema.packaging.stockQuantity} + ${delta}`,
+            pricePerUnit: meterPrice
           })
           .where(eq(schema.packaging.id, line.packagingId))
           .returning({ name: schema.packaging.name, unit: schema.packaging.unit })
-        row = updated
-      } else {
-        const [found] = await tx
-          .select({ name: schema.packaging.name, unit: schema.packaging.unit })
-          .from(schema.packaging)
-          .where(eq(schema.packaging.id, line.packagingId))
-        row = found
+        if (!updated) throw createError({ statusCode: 400, statusMessage: 'Produk tidak ditemukan' })
       }
-      if (!row) throw createError({ statusCode: 400, statusMessage: 'Produk tidak ditemukan' })
-      names.push(`${row.name} ${line.quantity} ${row.unit}`)
+      names.push(`${packaging.name} ${line.quantity} ${purchaseUnit}`)
     }
   }
   return names

@@ -13,7 +13,15 @@ export default defineEventHandler(async () => {
 
   const lines = await db.select().from(schema.supplierPurchaseLines)
   const materials = await db.select({ id: schema.materials.id, name: schema.materials.name, unit: schema.materials.unit }).from(schema.materials)
-  const packaging = await db.select({ id: schema.packaging.id, name: schema.packaging.name, unit: schema.packaging.unit }).from(schema.packaging)
+  const packaging = await db
+    .select({
+      id: schema.packaging.id,
+      name: schema.packaging.name,
+      unit: schema.packaging.unit,
+      purchaseUnit: schema.packaging.purchaseUnit,
+      unitsPerPurchase: schema.packaging.unitsPerPurchase
+    })
+    .from(schema.packaging)
   const projects = await db.select({ id: schema.products.id, name: schema.products.name }).from(schema.products)
   const expenseIds = [...new Set(purchases.map((p) => p.expenseId).filter(Boolean))]
   const expenses = expenseIds.length
@@ -34,7 +42,14 @@ export default defineEventHandler(async () => {
     const row = {
       ...line,
       itemName: sanitizeText(item?.name) || '(barang dihapus)',
-      unit: sanitizeText(item?.unit) || ''
+      unit:
+        sanitizeText(
+          line.itemType === 'packaging' && Number(item?.unitsPerPurchase) > 1
+            ? item?.purchaseUnit || 'roll'
+            : item?.unit
+        ) || '',
+      stockUnit: sanitizeText(item?.unit) || '',
+      unitsPerPurchase: Number(item?.unitsPerPurchase) || 1
     }
     const arr = linesByPurchase.get(line.purchaseId) || []
     arr.push(row)
