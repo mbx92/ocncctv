@@ -1,9 +1,28 @@
-import 'dotenv/config'
 import pg from 'pg'
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+
+const rootDir = dirname(fileURLToPath(import.meta.url))
+const envPath = join(rootDir, '../.env')
+if (!process.env.DATABASE_URL && existsSync(envPath)) {
+  for (const line of readFileSync(envPath, 'utf8').split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+    const eq = trimmed.indexOf('=')
+    if (eq <= 0) continue
+    const key = trimmed.slice(0, eq).trim()
+    let value = trimmed.slice(eq + 1).trim()
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1)
+    }
+    if (key && process.env[key] === undefined) process.env[key] = value
+  }
+}
 
 // Migrator sendiri (bukan drizzle migrate default): tiap file migrasi di-commit
 // terpisah. Default drizzle membungkus SEMUA migrasi pending dalam 1 transaksi,
@@ -16,7 +35,7 @@ if (!url) {
   process.exit(1)
 }
 
-const migrationsFolder = join(dirname(fileURLToPath(import.meta.url)), '../server/db/migrations')
+const migrationsFolder = join(rootDir, '../server/db/migrations')
 const journalPath = join(migrationsFolder, 'meta/_journal.json')
 if (!existsSync(journalPath)) {
   console.error('Tidak menemukan meta/_journal.json')
