@@ -532,7 +532,13 @@ export const appSettings = pgTable('app_settings', {
   invoiceShareTtlDays: integer('invoice_share_ttl_days').notNull().default(7),
   erpSyncBaseUrl: text('erp_sync_base_url'),
   erpSyncApiKey: text('erp_sync_api_key'),
-  erpSyncLastAt: timestamp('erp_sync_last_at')
+  erpSyncLastAt: timestamp('erp_sync_last_at'),
+  catalogSyncLastAt: timestamp('catalog_sync_last_at'),
+  catalogSyncLastSource: text('catalog_sync_last_source'),
+  catalogSyncLastMessage: text('catalog_sync_last_message'),
+  catalogSyncCreated: integer('catalog_sync_created').notNull().default(0),
+  catalogSyncUpdated: integer('catalog_sync_updated').notNull().default(0),
+  catalogSyncRemoved: integer('catalog_sync_removed').notNull().default(0)
 })
 
 // Tautan publik invoice: token acak, kadaluarsa sesuai pengaturan saat dibuat.

@@ -92,6 +92,8 @@ async function runSync() {
     if (data.lastSyncedAt) lastSyncedAt.value = data.lastSyncedAt
     await refreshMeta()
     await fetchItems()
+    await refreshNotice()
+    markSeen()
     useToast().success(syncMessage.value)
   } catch (e) {
     errorMsg.value = e.data?.statusMessage || 'Gagal sync katalog dari Google Sheets.'
@@ -119,8 +121,18 @@ watch([activeSheet, search], () => {
   timer = setTimeout(fetchItems, 250)
 })
 
+const { notice, markSeen, refresh: refreshNotice } = useCatalogNotice()
+
 onMounted(fetchItems)
 onUnmounted(() => clearTimeout(timer))
+
+watch(
+  () => notice.value?.lastSyncedAt,
+  (at) => {
+    if (at) markSeen()
+  },
+  { immediate: true }
+)
 </script>
 
 <template>
@@ -133,6 +145,7 @@ onUnmounted(() => clearTimeout(timer))
           <span class="hidden sm:inline"> — sync {{ formatDateTime(lastSyncedAt) }}</span>
         </p>
         <p class="sm:hidden text-xs text-ink-400 mt-0.5">Sync {{ formatDateTime(lastSyncedAt) }}</p>
+        <p class="text-[11px] text-ink-400 mt-0.5">Otomatis setiap hari pukul 06.00 WIB.</p>
       </div>
       <div class="flex items-center gap-1.5 shrink-0">
         <button

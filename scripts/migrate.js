@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import pg from 'pg'
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'

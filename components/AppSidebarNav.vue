@@ -6,6 +6,7 @@ const props = defineProps({ query: { type: String, default: '' } })
 defineEmits(['navigate'])
 const route = useRoute()
 const groups = navigationGroups
+const { synced: catalogSynced } = useCatalogNotice()
 const visibleGroups = computed(() => {
   const query = props.query.trim().toLocaleLowerCase('id')
   return groups.map(group => ({
@@ -66,8 +67,16 @@ function linkClass(to) {
       </button>
       <div v-show="query.trim() || expanded[group.id]" class="flex flex-col pb-1">
         <NuxtLink v-for="item in group.items" :key="item.to" :to="item.to" :class="linkClass(item.to)" @click="$emit('navigate')">
-          <component :is="item.icon" class="w-5 h-5 shrink-0" />
-          <span class="truncate">{{ item.label }}</span>
+          <span class="relative shrink-0">
+            <component :is="item.icon" class="w-5 h-5" />
+            <span
+              v-if="item.to === '/catalog'"
+              class="app-nav-sync-dot"
+              :class="catalogSynced ? 'app-nav-sync-dot--ok' : 'app-nav-sync-dot--pending'"
+              :title="catalogSynced ? 'Katalog sudah di-sync' : 'Katalog belum di-sync'"
+            />
+          </span>
+          <span class="truncate flex-1">{{ item.label }}</span>
         </NuxtLink>
       </div>
     </section>

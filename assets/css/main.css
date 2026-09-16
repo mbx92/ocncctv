@@ -114,6 +114,16 @@
   .btn-action-danger {
     @apply btn-action text-ink-500 hover:bg-red-50 hover:text-red-600;
   }
+  .app-nav-sync-dot {
+    @apply absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full ring-2 ring-ink-900;
+  }
+  .app-nav-sync-dot--ok {
+    @apply bg-teal-400;
+  }
+  .app-nav-sync-dot--pending {
+    @apply bg-red-500;
+    animation: app-nav-sync-pulse 2s ease-in-out infinite;
+  }
   .input {
     /* text-base (16px): cegah iOS/PWA zoom otomatis saat fokus field.
        line-height = tinggi konten (h-10 minus border) agar angka/teks di tengah,
@@ -328,4 +338,9 @@
       background-color: #f8fafc;
     }
   }
+}
+
+@keyframes app-nav-sync-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
 }

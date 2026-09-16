@@ -1,5 +1,5 @@
 <script setup>
-import { PlusIcon, TrashIcon, CheckIcon, XMarkIcon } from '@heroicons/vue/24/outline'
+import { PlusIcon, PencilSquareIcon, TrashIcon, CheckIcon, XMarkIcon, ClipboardDocumentIcon } from '@heroicons/vue/24/outline'
 import { sanitizeText } from '~/utils/sanitizeText.js'
 
 const { data: purchases, refresh } = await useFetch('/api/purchases')
@@ -28,6 +28,7 @@ watch(purchases, reset)
 const showForm = ref(false)
 const showSuppliers = ref(false)
 const showCategories = ref(false)
+const editing = ref(null)
 const form = ref({})
 const errorMsg = ref('')
 const saving = ref(false)
@@ -38,6 +39,13 @@ const savingSupplier = ref(false)
 const categoryForm = ref({ name: '' })
 const categoryError = ref('')
 const savingCategory = ref(false)
+
+const knownSupplierNames = computed(() => new Set((suppliers.value || []).map((s) => s.name)))
+const orphanSupplier = computed(() => {
+  const name = form.value.supplier
+  if (!name) return ''
+  return knownSupplierNames.value.has(name) ? '' : name
+})
 
 function emptyLine() {
   return {
@@ -50,6 +58,7 @@ function emptyLine() {
   }
 }
 function openAdd() {
+  editing.value = null
   form.value = {
     date: todayStr(),
     supplier: suppliers.value?.[0]?.name || '',
@@ -62,6 +71,67 @@ function openAdd() {
   }
   errorMsg.value = ''
   showForm.value = true
+}
+
+function dateInputValue(value) {
+  const m = String(value || '').match(/^(\d{4}-\d{2}-\d{2})/)
+  return m ? m[1] : todayStr()
+}
+
+function fallbackCategory(p) {
+  if (p.expenseCategory) return p.expenseCategory
+  const hasPackaging = (p.lines || []).some((l) => l.itemType === 'packaging')
+  const hasMaterial = (p.lines || []).some((l) => l.itemType === 'material')
+  if (hasMaterial && !hasPackaging) return 'material'
+  return 'packaging'
+}
+
+function openEdit(p) {
+  editing.value = p
+  form.value = {
+    date: dateInputValue(p.date),
+    supplier: p.supplier || '',
+    category: fallbackCategory(p),
+    projectId: p.projectId || '',
+    notes: p.notes || '',
+    shippingFee: p.shippingFee || 0,
+    platformFee: p.platformFee || 0,
+    lines: (p.lines || []).length
+      ? p.lines.map((l) => ({
+          itemType: l.itemType === 'material' ? 'material' : 'packaging',
+          materialId: l.materialId || '',
+          packagingId: l.packagingId || '',
+          quantity: purchaseQty(l.quantity),
+          stockQuantity: purchaseQty(l.stockQuantity),
+          unitPrice: Math.round(Number(l.unitPrice) || 0)
+        }))
+      : [emptyLine()]
+  }
+  errorMsg.value = ''
+  showForm.value = true
+}
+
+function closeForm() {
+  showForm.value = false
+  editing.value = null
+}
+
+function purchaseItemsText(p) {
+  return (p.lines || [])
+    .map((l) => {
+      const name = String(l.itemName || '').trim()
+      if (!name) return ''
+      const qty = formatNumber(l.quantity)
+      const unit = String(l.unit || '').trim()
+      return `${name} — ${qty}${unit ? ` ${unit}` : ''}`
+    })
+    .filter(Boolean)
+    .join('\n')
+}
+
+function copyPurchaseItems(p) {
+  const n = (p.lines || []).filter((l) => String(l.itemName || '').trim()).length
+  copyText(purchaseItemsText(p), n > 1 ? `${n} barang disalin` : 'Nama barang disalin')
 }
 
 function onProjectChange() {
@@ -181,10 +251,15 @@ async function save() {
   errorMsg.value = ''
   saving.value = true
   try {
-    await $fetch('/api/purchases', { method: 'POST', body: form.value })
-    showForm.value = false
+    if (editing.value) {
+      await $fetch(`/api/purchases/${editing.value.id}`, { method: 'PUT', body: form.value })
+      useToast().success('Pembelian diperbarui. Stok dan pengeluaran disesuaikan.')
+    } else {
+      await $fetch('/api/purchases', { method: 'POST', body: form.value })
+      useToast().success('Pembelian tersimpan. Pengeluaran tercatat; sisa masuk stok sesuai isian.')
+    }
+    closeForm()
     await refresh()
-    useToast().success('Pembelian tersimpan. Pengeluaran tercatat; sisa masuk stok sesuai isian.')
   } catch (e) {
     errorMsg.value = e.data?.statusMessage || 'Gagal menyimpan'
   } finally {
@@ -212,7 +287,7 @@ async function remove(p) {
     </div>
     <p class="text-xs text-ink-500">
       Beli untuk proyek: kas terpotong, barang terpakai tidak masuk gudang. Sisa isi di kolom masuk stok — jenis Produk masuk stok Produk.
-      Tanpa proyek, seluruh qty masuk stok (beli persediaan).
+      Tanpa proyek, seluruh qty masuk stok (beli persediaan). Tombol Salin menyalin semua nama barang di transaksi itu.
     </p>
 
     <div class="panel hidden md:block">
@@ -252,7 +327,17 @@ async function remove(p) {
                 </div>
               </td>
               <td class="text-right">
-                <button type="button" class="btn-action-danger" @click="remove(p)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+                <div class="btn-actions justify-end">
+                  <button type="button" class="btn-action" :disabled="!p.lines?.length" @click="copyPurchaseItems(p)">
+                    <ClipboardDocumentIcon class="w-3.5 h-3.5" />Salin
+                  </button>
+                  <button type="button" class="btn-action" @click="openEdit(p)">
+                    <PencilSquareIcon class="w-3.5 h-3.5" />Edit
+                  </button>
+                  <button type="button" class="btn-action-danger" @click="remove(p)">
+                    <TrashIcon class="w-3.5 h-3.5" />Hapus
+                  </button>
+                </div>
               </td>
             </tr>
             <tr v-if="!total">
@@ -289,18 +374,28 @@ async function remove(p) {
           <span v-if="p.shippingFee && p.platformFee"> · </span>
           <span v-if="p.platformFee">Fee {{ formatIDR(p.platformFee) }}</span>
         </div>
-        <div class="text-xs text-ink-500">
+        <div class="text-xs text-ink-500 space-y-0.5">
           <div v-for="l in p.lines" :key="l.id">
             {{ l.itemName }} — {{ formatNumber(l.quantity) }} {{ l.unit }}
             <span v-if="Number(l.stockQuantity) > 0"> · stok +{{ formatNumber(l.stockQuantity) }}</span>
           </div>
         </div>
-        <button type="button" class="btn-action-danger" @click="remove(p)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+        <div class="btn-actions pt-1">
+          <button type="button" class="btn-action" :disabled="!p.lines?.length" @click="copyPurchaseItems(p)">
+            <ClipboardDocumentIcon class="w-3.5 h-3.5" />Salin
+          </button>
+          <button type="button" class="btn-action" @click="openEdit(p)">
+            <PencilSquareIcon class="w-3.5 h-3.5" />Edit
+          </button>
+          <button type="button" class="btn-action-danger" @click="remove(p)">
+            <TrashIcon class="w-3.5 h-3.5" />Hapus
+          </button>
+        </div>
       </div>
       <p v-if="!total" class="panel p-6 text-center text-sm text-ink-500">Belum ada pembelian.</p>
     </div>
 
-    <AppModal v-if="showForm" title="Catat Pembelian Supplier" size="lg" @close="showForm = false">
+    <AppModal v-if="showForm" :title="editing ? 'Edit Pembelian Supplier' : 'Catat Pembelian Supplier'" size="lg" @close="closeForm">
       <form class="space-y-3" @submit.prevent="save">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div class="date-field">
@@ -312,6 +407,7 @@ async function remove(p) {
             <div class="flex gap-2 min-w-0">
               <select v-model="form.supplier" class="input min-w-0" required>
                 <option value="" disabled>Pilih supplier...</option>
+                <option v-if="orphanSupplier" :value="orphanSupplier">{{ orphanSupplier }}</option>
                 <option v-for="s in suppliers" :key="s.id" :value="s.name">{{ s.name }}</option>
               </select>
               <button type="button" class="btn-secondary shrink-0" title="Kelola supplier" @click="openSuppliers">
@@ -470,9 +566,11 @@ async function remove(p) {
         </div>
         <p v-if="errorMsg" class="text-sm text-red-600">{{ errorMsg }}</p>
         <div class="flex justify-end gap-2">
-          <button type="button" class="btn-secondary" @click="showForm = false"><XMarkIcon class="w-4 h-4" />Batal</button>
+          <button type="button" class="btn-secondary" @click="closeForm"><XMarkIcon class="w-4 h-4" />Batal</button>
           <button type="submit" class="btn-primary" :disabled="saving">
-            <CheckIcon class="w-4 h-4" />{{ saving ? 'Menyimpan...' : 'Simpan Pembelian' }}
+            <CheckIcon class="w-4 h-4" />{{
+              saving ? 'Menyimpan...' : editing ? 'Simpan Perubahan' : 'Simpan Pembelian'
+            }}
           </button>
         </div>
       </form>

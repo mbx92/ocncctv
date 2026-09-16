@@ -112,7 +112,7 @@ async function remove(p) {
           <PhotoIcon v-else class="w-5 h-5 text-ink-300" />
         </div>
         <div class="min-w-0 flex-1 space-y-1">
-          <div class="font-medium break-words">{{ p.name }}</div>
+          <CopyableText :text="p.name" class="font-medium break-words">{{ p.name }}</CopyableText>
           <div class="text-sm font-mono">{{ formatIDR(p.pricePerUnit) }}/{{ p.unit }}</div>
           <div class="text-sm font-mono" :class="p.stockQuantity < 10 ? 'text-amber-600 font-semibold' : 'text-ink-500'">
             Stok {{ formatNumber(p.stockQuantity) }} {{ p.unit }}
@@ -160,7 +160,9 @@ async function remove(p) {
                 <PhotoIcon v-else class="w-4 h-4 text-ink-300" />
               </div>
             </td>
-            <td class="font-medium">{{ p.name }}</td>
+            <td class="font-medium">
+              <CopyableText :text="p.name">{{ p.name }}</CopyableText>
+            </td>
               <td class="num">{{ formatIDR(p.pricePerUnit) }}/{{ p.unit }}</td>
               <td class="num" :class="p.stockQuantity < 10 ? 'text-amber-600 font-semibold' : ''">
                 {{ formatNumber(p.stockQuantity) }} {{ p.unit }}

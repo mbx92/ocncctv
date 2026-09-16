@@ -11,7 +11,16 @@ export async function getSettings() {
 
 export function presentSettings(row) {
   const key = String(row?.erpSyncApiKey || '').trim()
-  const { erpSyncApiKey, ...rest } = row || {}
+  const {
+    erpSyncApiKey: _erpSyncApiKey,
+    catalogSyncLastAt: _catalogSyncLastAt,
+    catalogSyncLastSource: _catalogSyncLastSource,
+    catalogSyncLastMessage: _catalogSyncLastMessage,
+    catalogSyncCreated: _catalogSyncCreated,
+    catalogSyncUpdated: _catalogSyncUpdated,
+    catalogSyncRemoved: _catalogSyncRemoved,
+    ...rest
+  } = row || {}
   return {
     ...rest,
     erpSyncApiKeySet: !!key,

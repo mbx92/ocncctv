@@ -252,7 +252,7 @@ async function saveUse() {
       <div v-for="m in paged" :key="m.id" class="panel p-3 space-y-3">
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0">
-            <div class="font-medium break-words leading-snug">{{ m.name }}</div>
+            <CopyableText :text="m.name" class="font-medium break-words leading-snug">{{ m.name }}</CopyableText>
             <span class="badge mt-1" :class="materialTypeBadge(m.type)">{{ materialTypeLabel(m.type) }}</span>
           </div>
           <span class="badge shrink-0" :class="stockStatusBadge(m.stockStatus)">{{ stockStatusLabel(m.stockStatus) }}</span>
@@ -314,7 +314,7 @@ async function saveUse() {
           <tbody>
             <tr v-for="m in paged" :key="m.id">
               <td class="font-medium">
-                <div>{{ m.name }}</div>
+                <CopyableText :text="m.name">{{ m.name }}</CopyableText>
                 <div class="text-xs text-ink-400 font-normal mt-0.5">{{ formatIDR(m.pricePerUnit) }}/{{ m.unit }}</div>
               </td>
               <td>

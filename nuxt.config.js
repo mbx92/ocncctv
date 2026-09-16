@@ -61,6 +61,11 @@ export default defineNuxtConfig({
       ]
     }
   },
+  nitro: {
+    experimental: {
+      tasks: true
+    }
+  },
   pwa: {
     registerType: 'autoUpdate',
     injectRegister: 'auto',

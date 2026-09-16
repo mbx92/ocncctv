@@ -1,7 +1,7 @@
-import { eq, sql } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
 import { logAudit } from '../../utils/audit.js'
-import { applyMaterialStockDelta } from '../../utils/materialStock.js'
+import { revertPurchaseLineStock } from '../../utils/supplierPurchase.js'
 
 export default defineEventHandler(async (event) => {
   const id = Number(getRouterParam(event, 'id'))
@@ -13,18 +13,7 @@ export default defineEventHandler(async (event) => {
 
   await db.transaction(async (tx) => {
     for (const line of lines) {
-      if (line.itemType === 'material' && line.materialId) {
-        const delta = Number(line.stockQuantity ?? line.quantity) || 0
-        if (delta) await applyMaterialStockDelta(tx, schema, { id: line.materialId, delta: -delta })
-      } else if (line.itemType === 'packaging' && line.packagingId) {
-        const delta = Number(line.stockQuantity ?? line.quantity) || 0
-        if (delta) {
-          await tx
-            .update(schema.packaging)
-            .set({ stockQuantity: sql`GREATEST(${schema.packaging.stockQuantity} - ${delta}, 0)` })
-            .where(eq(schema.packaging.id, line.packagingId))
-        }
-      }
+      await revertPurchaseLineStock(tx, schema, line)
     }
     if (purchase.expenseId) {
       await tx.delete(schema.expenses).where(eq(schema.expenses.id, purchase.expenseId))

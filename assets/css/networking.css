@@ -42,10 +42,15 @@
 .network-sidebar .app-nav-group { padding: 14px 12px 8px; color: #8ca3b5; font-size: 9px; letter-spacing: .15em; }
 .network-sidebar .app-nav-group:hover { color: #e4eef5; }
 .network-sidebar .app-nav-link { gap: 11px; margin: 2px 0; padding: 10px 12px; font-size: 12px; border-radius: 7px; color: #beccd7; border-left: 2px solid transparent; }
-.network-sidebar .app-nav-link > svg { width: 18px; height: 18px; color: #8ba9bd; }
+.network-sidebar .app-nav-link > svg,
+.network-sidebar .app-nav-link > span > svg { width: 18px; height: 18px; color: #8ba9bd; }
 .network-sidebar .app-nav-link:hover { color: #fff; background: #1b3649; }
 .network-sidebar .app-nav-link--active { color: #e5ffff !important; border-color: #60c6c5 !important; background: #1b4050; font-weight: 600; }
-.network-sidebar .app-nav-link--active > svg { color: #70d1d0; }
+.network-sidebar .app-nav-link--active > svg,
+.network-sidebar .app-nav-link--active > span > svg { color: #70d1d0; }
+.network-sidebar .app-nav-sync-dot { box-shadow: 0 0 0 2px #102636; }
+.network-sidebar .app-nav-sync-dot--ok { background: #2dd4bf; }
+.network-sidebar .app-nav-sync-dot--pending { background: #ef4444; }
 .network-sidebar__footer { padding: 12px 16px 18px; padding-bottom: max(18px, env(safe-area-inset-bottom, 0px)); border-top: 1px solid #294050; }
 .network-theme-link { display: flex; align-items: center; gap: 9px; padding: 6px 4px 15px; font-size: 11px; color: #a9bdcb; }
 .network-theme-link svg { width: 16px; height: 16px; }
@@ -81,6 +86,7 @@
 .network-drawer::backdrop { background: rgb(8 23 35 / 55%); backdrop-filter: blur(3px); }
 .network-drawer .network-sidebar__brand { padding-top: max(24px, env(safe-area-inset-top, 0px)); }
 .network-overview { display: flex; flex-direction: column; gap: 22px; }
+.network-dashboard .catalog-sync-banner { border-color: #b7e3e0; background: #eef8f7; }
 .network-page-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 18px; }
 .network-eyebrow { font-size: 9px; font-weight: 600; letter-spacing: .16em; color: #5e7a8a; }
 .network-page-heading h1 { margin-top: 7px; }
