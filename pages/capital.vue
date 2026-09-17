@@ -1,5 +1,6 @@
 <script setup>
 import { PlusIcon, PencilSquareIcon, TrashIcon, CheckIcon, XMarkIcon, ArrowUpTrayIcon, ArrowDownTrayIcon } from '@heroicons/vue/24/outline'
+import { categoryBadgeProps } from '~/utils/expenseCategory.js'
 
 const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
 
@@ -13,6 +14,7 @@ const { data, refresh } = await useFetch('/api/capital', { query })
 
 const transactions = computed(() => data.value?.transactions || [])
 const summary = computed(() => data.value?.summary || {})
+const expenseBreakdown = computed(() => summary.value.expensesByCategory || [])
 
 const { page, pageSize, paged, total, totalPages, rangeStart, rangeEnd, reset } = usePagination(
   computed(() => transactions.value || []),
@@ -135,8 +137,21 @@ async function remove(t) {
             <td class="num text-amber-600">{{ formatIDR(summary.salesReceivable) }}</td>
           </tr>
           <tr>
-            <td class="pl-6 text-ink-500">− Pengeluaran (termasuk beli alat baru)</td>
+            <td class="pl-6 text-ink-500">− Pengeluaran</td>
             <td class="num text-red-600">{{ formatIDR(summary.totalExpenses) }}</td>
+          </tr>
+          <tr v-for="row in expenseBreakdown" :key="row.category">
+            <td class="pl-10 sm:pl-12">
+              <div class="flex flex-wrap items-center gap-2">
+                <span v-bind="categoryBadgeProps(row.category, row.color)">{{ row.name }}</span>
+                <span class="text-xs text-ink-400">{{ row.percent }}%</span>
+              </div>
+            </td>
+            <td class="num text-red-600">{{ formatIDR(row.amount) }}</td>
+          </tr>
+          <tr v-if="!expenseBreakdown.length">
+            <td class="pl-10 sm:pl-12 text-ink-400">Belum ada pengeluaran</td>
+            <td class="num text-ink-400">{{ formatIDR(0) }}</td>
           </tr>
           <tr class="bg-ink-50 font-semibold">
             <td>Estimasi kas</td>
@@ -148,7 +163,8 @@ async function remove(t) {
       </table>
       <div class="p-3 text-xs text-ink-500 border-t border-ink-200 space-y-1">
         <p>Estimasi kas = modal kas + penjualan lunas − pengeluaran. Piutang belum masuk estimasi kas.</p>
-        <p>Beli peralatan baru memotong kas.</p>
+        <p>Pengeluaran dipecah per jenis (perlengkapan, produk, operasional, peralatan, dan kategori lain) dari sumber yang sama.</p>
+        <p>Beli peralatan baru memotong kas, tampil di baris Peralatan.</p>
         <p>
           Aset peralatan {{ formatIDR(summary.equipmentAssets) }} adalah alat yang sudah dimiliki — bukan kas, tidak dijumlah ke estimasi kas.
         </p>

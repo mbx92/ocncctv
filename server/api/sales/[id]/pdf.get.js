@@ -14,7 +14,8 @@ export default defineEventHandler(async (event) => {
   })
   const settings = await getSettings()
   const invoice = await buildInvoicePayload(db, schema, payload, settings)
-  const bytes = await buildInvoicePdf(invoice)
+  const style = String(getQuery(event).tampilan || '') === 'resmi' ? 'resmi' : 'ringkas'
+  const bytes = await buildInvoicePdf(invoice, { style })
   setResponseHeaders(event, {
     'Content-Type': 'application/pdf',
     'Content-Disposition': `attachment; filename="${invoicePdfFilename(invoice)}"`

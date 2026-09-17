@@ -3,6 +3,7 @@ import { eq, sql } from 'drizzle-orm'
 import { clampDownPayment } from './salePayment.js'
 import { loadRabLines, presentRabLines } from './customOrders.js'
 import { applyRabAdjustments, loadProjectExtraLines, loadProjectRabAdjustments } from './projectLines.js'
+import { resolveOfficialInvoiceCopy } from './invoiceOfficial.js'
 
 const CHANNEL_LABEL = {
   tokopedia: 'Tokopedia',
@@ -214,10 +215,13 @@ export function toInvoicePayload(row, settings, lines = []) {
   const paid = row.paymentStatus === 'paid'
   const methodLabel = PAYMENT_METHOD_LABEL[row.paymentMethod] || row.paymentMethod || null
   const customerName = row.customerName || row.customCustomerName || '—'
+  const title = String(row.productName || row.customTitle || '').trim() || null
+  const businessName = settings.invoiceBusinessName || 'OCN'
   return {
     id: row.id,
     invoiceNumber: row.invoiceNumber,
     date: row.date,
+    title,
     customerName,
     channel: row.channel,
     channelLabel: CHANNEL_LABEL[row.channel] || row.channel,
@@ -243,8 +247,15 @@ export function toInvoicePayload(row, settings, lines = []) {
     downPayment,
     downPaymentLabel: downPayment > 0 ? 'Uang muka (DP)' : null,
     total: afterDiscount - downPayment,
+    official: resolveOfficialInvoiceCopy(settings, {
+      title: title || 'pekerjaan ini',
+      customerName,
+      businessName,
+      jobTypeLabel: '',
+      quoteNumber: row.invoiceNumber || ''
+    }),
     business: {
-      name: settings.invoiceBusinessName || 'OCN',
+      name: businessName,
       address: settings.invoiceAddress || null,
       phone: settings.invoicePhone || null,
       footer: settings.invoiceFooter || 'Terima kasih telah berbelanja.'

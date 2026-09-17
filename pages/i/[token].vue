@@ -1,10 +1,22 @@
 <script setup>
 import { PrinterIcon, ArrowDownTrayIcon } from '@heroicons/vue/24/outline'
+import { parseQuoteStyle } from '~/utils/quoteStyle.js'
 
 definePageMeta({ layout: 'print' })
 
 const route = useRoute()
+const router = useRouter()
 const { data: invoice, error } = await useFetch(`/api/public/invoices/${route.params.token}`)
+
+const invoiceStyle = computed({
+  get: () => parseQuoteStyle(route.query.tampilan),
+  set(value) {
+    const query = { ...route.query }
+    if (value === 'resmi') query.tampilan = 'resmi'
+    else delete query.tampilan
+    router.replace({ query })
+  }
+})
 
 useHead({
   title: computed(() => (invoice.value ? `Invoice ${invoice.value.invoiceNumber}` : 'Invoice'))
@@ -20,7 +32,10 @@ async function downloadPdf() {
   if (!invoice.value) return
   pdfBusy.value = true
   try {
-    const blob = await $fetch(`/api/public/invoices/${route.params.token}/pdf`, { responseType: 'blob' })
+    const blob = await $fetch(
+      `/api/public/invoices/${route.params.token}/pdf${invoiceStyle.value === 'resmi' ? '?tampilan=resmi' : ''}`,
+      { responseType: 'blob' }
+    )
     const href = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = href
@@ -40,6 +55,7 @@ async function downloadPdf() {
 <template>
   <div class="min-h-screen bg-ink-100 print:bg-white">
     <div class="no-print sticky top-0 z-10 flex flex-wrap items-center justify-end gap-2 px-3 py-2.5 sm:px-4 sm:py-3 bg-ink-900 text-ink-100 print:hidden">
+      <QuoteStyleToggle v-model="invoiceStyle" />
       <button class="btn-secondary !text-ink-800" type="button" @click="printInvoice">
         <PrinterIcon class="w-4 h-4" />Cetak
       </button>
@@ -48,6 +64,7 @@ async function downloadPdf() {
       </button>
     </div>
     <p v-if="error" class="p-6 text-sm text-red-600">{{ error.data?.statusMessage || 'Tautan tidak valid atau sudah kedaluwarsa' }}</p>
-    <InvoiceSheet v-if="invoice" :invoice="invoice" />
+    <InvoiceOfficialSheet v-if="invoice && invoiceStyle === 'resmi'" :invoice="invoice" />
+    <InvoiceSheet v-else-if="invoice" :invoice="invoice" />
   </div>
 </template>

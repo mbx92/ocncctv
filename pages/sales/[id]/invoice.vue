@@ -1,10 +1,22 @@
 <script setup>
 import { ArrowLeftIcon, PrinterIcon, ArrowDownTrayIcon, ShareIcon, ClipboardDocumentIcon } from '@heroicons/vue/24/outline'
+import { parseQuoteStyle } from '~/utils/quoteStyle.js'
 
 definePageMeta({ layout: 'print' })
 
 const route = useRoute()
+const router = useRouter()
 const { data: invoice, error } = await useFetch(`/api/sales/${route.params.id}`)
+
+const invoiceStyle = computed({
+  get: () => parseQuoteStyle(route.query.tampilan),
+  set(value) {
+    const query = { ...route.query }
+    if (value === 'resmi') query.tampilan = 'resmi'
+    else delete query.tampilan
+    router.replace({ query })
+  }
+})
 
 useHead({
   title: computed(() => (invoice.value ? `Invoice ${invoice.value.invoiceNumber}` : 'Invoice'))
@@ -41,7 +53,8 @@ async function shareInvoice() {
   shareBusy.value = true
   try {
     const res = await $fetch(`/api/sales/${route.params.id}/share`, { method: 'POST' })
-    const url = `${window.location.origin}${res.path}`
+    const qs = invoiceStyle.value === 'resmi' ? '?tampilan=resmi' : ''
+    const url = `${window.location.origin}${res.path}${qs}`
     shareInfo.value = { url, expiresAt: res.expiresAt, reused: res.reused }
     if (navigator.share) {
       try {
@@ -84,6 +97,7 @@ async function copyShareUrl() {
         <ArrowLeftIcon class="w-4 h-4" /> Penjualan
       </NuxtLink>
       <div class="flex flex-wrap items-center gap-2">
+        <QuoteStyleToggle v-model="invoiceStyle" />
         <button class="btn-secondary !text-ink-800" type="button" @click="printInvoice">
           <PrinterIcon class="w-4 h-4" />Cetak
         </button>
@@ -91,7 +105,7 @@ async function copyShareUrl() {
           class="btn-secondary !text-ink-800"
           type="button"
           :disabled="pdfBusy || !invoice"
-          @click="downloadPdf(`/api/sales/${route.params.id}/pdf`, `${invoice?.invoiceNumber || 'invoice'}.pdf`)"
+          @click="downloadPdf(`/api/sales/${route.params.id}/pdf${invoiceStyle === 'resmi' ? '?tampilan=resmi' : ''}`, `${invoice?.invoiceNumber || 'invoice'}.pdf`)"
         >
           <ArrowDownTrayIcon class="w-4 h-4" />{{ pdfBusy ? 'Mengunduh…' : 'PDF' }}
         </button>
@@ -114,6 +128,7 @@ async function copyShareUrl() {
       </div>
     </div>
 
-    <InvoiceSheet v-if="invoice" :invoice="invoice" />
+    <InvoiceOfficialSheet v-if="invoice && invoiceStyle === 'resmi'" :invoice="invoice" />
+    <InvoiceSheet v-else-if="invoice" :invoice="invoice" />
   </div>
 </template>

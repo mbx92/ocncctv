@@ -44,6 +44,31 @@ export function totalCashOut(expenseRows) {
   return expenseRows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0)
 }
 
+export function expensesByCategory(expenseRows) {
+  const map = new Map()
+  for (const row of expenseRows || []) {
+    const key = String(row.category || 'other')
+    const prev = map.get(key) || {
+      category: key,
+      name: row.categoryName || (key === 'other' ? 'Lainnya' : key),
+      color: row.categoryColor || null,
+      amount: 0
+    }
+    if (row.categoryName) prev.name = row.categoryName
+    if (row.categoryColor && !prev.color) prev.color = row.categoryColor
+    prev.amount += Number(row.amount) || 0
+    map.set(key, prev)
+  }
+  const total = [...map.values()].reduce((sum, row) => sum + row.amount, 0)
+  return [...map.values()]
+    .filter((row) => row.amount > 0)
+    .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name, 'id'))
+    .map((row) => ({
+      ...row,
+      percent: total ? Math.round((row.amount / total) * 100) : 0
+    }))
+}
+
 export function equipmentAssetTotal(machineRows) {
   return (machineRows || []).reduce((sum, row) => {
     if (row.acquisition === 'purchased') return sum
@@ -62,6 +87,7 @@ export function capitalPosition({ capitalRows, salesRows, expenseRows, machineRo
     salesRevenue,
     salesReceivable: receivable,
     totalExpenses,
+    expensesByCategory: expensesByCategory(expenseRows),
     equipmentAssets,
     estimatedCash: owner.netCapital + salesRevenue - totalExpenses
   }

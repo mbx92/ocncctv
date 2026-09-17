@@ -30,7 +30,15 @@ export default defineEventHandler(async (event) => {
         paymentStatus: schema.sales.paymentStatus
       })
       .from(schema.sales),
-    db.select({ amount: schema.expenses.amount, category: schema.expenses.category }).from(schema.expenses),
+    db
+      .select({
+        amount: schema.expenses.amount,
+        category: schema.expenses.category,
+        categoryName: schema.expenseCategories.name,
+        categoryColor: schema.expenseCategories.color
+      })
+      .from(schema.expenses)
+      .leftJoin(schema.expenseCategories, eq(schema.expenses.category, schema.expenseCategories.key)),
     db
       .select({
         purchasePrice: schema.machines.purchasePrice,
