@@ -21,5 +21,6 @@ useHead({
   <ToastContainer />
   <ClientOnly>
     <PwaPrompt />
+    <NotificationPrompt />
   </ClientOnly>
 </template>

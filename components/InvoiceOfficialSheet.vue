@@ -64,6 +64,9 @@ const copy = computed(() => {
             <span v-if="invoice.paymentMethodLabel"> · {{ invoice.paymentMethodLabel }}</span>
           </div>
           <div v-if="invoice.paidAt"><span class="text-ink-500">Dibayar</span> {{ formatDate(invoice.paidAt) }}</div>
+          <div v-if="invoice.paymentStatus === 'unpaid' && invoice.dueDate">
+            <span class="text-ink-500">Jatuh tempo</span> {{ formatDate(invoice.dueDate) }}
+          </div>
         </div>
       </div>
     </header>

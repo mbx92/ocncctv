@@ -3,6 +3,13 @@ import { sanitizeText } from './sanitizeText.js'
 
 export const CALENDAR_EVENT_KINDS = ['survey', 'meeting', 'followup', 'other']
 
+export const calendarEventKindLabel = {
+  survey: 'Cek lokasi',
+  meeting: 'Meeting',
+  followup: 'Follow-up',
+  other: 'Lainnya'
+}
+
 export function normalizeCalendarEventKind(value) {
   const raw = String(value || '').trim()
   return CALENDAR_EVENT_KINDS.includes(raw) ? raw : null

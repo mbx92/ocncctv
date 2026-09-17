@@ -470,6 +470,13 @@
       "when": 1789600000024,
       "tag": "0066_project_down_payments",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1789600000025,
+      "tag": "0067_reminders",
+      "breakpoints": true
     }
   ]
 }

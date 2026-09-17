@@ -19,6 +19,8 @@ export function presentSettings(row) {
     catalogSyncCreated: _catalogSyncCreated,
     catalogSyncUpdated: _catalogSyncUpdated,
     catalogSyncRemoved: _catalogSyncRemoved,
+    vapidPublicKey: _vapidPublicKey,
+    vapidPrivateKey: _vapidPrivateKey,
     ...rest
   } = row || {}
   return {

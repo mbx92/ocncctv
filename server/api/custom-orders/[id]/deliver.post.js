@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm'
 import { useDb, schema } from '../../../db/index.js'
 import { logAudit } from '../../../utils/audit.js'
 import { allocateInvoiceNumber } from '../../../utils/invoice.js'
-import { parseSalePayment } from '../../../utils/salePayment.js'
+import { parseSalePayment, resolveDueDate } from '../../../utils/salePayment.js'
 
 export default defineEventHandler(async (event) => {
   const id = Number(getRouterParam(event, 'id'))
@@ -53,7 +53,12 @@ export default defineEventHandler(async (event) => {
         notes: body.notes || `RAB · ${order.customerName} · ${order.title}`,
         customerName: order.customerName,
         invoiceNumber,
-        ...payment
+        ...payment,
+        dueDate: resolveDueDate({
+          dueDate: body.dueDate,
+          paymentStatus: payment.paymentStatus,
+          saleDate
+        })
       })
       .returning()
     await tx.update(schema.customOrders).set({ status: 'delivered' }).where(eq(schema.customOrders.id, id))

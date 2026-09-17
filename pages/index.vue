@@ -27,6 +27,7 @@ function signedPct(n) {
 <template>
   <div class="space-y-4" :class="{ 'network-dashboard': theme === 'professional' }">
     <CatalogSyncBanner />
+    <RemindersBanner />
     <NetworkingDashboard v-if="theme === 'professional'" :data="data" :month="monthLabel" :loading="status === 'pending'" @refresh="refresh()" />
     <div v-else class="flex items-center justify-between gap-2">
       <div>

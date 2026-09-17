@@ -490,6 +490,7 @@ export const sales = pgTable(
     paymentNotes: text('payment_notes'),
     // Snapshot uang muka proyek saat penjualan dicatat. Invoice: total − DP.
     downPaymentAmount: integer('down_payment_amount').notNull().default(0),
+    dueDate: date('due_date'),
     createdAt: timestamp('created_at').notNull().defaultNow()
   },
   (t) => ({
@@ -565,8 +566,44 @@ export const appSettings = pgTable('app_settings', {
   catalogSyncLastMessage: text('catalog_sync_last_message'),
   catalogSyncCreated: integer('catalog_sync_created').notNull().default(0),
   catalogSyncUpdated: integer('catalog_sync_updated').notNull().default(0),
-  catalogSyncRemoved: integer('catalog_sync_removed').notNull().default(0)
+  catalogSyncRemoved: integer('catalog_sync_removed').notNull().default(0),
+  vapidPublicKey: text('vapid_public_key'),
+  vapidPrivateKey: text('vapid_private_key')
 })
+
+export const pushSubscriptions = pgTable(
+  'push_subscriptions',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    endpoint: text('endpoint').notNull(),
+    p256dh: text('p256dh').notNull(),
+    auth: text('auth').notNull(),
+    userAgent: text('user_agent'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow()
+  },
+  (t) => ({
+    endpointUniq: uniqueIndex('push_subscriptions_endpoint_uidx').on(t.endpoint),
+    userIdx: pgIndex('push_subscriptions_user_id_idx').on(t.userId)
+  })
+)
+
+export const reminderDispatches = pgTable(
+  'reminder_dispatches',
+  {
+    id: serial('id').primaryKey(),
+    kind: text('kind').notNull(),
+    entityId: integer('entity_id').notNull(),
+    day: date('day').notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow()
+  },
+  (t) => ({
+    kindEntityDayUniq: uniqueIndex('reminder_dispatches_kind_entity_day_uidx').on(t.kind, t.entityId, t.day)
+  })
+)
 
 // Tautan publik invoice: token acak, kadaluarsa sesuai pengaturan saat dibuat.
 export const invoiceShareLinks = pgTable(

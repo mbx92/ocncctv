@@ -1,4 +1,6 @@
 import { sanitizeText } from './sanitizeText.js'
+import { parseYmd } from './projectStatus.js'
+import { addDaysYmd } from './dates.js'
 
 const METHODS = ['cash', 'transfer', 'other']
 
@@ -34,6 +36,16 @@ export function resolveDiscount(body, afterFee) {
     discountPercent: cap ? Math.round((amount / cap) * 1000) / 10 : 0,
     discountAmount: amount
   }
+}
+
+export function resolveDueDate({ dueDate, paymentStatus, saleDate, existingDueDate }) {
+  if (paymentStatus === 'paid') return existingDueDate || null
+  if (dueDate === null || dueDate === '') return null
+  const parsed = parseYmd(dueDate)
+  if (parsed) return parsed
+  if (existingDueDate) return existingDueDate
+  const base = parseYmd(saleDate)
+  return base ? addDaysYmd(base, 7) : null
 }
 
 export function parseSalePayment(body, _channel, saleDate, moneySource) {

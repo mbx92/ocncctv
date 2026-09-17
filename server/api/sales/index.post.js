@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
 import { logAudit } from '../../utils/audit.js'
 import { allocateInvoiceNumber } from '../../utils/invoice.js'
-import { parseSalePayment } from '../../utils/salePayment.js'
+import { parseSalePayment, resolveDueDate } from '../../utils/salePayment.js'
 import { downPaymentTotal, loadProjectFinanceMap } from '../../utils/projectRevenue.js'
 
 export default defineEventHandler(async (event) => {
@@ -63,7 +63,12 @@ export default defineEventHandler(async (event) => {
         customerName,
         invoiceNumber,
         downPaymentAmount,
-        ...payment
+        ...payment,
+        dueDate: resolveDueDate({
+          dueDate: body.dueDate,
+          paymentStatus: payment.paymentStatus,
+          saleDate: body.date
+        })
       })
       .returning()
     return created

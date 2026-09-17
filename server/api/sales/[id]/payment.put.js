@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { useDb, schema } from '../../../db/index.js'
 import { logAudit } from '../../../utils/audit.js'
-import { parseSalePayment } from '../../../utils/salePayment.js'
+import { parseSalePayment, resolveDueDate } from '../../../utils/salePayment.js'
 
 export default defineEventHandler(async (event) => {
   const id = Number(getRouterParam(event, 'id'))
@@ -18,7 +18,15 @@ export default defineEventHandler(async (event) => {
   )
   const [row] = await db
     .update(schema.sales)
-    .set(payment)
+    .set({
+      ...payment,
+      dueDate: resolveDueDate({
+        dueDate: body.dueDate,
+        paymentStatus: payment.paymentStatus,
+        saleDate: existing.date,
+        existingDueDate: existing.dueDate
+      })
+    })
     .where(eq(schema.sales.id, id))
     .returning()
   await logAudit(event, {

@@ -6,7 +6,8 @@ export default defineNuxtRouteMiddleware(async (to) => {
     to.path.startsWith('/i/') ||
     to.path.startsWith('/q/') ||
     to.path.startsWith('/p/') ||
-    to.path.startsWith('/workbox-')
+    to.path.startsWith('/workbox-') ||
+    to.path === '/sw-push.js'
   ) {
     return
   }

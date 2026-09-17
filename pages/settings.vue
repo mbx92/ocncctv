@@ -236,6 +236,7 @@ async function confirmErpSync(projectIds) {
     </div>
 
     <SettingsAppearance v-if="tab === 'tampilan'" />
+    <NotificationSettings v-if="tab === 'umum'" />
 
     <form v-if="formTabs.has(tab)" class="panel p-4 space-y-4" @submit.prevent="save">
       <template v-if="tab === 'umum'">

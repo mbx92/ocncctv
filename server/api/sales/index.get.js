@@ -39,7 +39,8 @@ export default defineEventHandler(async (event) => {
       discountKind: schema.sales.discountKind,
       discountPercent: schema.sales.discountPercent,
       paymentNotes: schema.sales.paymentNotes,
-      downPaymentAmount: schema.sales.downPaymentAmount
+      downPaymentAmount: schema.sales.downPaymentAmount,
+      dueDate: schema.sales.dueDate
     })
     .from(schema.sales)
     .leftJoin(schema.products, eq(schema.sales.productId, schema.products.id))

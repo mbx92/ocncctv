@@ -111,7 +111,8 @@ export async function loadSaleInvoiceRow(tx, schema, id) {
       discountAmount: schema.sales.discountAmount,
       discountKind: schema.sales.discountKind,
       discountPercent: schema.sales.discountPercent,
-      downPaymentAmount: schema.sales.downPaymentAmount
+      downPaymentAmount: schema.sales.downPaymentAmount,
+      dueDate: schema.sales.dueDate
     })
     .from(schema.sales)
     .leftJoin(schema.products, eq(schema.sales.productId, schema.products.id))
@@ -246,6 +247,7 @@ export function toInvoicePayload(row, settings, lines = []) {
         : null,
     downPayment,
     downPaymentLabel: downPayment > 0 ? 'Uang muka (DP)' : null,
+    dueDate: row.dueDate || null,
     total: afterDiscount - downPayment,
     official: resolveOfficialInvoiceCopy(settings, {
       title: title || 'pekerjaan ini',

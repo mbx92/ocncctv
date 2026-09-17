@@ -566,6 +566,7 @@ async function createRabFromVisit() {
           <label class="label">Catatan</label>
           <textarea v-model="form.notes" class="input min-h-[4.5rem]" placeholder="alamat, yang perlu dicek, jam, dll." />
         </div>
+        <p class="text-xs text-ink-400">Pengingat muncul di hari H dan sehari sebelumnya, jika notifikasi diaktifkan.</p>
         <p v-if="errorMsg" class="text-sm text-red-600">{{ errorMsg }}</p>
         <div class="flex flex-wrap justify-end gap-2 pt-1">
           <button v-if="editing" type="button" class="btn-action-danger mr-auto" :disabled="!!acting" @click="removeVisit">

@@ -64,6 +64,9 @@ export default defineNuxtConfig({
   nitro: {
     experimental: {
       tasks: true
+    },
+    scheduledTasks: {
+      '0 0,7,13 * * *': ['reminders:dispatch']
     }
   },
   pwa: {
@@ -91,10 +94,11 @@ export default defineNuxtConfig({
     workbox: {
       globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}'],
       navigateFallback: '/',
-      navigateFallbackDenylist: [/^\/api\//, /^\/i\//, /^\/q\//, /^\/p\//, /^\/manifest\.webmanifest$/, /^\/sw\.js$/],
+      navigateFallbackDenylist: [/^\/api\//, /^\/i\//, /^\/q\//, /^\/p\//, /^\/manifest\.webmanifest$/, /^\/sw\.js$/, /^\/sw-push\.js$/],
       cleanupOutdatedCaches: true,
       clientsClaim: true,
-      skipWaiting: true
+      skipWaiting: true,
+      importScripts: ['/sw-push.js']
     },
     client: {
       installPrompt: true,

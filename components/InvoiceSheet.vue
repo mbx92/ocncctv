@@ -49,6 +49,13 @@ function itemUnit(item) {
           <span v-if="invoice.paymentMethodLabel"> · {{ invoice.paymentMethodLabel }}</span>
         </div>
         <div v-if="invoice.paidAt" class="text-xs text-ink-500 mt-0.5">{{ formatDate(invoice.paidAt) }}</div>
+        <div
+          v-if="invoice.paymentStatus === 'unpaid' && invoice.dueDate"
+          class="text-xs mt-0.5"
+          :class="invoice.dueDate < todayStr() ? 'text-red-600' : 'text-ink-500'"
+        >
+          Jatuh tempo {{ formatDate(invoice.dueDate) }}
+        </div>
       </div>
     </section>
 

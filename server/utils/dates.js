@@ -12,6 +12,24 @@ export function monthStartStr(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
 }
 
+export function addDaysYmd(value, days) {
+  const s = toDateStr(value)
+  if (!s) return null
+  const [y, m, d] = s.split('-').map(Number)
+  const dt = new Date(y, m - 1, d)
+  dt.setDate(dt.getDate() + Number(days || 0))
+  return localDateStr(dt)
+}
+
+export function diffDaysYmd(from, to) {
+  const a = toDateStr(from)
+  const b = toDateStr(to)
+  if (!a || !b) return 0
+  const [ay, am, ad] = a.split('-').map(Number)
+  const [by, bm, bd] = b.split('-').map(Number)
+  return Math.round((new Date(by, bm - 1, bd) - new Date(ay, am - 1, ad)) / 86400000)
+}
+
 /** Normalisasi nilai DATE dari pg/Drizzle/query string → 'YYYY-MM-DD' atau null. */
 export function toDateStr(value) {
   if (value == null || value === '') return null

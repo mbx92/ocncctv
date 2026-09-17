@@ -98,6 +98,7 @@ function openAdd() {
     paymentStatus: 'paid',
     paymentMethod: 'cash',
     paidAt: todayStr(),
+    dueDate: ''
   }
   errorMsg.value = ''
   showForm.value = true
@@ -156,6 +157,11 @@ watch(
     if (status === 'paid') {
       if (!form.value.paidAt) form.value.paidAt = form.value.date || todayStr()
       if (!form.value.paymentMethod) form.value.paymentMethod = 'cash'
+    } else if (!form.value.dueDate) {
+      const base = form.value.date || todayStr()
+      const d = new Date(`${base}T00:00:00`)
+      d.setDate(d.getDate() + 7)
+      form.value.dueDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
     }
   }
 )
@@ -181,6 +187,25 @@ function saleGross(s) {
 function remainingDue(s) {
   if (s?.dueAmount != null) return Math.max(Math.round(Number(s.dueAmount) || 0), 0)
   return Math.max((s?.netRevenue || 0) - (s?.downPaymentAmount || 0), 0)
+}
+function invoiceDueState(s) {
+  const due = String(s?.dueDate || '').slice(0, 10)
+  if (s?.paymentStatus === 'paid' || !due) return null
+  const today = todayStr()
+  if (due < today) return 'overdue'
+  if (due === today) return 'today'
+  return 'upcoming'
+}
+async function setDueDate(s, dueDate) {
+  try {
+    await $fetch(`/api/sales/${s.id}/payment`, {
+      method: 'PUT',
+      body: { paymentStatus: 'unpaid', dueDate: dueDate || null }
+    })
+    await refresh()
+  } catch (e) {
+    useToast().error(e.data?.statusMessage || 'Gagal menyimpan jatuh tempo')
+  }
 }
 function discountLine(s) {
   if (!s.discountAmount) return ''
@@ -387,6 +412,27 @@ async function remove(s) {
             <dt>Sisa tagihan</dt>
             <dd class="font-mono text-amber-700">{{ formatIDR(remainingDue(s)) }}</dd>
           </div>
+          <div v-if="s.paymentStatus === 'unpaid'" class="col-span-2">
+            <label class="text-xs text-ink-500">Jatuh tempo</label>
+            <input
+              :value="s.dueDate || ''"
+              type="date"
+              class="input mt-0.5"
+              @change="setDueDate(s, $event.target.value)"
+            />
+            <p
+              v-if="invoiceDueState(s) === 'overdue'"
+              class="text-xs text-red-600 mt-0.5"
+            >
+              Telat
+            </p>
+            <p
+              v-else-if="invoiceDueState(s) === 'today'"
+              class="text-xs text-amber-700 mt-0.5"
+            >
+              Jatuh tempo hari ini
+            </p>
+          </div>
         </dl>
         <div class="pt-1 btn-actions">
           <NuxtLink :to="`/sales/${s.id}/invoice`" class="btn-action">
@@ -442,6 +488,26 @@ async function remove(s) {
                 </div>
                 <div v-if="s.paymentStatus === 'unpaid'" class="text-xs text-amber-700 font-normal">
                   Sisa {{ formatIDR(remainingDue(s)) }}
+                </div>
+                <div v-if="s.paymentStatus === 'unpaid'" class="mt-1">
+                  <input
+                    :value="s.dueDate || ''"
+                    type="date"
+                    class="input !h-8 !text-xs !py-0 max-w-[11rem]"
+                    @change="setDueDate(s, $event.target.value)"
+                  />
+                  <div
+                    v-if="invoiceDueState(s) === 'overdue'"
+                    class="text-xs text-red-600 font-normal mt-0.5"
+                  >
+                    Telat
+                  </div>
+                  <div
+                    v-else-if="invoiceDueState(s) === 'today'"
+                    class="text-xs text-amber-700 font-normal mt-0.5"
+                  >
+                    Jatuh tempo hari ini
+                  </div>
                 </div>
               </td>
               <td>
@@ -609,6 +675,11 @@ async function remove(s) {
             <div v-if="form.paymentStatus === 'paid'" class="date-field">
               <label class="label">Tanggal bayar</label>
               <input v-model="form.paidAt" type="date" class="input" />
+            </div>
+            <div v-if="form.paymentStatus === 'unpaid'" class="date-field sm:col-span-2">
+              <label class="label">Jatuh tempo</label>
+              <input v-model="form.dueDate" type="date" class="input" />
+              <p class="text-xs text-ink-400 mt-1">Pengingat dikirim pada tanggal ini, lalu setiap hari jika masih belum lunas.</p>
             </div>
           </div>
         </div>
