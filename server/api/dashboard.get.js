@@ -5,6 +5,7 @@ import { localDateStr, monthStartStr } from '../utils/dates.js'
 import { isOperatingExpenseCategory } from '../utils/expensePl.js'
 import { capitalPosition } from '../utils/capitalPosition.js'
 import { normalizeProductStatus } from '../utils/projectStatus.js'
+import { loadUnsoldProjectDownPayments } from '../utils/projectRevenue.js'
 
 const PACKAGING_LOW_STOCK = 10
 const PRODUCT_LOW_STOCK = 3
@@ -157,7 +158,7 @@ export default defineEventHandler(async () => {
     .from(schema.supplierPurchases)
     .where(and(gte(schema.supplierPurchases.date, monthStart), lte(schema.supplierPurchases.date, monthEnd)))
 
-  const [lowMaterials, lowPackaging, lowProducts, materialsCount, packagingCount, productCounts, seriesCount, machineCount, productionOpen, capitalRows, allSales, allExpenses, allMachines] =
+  const [lowMaterials, lowPackaging, lowProducts, materialsCount, packagingCount, productCounts, seriesCount, machineCount, productionOpen, capitalRows, allSales, allExpenses, allMachines, unsoldDownPayments] =
     await Promise.all([
       db
         .select({
@@ -196,6 +197,7 @@ export default defineEventHandler(async () => {
           quantity: schema.sales.quantity,
           salePricePerUnit: schema.sales.salePricePerUnit,
           discountAmount: schema.sales.discountAmount,
+          downPaymentAmount: schema.sales.downPaymentAmount,
           paymentStatus: schema.sales.paymentStatus
         })
         .from(schema.sales),
@@ -206,7 +208,8 @@ export default defineEventHandler(async () => {
           quantity: schema.machines.quantity,
           acquisition: schema.machines.acquisition
         })
-        .from(schema.machines)
+        .from(schema.machines),
+      loadUnsoldProjectDownPayments(db, schema)
     ])
 
   const productsByStatus = { waiting: 0, in_progress: 0, done: 0 }
@@ -217,7 +220,13 @@ export default defineEventHandler(async () => {
     productsTotal += r.c
   }
 
-  const capital = capitalPosition({ capitalRows, salesRows: allSales, expenseRows: allExpenses, machineRows: allMachines })
+  const capital = capitalPosition({
+    capitalRows,
+    salesRows: allSales,
+    expenseRows: allExpenses,
+    machineRows: allMachines,
+    unsoldDownPayments
+  })
 
   lowMaterials.sort((a, b) => {
     if (a.stockStatus === b.stockStatus) return String(a.name).localeCompare(String(b.name), 'id')

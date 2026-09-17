@@ -35,12 +35,38 @@ export function summarizeProjectRevenue(lines, wages) {
   }
 }
 
+export function downPaymentTotal(rows) {
+  return (rows || []).reduce((sum, row) => sum + Math.max(Math.round(Number(row.amount) || 0), 0), 0)
+}
+
+export async function loadUnsoldProjectDownPayments(db, schema) {
+  const sold = await db.select({ productId: schema.sales.productId }).from(schema.sales)
+  const soldIds = new Set(sold.map((row) => Number(row.productId)).filter(Boolean))
+  const rows = await db.select({
+    productId: schema.projectDownPayments.productId,
+    amount: schema.projectDownPayments.amount
+  }).from(schema.projectDownPayments)
+  let total = 0
+  for (const row of rows) {
+    if (soldIds.has(Number(row.productId))) continue
+    total += Math.max(Math.round(Number(row.amount) || 0), 0)
+  }
+  return total
+}
+
 export async function loadProjectFinanceMap(db, schema, productIds) {
   const ids = [...new Set((productIds || []).filter(Boolean))]
   const map = new Map(
     ids.map((id) => [
       id,
-      { rab: null, extraLines: [], rabAdjustments: [], wages: [], summary: summarizeProjectRevenue([], []) }
+      {
+        rab: null,
+        extraLines: [],
+        rabAdjustments: [],
+        wages: [],
+        downPayments: [],
+        summary: summarizeProjectRevenue([], [])
+      }
     ])
   )
   if (!ids.length) return map
@@ -56,6 +82,14 @@ export async function loadProjectFinanceMap(db, schema, productIds) {
 
   const extraMap = await loadProjectExtraLines(db, schema, ids)
   const adjMap = await loadProjectRabAdjustments(db, schema, ids)
+  const dpRows = await db
+    .select()
+    .from(schema.projectDownPayments)
+    .where(inArray(schema.projectDownPayments.productId, ids))
+    .orderBy(asc(schema.projectDownPayments.date), asc(schema.projectDownPayments.id))
+  for (const row of dpRows) {
+    map.get(row.productId)?.downPayments.push(row)
+  }
   for (const id of ids) {
     const entry = map.get(id)
     if (!entry) continue

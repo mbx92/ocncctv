@@ -71,3 +71,14 @@ export function saleMoney({ salePricePerUnit, quantity, discountAmount }) {
   const discount = Math.min(Math.max(Math.round(Number(discountAmount) || 0), 0), gross)
   return { gross, fee: 0, discount, net: gross - discount }
 }
+
+export function clampDownPayment(amount, cap) {
+  const limit = Math.max(Math.round(Number(cap) || 0), 0)
+  return Math.min(Math.max(Math.round(Number(amount) || 0), 0), limit)
+}
+
+export function saleSettled({ salePricePerUnit, quantity, discountAmount, downPaymentAmount }) {
+  const money = saleMoney({ salePricePerUnit, quantity, discountAmount })
+  const downPayment = clampDownPayment(downPaymentAmount, money.net)
+  return { ...money, downPayment, due: money.net - downPayment }
+}

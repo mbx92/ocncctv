@@ -1,7 +1,7 @@
 import { and, eq, gte, lte, desc, sql } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
 import { attachSaleCogs } from '../../utils/salesAggregate.js'
-import { saleMoney } from '../../utils/salePayment.js'
+import { saleMoney, saleSettled } from '../../utils/salePayment.js'
 
 export default defineEventHandler(async (event) => {
   const q = getQuery(event)
@@ -38,7 +38,8 @@ export default defineEventHandler(async (event) => {
       discountAmount: schema.sales.discountAmount,
       discountKind: schema.sales.discountKind,
       discountPercent: schema.sales.discountPercent,
-      paymentNotes: schema.sales.paymentNotes
+      paymentNotes: schema.sales.paymentNotes,
+      downPaymentAmount: schema.sales.downPaymentAmount
     })
     .from(schema.sales)
     .leftJoin(schema.products, eq(schema.sales.productId, schema.products.id))
@@ -49,6 +50,7 @@ export default defineEventHandler(async (event) => {
   return attachSaleCogs(
     rows.map((r) => {
       const money = saleMoney(r)
+      const settled = saleSettled(r)
       return {
         ...r,
         isCustom: !!r.customOrderId,
@@ -56,6 +58,8 @@ export default defineEventHandler(async (event) => {
         grossRevenue: money.gross,
         feeAmount: money.fee,
         discountAmount: money.discount,
+        downPaymentAmount: settled.downPayment,
+        dueAmount: settled.due,
         netRevenue: money.net
       }
     })

@@ -3,6 +3,7 @@ import { useDb, schema } from '../../db/index.js'
 import { logAudit } from '../../utils/audit.js'
 import { allocateInvoiceNumber } from '../../utils/invoice.js'
 import { parseSalePayment } from '../../utils/salePayment.js'
+import { downPaymentTotal, loadProjectFinanceMap } from '../../utils/projectRevenue.js'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
@@ -46,6 +47,8 @@ export default defineEventHandler(async (event) => {
     const customerName =
       String(body.customerName || '').trim() || String(rab?.customerName || '').trim() || null
     const invoiceNumber = await allocateInvoiceNumber(tx, schema, body.date)
+    const financeMap = await loadProjectFinanceMap(tx, schema, [productId])
+    const downPaymentAmount = downPaymentTotal(financeMap.get(productId)?.downPayments || [])
     const created = await tx
       .insert(schema.sales)
       .values({
@@ -59,6 +62,7 @@ export default defineEventHandler(async (event) => {
         notes: body.notes || null,
         customerName,
         invoiceNumber,
+        downPaymentAmount,
         ...payment
       })
       .returning()

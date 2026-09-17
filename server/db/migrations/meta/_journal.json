@@ -463,6 +463,13 @@
       "when": 1789600000023,
       "tag": "0065_cable_roll_meters",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1789600000024,
+      "tag": "0066_project_down_payments",
+      "breakpoints": true
     }
   ]
 }

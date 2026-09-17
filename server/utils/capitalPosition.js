@@ -1,4 +1,4 @@
-import { saleMoney } from './salePayment.js'
+import { saleSettled } from './salePayment.js'
 import { machineTotalValue } from './machines.js'
 
 // Posisi modal kas + estimasi kas.
@@ -15,26 +15,28 @@ export function ownerCapital(rows) {
   }
 }
 
-function saleNet(row) {
-  const { net } = saleMoney({
+function saleRowSettled(row) {
+  return saleSettled({
     salePricePerUnit: row.salePricePerUnit,
     quantity: row.quantity,
-    discountAmount: row.discountAmount
+    discountAmount: row.discountAmount,
+    downPaymentAmount: row.downPaymentAmount
   })
-  return net
 }
 
-export function salesInflow(salesRows) {
-  return salesRows.reduce((sum, row) => {
-    if (row.paymentStatus === 'unpaid') return sum
-    return sum + saleNet(row)
+export function salesInflow(salesRows, unsoldDownPayments = 0) {
+  const fromSales = salesRows.reduce((sum, row) => {
+    const settled = saleRowSettled(row)
+    if (row.paymentStatus === 'unpaid') return sum + settled.downPayment
+    return sum + settled.net
   }, 0)
+  return fromSales + Math.max(Math.round(Number(unsoldDownPayments) || 0), 0)
 }
 
 export function salesReceivable(salesRows) {
   return salesRows.reduce((sum, row) => {
     if (row.paymentStatus !== 'unpaid') return sum
-    return sum + saleNet(row)
+    return sum + saleRowSettled(row).due
   }, 0)
 }
 
@@ -49,9 +51,9 @@ export function equipmentAssetTotal(machineRows) {
   }, 0)
 }
 
-export function capitalPosition({ capitalRows, salesRows, expenseRows, machineRows = [] }) {
+export function capitalPosition({ capitalRows, salesRows, expenseRows, machineRows = [], unsoldDownPayments = 0 }) {
   const owner = ownerCapital(capitalRows)
-  const salesRevenue = salesInflow(salesRows)
+  const salesRevenue = salesInflow(salesRows, unsoldDownPayments)
   const receivable = salesReceivable(salesRows)
   const totalExpenses = totalCashOut(expenseRows)
   const equipmentAssets = equipmentAssetTotal(machineRows)

@@ -26,10 +26,7 @@ function purchasableScopeLines(finance) {
   const rabLines = (finance?.rab?.lines || []).map((line) => ({ ...line, source: 'rab' }))
   const extraLines = (finance?.extraLines || []).map((line) => ({ ...line, source: 'extra' }))
   return catalogLines([...rabLines, ...extraLines]).filter(
-    (line) =>
-      line.lineType !== 'product' &&
-      (Number(line.quantity) || 0) > 0 &&
-      !line.omitted
+    (line) => (Number(line.quantity) || 0) > 0 && !line.omitted
   )
 }
 
@@ -80,7 +77,7 @@ function defaultSupplierName() {
 }
 
 export function findPackagingForLine(packagingList, line) {
-  if (line.lineType === 'product' && line.packagingId) {
+  if (line.packagingId) {
     return packagingList.find((row) => row.id === Number(line.packagingId)) || null
   }
   const name = normalizeKey(line.name)
@@ -89,8 +86,11 @@ export function findPackagingForLine(packagingList, line) {
     const exact = packagingList.find((row) => normalizeKey(row.name) === name)
     if (exact) return exact
   }
-  if (code) {
-    const byCode = packagingList.find((row) => normalizeKey(row.name).includes(code))
+  if (code && code.length >= 6) {
+    const byCode = packagingList.find((row) => {
+      const packagingName = normalizeKey(row.name)
+      return packagingName === code || packagingName.includes(code)
+    })
     if (byCode) return byCode
   }
   return null
@@ -128,9 +128,12 @@ function packagingValuesFromLine(line, catalogRow, supplierName) {
   }
 }
 
-function allocatedPurchaseUnits(entry) {
+function alreadyPurchasedQty(entry, roll) {
   if (!entry) return 0
-  return Math.max((Number(entry.quantity) || 0) - (Number(entry.stocked) || 0), 0)
+  const bought = Math.max(Math.round(Number(entry.quantity) || 0), 0)
+  if (roll) return bought * roll.metersPerRoll
+  const stocked = Math.max(Math.round(Number(entry.stocked) || 0), 0)
+  return Math.max(bought - stocked, 0)
 }
 
 async function loadCatalogMap(db, schema, catalogItemIds) {
@@ -197,17 +200,16 @@ function planRabPurchase(scopeLines, packagingList, catalogMap, supplierName, pu
     })
     const needMeters = roll ? requiredMeters(group.requiredQty, group.unit, roll) : group.requiredQty
     const stockAvailable = stockAsMeters(group.packaging, roll)
-    const allocatedUnits = group.packaging?.id
-      ? allocatedPurchaseUnits(purchasedByPackaging.get(Number(group.packaging.id)))
+    const alreadyPurchased = group.packaging?.id
+      ? alreadyPurchasedQty(purchasedByPackaging.get(Number(group.packaging.id)), roll)
       : 0
-    const alreadyPurchased = roll ? allocatedUnits * roll.metersPerRoll : allocatedUnits
-    const coveredQty = stockAvailable + alreadyPurchased
-    const uncovered = Math.max(needMeters - coveredQty, 0)
-    const purchaseQty = roll ? rollsForMeters(uncovered, roll.metersPerRoll) : uncovered
+    const remaining = Math.max(needMeters - alreadyPurchased, 0)
+    const purchaseQty = roll ? rollsForMeters(remaining, roll.metersPerRoll) : remaining
     const unitPrice = roll ? roll.rollPrice : group.unitPrice
     const purchaseUnit = roll ? roll.purchaseUnit : group.unit
+    const stockCovered = remaining > 0 && stockAvailable >= remaining
 
-    if (purchaseQty <= 0) {
+    if (remaining <= 0 || purchaseQty <= 0) {
       skippedLines.push({
         name: group.name,
         code: group.code,
@@ -217,7 +219,7 @@ function planRabPurchase(scopeLines, packagingList, catalogMap, supplierName, pu
         stockAvailable,
         alreadyPurchased,
         metersPerRoll: roll?.metersPerRoll || null,
-        reason: alreadyPurchased > 0 ? 'already_purchased' : 'stock_covered'
+        reason: 'already_purchased'
       })
       continue
     }
@@ -236,6 +238,7 @@ function planRabPurchase(scopeLines, packagingList, catalogMap, supplierName, pu
       requiredUnit: roll ? roll.stockUnit : group.unit,
       stockAvailable,
       alreadyPurchased,
+      stockCovered,
       quantity: purchaseQty,
       unitPrice,
       metersPerRoll: roll?.metersPerRoll || null,
@@ -251,7 +254,8 @@ function planRabPurchase(scopeLines, packagingList, catalogMap, supplierName, pu
               code: group.code,
               unit: group.unit,
               costPrice: group.unitPrice,
-              catalogItemId: group.catalogItemId
+              catalogItemId: group.catalogItemId,
+              packagingId: group.packaging?.id
             },
             group.catalogRow,
             supplierName
@@ -264,10 +268,10 @@ function planRabPurchase(scopeLines, packagingList, catalogMap, supplierName, pu
 
 function emptyPurchaseMessage(scopeLines, skippedLines) {
   if (!scopeLines.length) {
-    return 'Tidak ada barang katalog yang perlu dibeli untuk proyek ini'
+    return 'Tidak ada barang yang perlu dibeli untuk proyek ini'
   }
   if (skippedLines.length) {
-    return 'Semua barang proyek ini sudah dibeli atau tersedia di gudang'
+    return 'Semua barang proyek ini sudah dibeli'
   }
   return 'Tidak ada barang yang perlu dibeli untuk proyek ini'
 }

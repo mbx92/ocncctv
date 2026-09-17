@@ -24,7 +24,11 @@ function presentProjectFinance(p, finance) {
     serviceSale: summary?.serviceSale ?? 0,
     revenue,
     profit,
-    wageTotal
+    wageTotal,
+    downPaymentTotal: (finance?.downPayments || []).reduce(
+      (sum, row) => sum + Math.max(Math.round(Number(row.amount) || 0), 0),
+      0
+    )
   }
 }
 

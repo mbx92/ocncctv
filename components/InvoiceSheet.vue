@@ -97,8 +97,12 @@ function formatInvoiceQty(item) {
           <dt class="text-ink-500">{{ invoice.discountLabel || 'Diskon' }}</dt>
           <dd class="font-mono">− {{ formatIDR(invoice.discount) }}</dd>
         </div>
+        <div v-if="invoice.downPayment" class="flex justify-between gap-4">
+          <dt class="text-ink-500">{{ invoice.downPaymentLabel || 'Uang muka (DP)' }}</dt>
+          <dd class="font-mono">− {{ formatIDR(invoice.downPayment) }}</dd>
+        </div>
         <div class="flex justify-between gap-4 border-t border-ink-200 pt-2 font-semibold">
-          <dt>Total</dt>
+          <dt>{{ invoice.paymentStatus === 'unpaid' && invoice.downPayment ? 'Sisa tagihan' : 'Total' }}</dt>
           <dd class="font-mono text-base">{{ formatIDR(invoice.total) }}</dd>
         </div>
       </dl>

@@ -304,7 +304,7 @@ function rabLineKey(line, index) {
 function initRabPurchaseSelection(draft) {
   const next = {}
   for (const [index, line] of (draft?.lines || []).entries()) {
-    next[rabLineKey(line, index)] = true
+    next[rabLineKey(line, index)] = !line.stockCovered
   }
   rabPurchaseSelected.value = next
 }
@@ -513,6 +513,59 @@ function autoDivideWages() {
   wageRows.value = distributeWagesFromServiceSale(liveFinance.value.serviceSale, wageRows.value)
   wageMsg.value = `Upah dibagi rata dari jasa ${formatIDR(liveFinance.value.serviceSale)}.`
   setTimeout(() => (wageMsg.value = ''), 4000)
+}
+
+const DP_METHODS = [
+  { id: 'transfer', label: 'Transfer' },
+  { id: 'cash', label: 'Tunai' },
+  { id: 'other', label: 'Lainnya' }
+]
+
+function mapDpRow(row) {
+  return {
+    date: String(row?.date || '').slice(0, 10) || todayStr(),
+    amount: Math.max(Math.round(Number(row?.amount) || 0), 0),
+    method: DP_METHODS.some((m) => m.id === row?.method) ? row.method : 'transfer',
+    notes: row?.notes || ''
+  }
+}
+
+const dpRows = ref((product.value?.downPayments || []).map(mapDpRow))
+watch(
+  () => product.value?.downPayments,
+  (rows) => {
+    dpRows.value = (rows || []).map(mapDpRow)
+  }
+)
+const savingDp = ref(false)
+const dpMsg = ref('')
+
+function addDpRow() {
+  dpRows.value.push({ date: todayStr(), amount: 0, method: 'transfer', notes: '' })
+}
+
+const liveDpTotal = computed(() =>
+  dpRows.value.reduce((sum, row) => sum + Math.max(Math.round(Number(row.amount) || 0), 0), 0)
+)
+const liveDue = computed(() => Math.max(liveFinance.value.revenue - liveDpTotal.value, 0))
+
+async function saveDownPayments() {
+  savingDp.value = true
+  dpMsg.value = ''
+  try {
+    await $fetch(`/api/products/${id}/down-payments`, {
+      method: 'PUT',
+      body: { downPayments: dpRows.value }
+    })
+    await refresh()
+    dpMsg.value = 'Uang muka tersimpan.'
+    setTimeout(() => (dpMsg.value = ''), 3000)
+    useToast().success('DP proyek tersimpan. Invoice akan memotong tagihan.')
+  } catch (e) {
+    useToast().error(e.data?.statusMessage || 'Gagal menyimpan DP')
+  } finally {
+    savingDp.value = false
+  }
 }
 
 async function saveExtras() {
@@ -840,6 +893,7 @@ const tab = computed({
             <div class="mt-1 font-mono font-semibold text-base sm:text-lg text-teal-700">{{ formatIDR(liveFinance.revenue) }}</div>
             <div class="text-xs text-ink-400 mt-0.5">
               {{ goods.length }} barang · {{ jasa.length }} jasa
+              <span v-if="liveDpTotal"> · DP {{ formatIDR(liveDpTotal) }}</span>
             </div>
           </div>
           <div class="p-3 sm:p-4">
@@ -1422,6 +1476,17 @@ const tab = computed({
               {{ formatIDR(liveFinance.profit) }}
             </span>
           </div>
+          <div class="px-3 py-2.5 flex items-start justify-between gap-3">
+            <div>
+              <div class="text-sm">Uang muka (DP)</div>
+              <div class="text-xs text-ink-400">Sudah diterima, dipotong di invoice</div>
+            </div>
+            <div class="num text-sm">{{ liveDpTotal ? `− ${formatIDR(liveDpTotal)}` : formatIDR(0) }}</div>
+          </div>
+          <div class="px-3 py-2.5 flex items-center justify-between gap-3 font-medium">
+            <span>Sisa tagihan</span>
+            <span class="num">{{ formatIDR(liveDue) }}</span>
+          </div>
         </div>
         <p v-if="!product.rab && !extraLines.length" class="px-3 py-3 text-xs text-ink-400 border-t border-ink-100">
           Belum ada RAB atau item tambahan. Pendapatan 0 sampai ada baris item.
@@ -1513,6 +1578,71 @@ const tab = computed({
           </div>
         </div>
       </div>
+
+      <div class="panel overflow-hidden lg:col-span-2">
+        <div class="panel-header !flex-wrap gap-2">
+          <span class="panel-title">Uang muka (DP)</span>
+          <button v-if="isAdmin" type="button" class="btn-secondary shrink-0 ml-auto" @click="addDpRow">
+            <PlusIcon class="w-3.5 h-3.5" />Catat DP
+          </button>
+        </div>
+        <div class="p-3 sm:p-4 space-y-3">
+          <p class="text-xs text-ink-500">
+            Catat uang muka pelanggan di sini. Saat invoice penjualan dibuat, DP dipotong dari tagihan.
+            Kas DP sudah dihitung sebelum penjualan dicatat.
+          </p>
+          <div v-for="(row, i) in dpRows" :key="i" class="rounded-panel border border-ink-200 p-3 space-y-2">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div class="date-field">
+                <label class="label">Tanggal</label>
+                <input v-model="row.date" type="date" class="input" :disabled="!isAdmin" required />
+              </div>
+              <div>
+                <label class="label">Jumlah</label>
+                <IdrInput v-model="row.amount" :disabled="!isAdmin" input-class="w-full" />
+              </div>
+              <div>
+                <label class="label">Metode</label>
+                <select v-model="row.method" class="input" :disabled="!isAdmin">
+                  <option v-for="m in DP_METHODS" :key="m.id" :value="m.id">{{ m.label }}</option>
+                </select>
+              </div>
+            </div>
+            <div class="flex items-end gap-2">
+              <div class="flex-1 min-w-0">
+                <label class="label">Catatan</label>
+                <input v-model="row.notes" class="input" :disabled="!isAdmin" placeholder="opsional — mis. transfer BCA" />
+              </div>
+              <button
+                v-if="isAdmin"
+                type="button"
+                class="text-red-500 hover:text-red-700 text-lg leading-none px-1 mb-2 shrink-0"
+                @click="dpRows.splice(i, 1)"
+              >
+                &times;
+              </button>
+            </div>
+          </div>
+          <p v-if="!dpRows.length" class="text-sm text-ink-500 text-center py-4">
+            Belum ada DP. Klik "Catat DP" jika pelanggan sudah transfer uang muka.
+          </p>
+          <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+            <div class="text-sm">
+              <span class="text-ink-500">Total DP</span>
+              <span class="font-mono font-semibold ml-2">{{ formatIDR(liveDpTotal) }}</span>
+              <span class="text-ink-400 mx-1">·</span>
+              <span class="text-ink-500">Sisa</span>
+              <span class="font-mono ml-2">{{ formatIDR(liveDue) }}</span>
+            </div>
+            <div v-if="isAdmin" class="flex items-center gap-2">
+              <span v-if="dpMsg" class="text-sm text-green-600">{{ dpMsg }}</span>
+              <button type="button" class="btn-primary" :disabled="savingDp" @click="saveDownPayments">
+                <CheckIcon class="w-4 h-4" />{{ savingDp ? 'Menyimpan…' : 'Simpan DP' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <TechnicianManageModal
@@ -1542,7 +1672,7 @@ const tab = computed({
             <span class="text-sky-800/75">Centang barang untuk pesanan ini. Sisanya bisa dibeli ke supplier lain.</span>
           </div>
           <p class="text-sky-800/70">
-            Kabel roll dibeli utuh; sisa meter masuk stok gudang. Simpan perubahan item dulu jika qty tambahan belum disimpan.
+            Kabel roll dibeli utuh; sisa meter masuk stok gudang. Item bertanda "Stok cukup" tidak tercentang — centang jika tetap mau belanja baru.
           </p>
         </div>
 
@@ -1605,6 +1735,7 @@ const tab = computed({
                         Gudang
                       </span>
                       <span v-else class="badge bg-sky-100 text-sky-800">Baru</span>
+                      <span v-if="line.stockCovered" class="badge bg-emerald-100 text-emerald-800">Stok cukup</span>
                       <span v-if="line.source === 'extra'" class="badge bg-amber-100 text-amber-800">Tambahan</span>
                     </div>
                     <div class="font-medium text-ink-900 leading-snug break-words">{{ line.name }}</div>

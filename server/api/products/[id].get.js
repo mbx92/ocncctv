@@ -23,6 +23,11 @@ export default defineEventHandler(async (event) => {
     extraLines: finance?.extraLines || [],
     rabAdjustments: finance?.rabAdjustments || [],
     wages: finance?.wages || [],
+    downPayments: finance?.downPayments || [],
+    downPaymentTotal: (finance?.downPayments || []).reduce(
+      (sum, row) => sum + Math.max(Math.round(Number(row.amount) || 0), 0),
+      0
+    ),
     finance: finance?.summary || null,
     hpp: hpp.total,
     breakdown: hpp.breakdown,

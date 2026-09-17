@@ -179,6 +179,9 @@ async function remove(p) {
               <td class="num">
                 <span v-if="p.hasScope">{{ formatIDR(p.revenue) }}</span>
                 <span v-else class="text-ink-400 text-xs">belum ada data</span>
+                <div v-if="p.downPaymentTotal" class="text-xs text-ink-400 font-normal">
+                  DP {{ formatIDR(p.downPaymentTotal) }}
+                </div>
               </td>
               <td class="num">
                 <span v-if="p.hasScope" :class="(p.profit || 0) >= 0 ? '' : 'text-red-600'">{{ formatIDR(p.profit) }}</span>
@@ -231,6 +234,7 @@ async function remove(p) {
         <div class="text-sm font-mono">
           <span v-if="p.hasScope">Pendapatan {{ formatIDR(p.revenue) }} · Laba {{ formatIDR(p.profit) }}</span>
           <span v-else class="text-ink-400 text-xs">Belum ada data pendapatan</span>
+          <span v-if="p.downPaymentTotal" class="text-xs text-ink-400"> · DP {{ formatIDR(p.downPaymentTotal) }}</span>
         </div>
         <div class="btn-actions pt-1">
           <NuxtLink :to="`/projects/${p.id}?tab=items`" class="btn-action">

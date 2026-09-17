@@ -50,7 +50,9 @@ const totals = computed(() => {
     count: rows.length,
     gross: rows.reduce((a, r) => a + r.grossRevenue, 0),
     net: rows.reduce((a, r) => a + r.netRevenue, 0),
-    unpaid: rows.filter((r) => r.paymentStatus === 'unpaid').reduce((a, r) => a + r.netRevenue, 0)
+    unpaid: rows
+      .filter((r) => r.paymentStatus === 'unpaid')
+      .reduce((a, r) => a + remainingDue(r), 0)
   }
 })
 
@@ -76,6 +78,7 @@ function applyProject(p) {
   form.value.quantity = 1
   form.value.salePricePerUnit = p?.revenue || 0
   form.value.customerName = p?.customerName || ''
+  form.value.downPaymentAmount = p?.downPaymentTotal || 0
 }
 
 function openAdd() {
@@ -90,6 +93,7 @@ function openAdd() {
     discountAmount: 0,
     discountKind: 'amount',
     discountPercent: 0,
+    downPaymentAmount: p?.downPaymentTotal || 0,
     paymentNotes: '',
     paymentStatus: 'paid',
     paymentMethod: 'cash',
@@ -113,6 +117,13 @@ const preview = computed(() => {
       : Math.min(Math.max(Math.round(Number(form.value.discountAmount) || 0), 0), gross)
   const net = gross - discount
   const margin = net - goodsCost
+  const downPayment = Math.min(
+    Math.max(
+      Math.round(Number(selectedProduct.value?.downPaymentTotal ?? form.value.downPaymentAmount) || 0),
+      0
+    ),
+    net
+  )
   return {
     goodsCost,
     hasCost: !!selectedProduct.value?.hasRab,
@@ -121,6 +132,8 @@ const preview = computed(() => {
     serviceSale: selectedProduct.value?.serviceSale || 0,
     gross,
     discount,
+    downPayment,
+    due: net - downPayment,
     net,
     margin,
     marginPercent: net ? Math.round((margin / net) * 100) : 0
@@ -165,6 +178,10 @@ async function save() {
 function saleGross(s) {
   return (s.salePricePerUnit || 0) * (s.quantity || 0)
 }
+function remainingDue(s) {
+  if (s?.dueAmount != null) return Math.max(Math.round(Number(s.dueAmount) || 0), 0)
+  return Math.max((s?.netRevenue || 0) - (s?.downPaymentAmount || 0), 0)
+}
 function discountLine(s) {
   if (!s.discountAmount) return ''
   if (s.discountKind === 'percent') return `diskon ${s.discountPercent}% (${formatIDR(s.discountAmount)})`
@@ -195,7 +212,9 @@ const payPreview = computed(() => {
     payForm.value.discountKind === 'percent'
       ? Math.round(gross * (Math.min(Math.max(Number(payForm.value.discountPercent) || 0, 0), 100) / 100))
       : Math.min(Math.max(Math.round(Number(payForm.value.discountAmount) || 0), 0), gross)
-  return { gross, discount, net: gross - discount }
+  const net = gross - discount
+  const downPayment = Math.min(Math.max(Math.round(Number(s.downPaymentAmount) || 0), 0), net)
+  return { gross, discount, net, downPayment, due: net - downPayment }
 })
 function setDiscountKind(target, kind) {
   const cap = target === 'pay' ? payPreview.value?.gross || 0 : preview.value?.gross || 0
@@ -360,6 +379,14 @@ async function remove(s) {
             <dt class="text-ink-500">Bersih</dt>
             <dd class="font-mono">{{ formatIDR(s.netRevenue) }}</dd>
           </div>
+          <div v-if="s.downPaymentAmount" class="flex justify-between col-span-2">
+            <dt class="text-ink-500">Uang muka (DP)</dt>
+            <dd class="font-mono">− {{ formatIDR(s.downPaymentAmount) }}</dd>
+          </div>
+          <div v-if="s.paymentStatus === 'unpaid'" class="flex justify-between col-span-2 font-medium">
+            <dt>Sisa tagihan</dt>
+            <dd class="font-mono text-amber-700">{{ formatIDR(remainingDue(s)) }}</dd>
+          </div>
         </dl>
         <div class="pt-1 btn-actions">
           <NuxtLink :to="`/sales/${s.id}/invoice`" class="btn-action">
@@ -408,7 +435,15 @@ async function remove(s) {
                 <div v-if="s.notes" class="text-xs text-ink-400">{{ s.notes }}</div>
               </td>
               <td class="num">{{ formatIDR(s.salePricePerUnit) }}</td>
-              <td class="num">{{ formatIDR(s.netRevenue) }}</td>
+              <td class="num">
+                {{ formatIDR(s.netRevenue) }}
+                <div v-if="s.downPaymentAmount" class="text-xs text-ink-400 font-normal">
+                  DP − {{ formatIDR(s.downPaymentAmount) }}
+                </div>
+                <div v-if="s.paymentStatus === 'unpaid'" class="text-xs text-amber-700 font-normal">
+                  Sisa {{ formatIDR(remainingDue(s)) }}
+                </div>
+              </td>
               <td>
                 <span
                   class="badge"
@@ -465,7 +500,7 @@ async function remove(s) {
             <select v-model="form.productId" class="input" required :disabled="!sellableProducts.length">
               <option v-if="!sellableProducts.length" value="">Tidak ada proyek yang belum tercatat</option>
               <option v-for="p in sellableProducts" :key="p.id" :value="p.id">
-                {{ p.name }}{{ p.customerName ? ` · ${p.customerName}` : '' }}{{ p.hasRab ? ` — ${formatIDR(p.revenue)}` : '' }}
+                {{ p.name }}{{ p.customerName ? ` · ${p.customerName}` : '' }}{{ p.hasRab ? ` — ${formatIDR(p.revenue)}` : '' }}{{ p.downPaymentTotal ? ` · DP ${formatIDR(p.downPaymentTotal)}` : '' }}
               </option>
             </select>
             <div v-if="selectedProduct" class="mt-2 space-y-1">
@@ -478,9 +513,13 @@ async function remove(s) {
               <p v-if="selectedProduct.hasRab" class="text-xs text-ink-500">
                 Nilai RAB {{ formatIDR(selectedProduct.revenue) }}
                 <span v-if="selectedProduct.goodsCost"> · modal {{ formatIDR(selectedProduct.goodsCost) }}</span>
+                <span v-if="selectedProduct.downPaymentTotal"> · DP {{ formatIDR(selectedProduct.downPaymentTotal) }}</span>
               </p>
               <p v-else class="text-xs text-amber-600">
                 Proyek ini belum tertaut RAB — isi nilai penjualan manual.
+              </p>
+              <p v-if="selectedProduct.downPaymentTotal" class="text-xs text-teal-700">
+                DP proyek akan dipotong di invoice. Sisa tagihan {{ formatIDR(preview.due) }}.
               </p>
             </div>
             <p v-else-if="!sellableProducts.length" class="text-xs text-ink-500 mt-2">
@@ -610,6 +649,14 @@ async function remove(s) {
                 <dt class="text-ink-600 font-medium">Revenue bersih</dt>
                 <dd class="font-mono font-semibold text-teal-600">{{ formatIDR(preview.net) }}</dd>
               </div>
+              <div v-if="preview.downPayment" class="flex justify-between gap-2">
+                <dt class="text-ink-500">Uang muka (DP)</dt>
+                <dd class="font-mono text-red-600">− {{ formatIDR(preview.downPayment) }}</dd>
+              </div>
+              <div v-if="preview.downPayment" class="flex justify-between gap-2 pt-1.5 border-t border-ink-200">
+                <dt class="text-ink-600 font-medium">{{ form.paymentStatus === 'unpaid' ? 'Sisa tagihan' : 'Tagihan invoice' }}</dt>
+                <dd class="font-mono font-semibold">{{ formatIDR(preview.due) }}</dd>
+              </div>
             </dl>
             <div v-if="belowCost" class="flex gap-2 rounded bg-red-50 border border-red-200 p-2 text-xs text-red-700">
               <ExclamationTriangleIcon class="w-4 h-4 shrink-0" />
@@ -729,9 +776,13 @@ async function remove(s) {
             </dt>
             <dd class="font-mono text-red-600">− {{ formatIDR(payPreview.discount) }}</dd>
           </div>
+          <div v-if="payPreview.downPayment" class="flex justify-between gap-2">
+            <dt class="text-ink-500">Uang muka (DP)</dt>
+            <dd class="font-mono text-red-600">− {{ formatIDR(payPreview.downPayment) }}</dd>
+          </div>
           <div class="flex justify-between gap-2 pt-1.5 border-t border-ink-200">
-            <dt class="font-medium">Diterima</dt>
-            <dd class="font-mono font-semibold text-teal-600">{{ formatIDR(payPreview.net) }}</dd>
+            <dt class="font-medium">{{ payPreview.downPayment ? 'Sisa dilunasi' : 'Diterima' }}</dt>
+            <dd class="font-mono font-semibold text-teal-600">{{ formatIDR(payPreview.downPayment ? payPreview.due : payPreview.net) }}</dd>
           </div>
         </dl>
         <p v-if="payError" class="text-sm text-red-600">{{ payError }}</p>

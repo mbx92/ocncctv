@@ -213,7 +213,7 @@ export async function buildInvoicePdf(invoice) {
     y -= rowH
   }
 
-  ensure(80)
+  ensure(110)
   page.drawLine({ start: { x: 330, y }, end: { x: right, y }, thickness: 0.5, color: line })
   y -= 16
   const sub = formatInvoiceIDR(invoice.subtotal)
@@ -224,11 +224,19 @@ export async function buildInvoicePdf(invoice) {
     const discLabel = String(invoice.discountLabel || 'Diskon')
     const discAmount = `- ${formatInvoiceIDR(invoice.discount)}`
     page.drawText(discLabel, { x: 330, y, size: 10, font, color: muted })
-    page.drawText(discAmount, { x: right - font.widthOfTextAtSize(discAmount, 10), y, size: 10, font, color: ink })
+    page.drawText(discAmount, { x: right - font.widthOfTextAtSize(discAmount, 10), y, size: 10, font, color: muted })
+  }
+  if (invoice.downPayment) {
+    y -= 16
+    const dpLabel = String(invoice.downPaymentLabel || 'Uang muka (DP)')
+    const dpAmount = `- ${formatInvoiceIDR(invoice.downPayment)}`
+    page.drawText(dpLabel, { x: 330, y, size: 10, font, color: muted })
+    page.drawText(dpAmount, { x: right - font.widthOfTextAtSize(dpAmount, 10), y, size: 10, font, color: muted })
   }
   y -= 18
+  const totalLabel = invoice.paymentStatus === 'unpaid' && invoice.downPayment ? 'Sisa tagihan' : 'Total'
   const total = formatInvoiceIDR(invoice.total)
-  page.drawText('Total', { x: 330, y, size: 11, font: fontBold, color: ink })
+  page.drawText(totalLabel, { x: 330, y, size: 11, font: fontBold, color: ink })
   page.drawText(total, { x: right - fontBold.widthOfTextAtSize(total, 11), y, size: 11, font: fontBold, color: ink })
 
   y -= 36

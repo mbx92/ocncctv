@@ -315,6 +315,25 @@ export const projectTechnicianWages = pgTable(
   })
 )
 
+// Uang muka pelanggan per proyek. Dicopy ke penjualan saat invoice dibuat.
+export const projectDownPayments = pgTable(
+  'project_down_payments',
+  {
+    id: serial('id').primaryKey(),
+    productId: integer('product_id')
+      .notNull()
+      .references(() => products.id, { onDelete: 'cascade' }),
+    date: date('date').notNull(),
+    amount: integer('amount').notNull().default(0),
+    method: text('method').notNull().default('transfer'),
+    notes: text('notes'),
+    createdAt: timestamp('created_at').notNull().defaultNow()
+  },
+  (t) => ({
+    productIdx: pgIndex('project_down_payments_product_id_idx').on(t.productId)
+  })
+)
+
 // Item/jasa tambahan di proyek, di luar baris RAB. Penawaran RAB tetap utuh.
 export const projectExtraLines = pgTable(
   'project_extra_lines',
@@ -469,6 +488,8 @@ export const sales = pgTable(
     discountKind: text('discount_kind').notNull().default('amount'),
     discountPercent: real('discount_percent').notNull().default(0),
     paymentNotes: text('payment_notes'),
+    // Snapshot uang muka proyek saat penjualan dicatat. Invoice: total − DP.
+    downPaymentAmount: integer('down_payment_amount').notNull().default(0),
     createdAt: timestamp('created_at').notNull().defaultNow()
   },
   (t) => ({

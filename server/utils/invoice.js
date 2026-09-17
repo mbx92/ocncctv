@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { eq, sql } from 'drizzle-orm'
+import { clampDownPayment } from './salePayment.js'
 import { loadRabLines, presentRabLines } from './customOrders.js'
 import { applyRabAdjustments, loadProjectExtraLines, loadProjectRabAdjustments } from './projectLines.js'
 
@@ -108,7 +109,8 @@ export async function loadSaleInvoiceRow(tx, schema, id) {
       paidAt: schema.sales.paidAt,
       discountAmount: schema.sales.discountAmount,
       discountKind: schema.sales.discountKind,
-      discountPercent: schema.sales.discountPercent
+      discountPercent: schema.sales.discountPercent,
+      downPaymentAmount: schema.sales.downPaymentAmount
     })
     .from(schema.sales)
     .leftJoin(schema.products, eq(schema.sales.productId, schema.products.id))
@@ -207,6 +209,8 @@ export function toInvoicePayload(row, settings, lines = []) {
   const discount = Math.min(Math.max(Math.round(Number(row.discountAmount) || 0), 0), subtotal)
   const discountKind = row.discountKind === 'percent' ? 'percent' : 'amount'
   const discountPercent = Math.min(Math.max(Number(row.discountPercent) || 0, 0), 100)
+  const afterDiscount = subtotal - discount
+  const downPayment = clampDownPayment(row.downPaymentAmount, afterDiscount)
   const paid = row.paymentStatus === 'paid'
   const methodLabel = PAYMENT_METHOD_LABEL[row.paymentMethod] || row.paymentMethod || null
   const customerName = row.customerName || row.customCustomerName || '—'
@@ -236,7 +240,9 @@ export function toInvoicePayload(row, settings, lines = []) {
           ? `Diskon ${discountPercent}%`
           : 'Diskon'
         : null,
-    total: subtotal - discount,
+    downPayment,
+    downPaymentLabel: downPayment > 0 ? 'Uang muka (DP)' : null,
+    total: afterDiscount - downPayment,
     business: {
       name: settings.invoiceBusinessName || 'OCN',
       address: settings.invoiceAddress || null,

@@ -1,6 +1,7 @@
 import { and, gte, lte, eq, desc } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
 import { capitalPosition } from '../../utils/capitalPosition.js'
+import { loadUnsoldProjectDownPayments } from '../../utils/projectRevenue.js'
 
 // Modal kas = setoran − penarikan.
 // Aset peralatan = nilai alat yang sudah dimiliki (bukan belanja baru).
@@ -14,7 +15,7 @@ export default defineEventHandler(async (event) => {
   if (q.dateFrom) conds.push(gte(schema.capitalTransactions.date, q.dateFrom))
   if (q.dateTo) conds.push(lte(schema.capitalTransactions.date, q.dateTo))
 
-  const [transactions, salesRows, expenseRows, machineRows] = await Promise.all([
+  const [transactions, salesRows, expenseRows, machineRows, unsoldDownPayments] = await Promise.all([
     db
       .select()
       .from(schema.capitalTransactions)
@@ -25,6 +26,7 @@ export default defineEventHandler(async (event) => {
         quantity: schema.sales.quantity,
         salePricePerUnit: schema.sales.salePricePerUnit,
         discountAmount: schema.sales.discountAmount,
+        downPaymentAmount: schema.sales.downPaymentAmount,
         paymentStatus: schema.sales.paymentStatus
       })
       .from(schema.sales),
@@ -35,10 +37,17 @@ export default defineEventHandler(async (event) => {
         quantity: schema.machines.quantity,
         acquisition: schema.machines.acquisition
       })
-      .from(schema.machines)
+      .from(schema.machines),
+    loadUnsoldProjectDownPayments(db, schema)
   ])
 
-  const summary = capitalPosition({ capitalRows: transactions, salesRows, expenseRows, machineRows })
+  const summary = capitalPosition({
+    capitalRows: transactions,
+    salesRows,
+    expenseRows,
+    machineRows,
+    unsoldDownPayments
+  })
 
   return {
     transactions,
