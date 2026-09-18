@@ -1,6 +1,7 @@
 import { useDb, schema } from '../../db/index.js'
 import { logAudit } from '../../utils/audit.js'
 import { parseCalendarEventBody } from '../../utils/calendarEvent.js'
+import { queueReminderDispatch } from '../../utils/reminders.js'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
@@ -13,5 +14,6 @@ export default defineEventHandler(async (event) => {
     entityId: row.id,
     summary: `Jadwal ${row.kind} "${row.title}" ${row.date}`
   })
+  queueReminderDispatch('calendar-create')
   return row
 })

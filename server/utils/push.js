@@ -30,13 +30,18 @@ export async function ensureVapidKeys() {
 
 export async function sendPushToSubscription(sub, payload) {
   const keys = await ensureVapidKeys()
-  webpush.setVapidDetails('mailto:ocn@local', keys.publicKey, keys.privateKey)
+  webpush.setVapidDetails(
+    String(process.env.VAPID_SUBJECT || 'mailto:ocn@localhost').trim() || 'mailto:ocn@localhost',
+    keys.publicKey,
+    keys.privateKey
+  )
   await webpush.sendNotification(
     {
       endpoint: sub.endpoint,
       keys: { p256dh: sub.p256dh, auth: sub.auth }
     },
-    JSON.stringify(payload)
+    JSON.stringify(payload),
+    { TTL: 24 * 60 * 60, urgency: 'high' }
   )
 }
 

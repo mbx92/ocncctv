@@ -10,7 +10,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=3000
-RUN apk add --no-cache wget
+ENV TZ=Asia/Jakarta
+RUN apk add --no-cache wget tzdata
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY --from=builder /app/.output ./.output

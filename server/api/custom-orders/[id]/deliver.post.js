@@ -3,6 +3,7 @@ import { useDb, schema } from '../../../db/index.js'
 import { logAudit } from '../../../utils/audit.js'
 import { allocateInvoiceNumber } from '../../../utils/invoice.js'
 import { parseSalePayment, resolveDueDate } from '../../../utils/salePayment.js'
+import { queueReminderDispatch } from '../../../utils/reminders.js'
 
 export default defineEventHandler(async (event) => {
   const id = Number(getRouterParam(event, 'id'))
@@ -70,5 +71,6 @@ export default defineEventHandler(async (event) => {
     entityId: row.id,
     summary: `Serah terima RAB id ${id}`
   })
+  queueReminderDispatch('sale-deliver')
   return row
 })

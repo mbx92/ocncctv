@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm'
 import { useDb, schema } from '../../../db/index.js'
 import { logAudit } from '../../../utils/audit.js'
 import { normalizeProductStatus, parseYmd } from '../../../utils/projectStatus.js'
+import { queueReminderDispatch } from '../../../utils/reminders.js'
 
 export default defineEventHandler(async (event) => {
   const id = Number(getRouterParam(event, 'id'))
@@ -27,5 +28,6 @@ export default defineEventHandler(async (event) => {
       ? `Jadwal mulai proyek "${row.name}": ${plannedStartDate}`
       : `Hapus jadwal mulai proyek "${row.name}"`
   })
+  queueReminderDispatch('project-schedule')
   return row
 })

@@ -1,11 +1,18 @@
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
 
 export default defineEventHandler(async (event) => {
+  const userId = event.context.auth?.id
+  if (!userId) throw createError({ statusCode: 401, statusMessage: 'Belum login' })
   const body = (await readBody(event).catch(() => null)) || {}
   const endpoint = String(body.endpoint || '').trim()
-  if (!endpoint) throw createError({ statusCode: 400, statusMessage: 'Endpoint wajib' })
   const db = useDb()
-  await db.delete(schema.pushSubscriptions).where(eq(schema.pushSubscriptions.endpoint, endpoint))
+  if (endpoint) {
+    await db
+      .delete(schema.pushSubscriptions)
+      .where(and(eq(schema.pushSubscriptions.endpoint, endpoint), eq(schema.pushSubscriptions.userId, userId)))
+  } else {
+    await db.delete(schema.pushSubscriptions).where(eq(schema.pushSubscriptions.userId, userId))
+  }
   return { ok: true }
 })

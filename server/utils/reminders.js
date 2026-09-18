@@ -145,6 +145,20 @@ async function claimDispatch(db, item, day) {
   }
 }
 
+export function queueReminderDispatch(reason = 'mutation') {
+  setTimeout(() => {
+    dispatchPushReminders()
+      .then((result) => {
+        if (result?.sent) {
+          console.log(`[OCN] Push pengingat (${reason}): terkirim ${result.sent}`)
+        }
+      })
+      .catch((e) => {
+        console.error(`[OCN] Push pengingat gagal (${reason}):`, e.message || e)
+      })
+  }, 250)
+}
+
 export async function dispatchPushReminders() {
   const { sendPushToSubscription, isGonePushError } = await import('./push.js')
   const { today, items } = await loadReminderItems()
@@ -168,16 +182,29 @@ export async function dispatchPushReminders() {
       url: item.url,
       tag: item.tag
     }
+    let itemSent = 0
     for (const sub of subs) {
       try {
         await sendPushToSubscription(sub, payload)
         sent += 1
+        itemSent += 1
       } catch (err) {
         failed += 1
         if (isGonePushError(err)) {
           await db.delete(schema.pushSubscriptions).where(eq(schema.pushSubscriptions.id, sub.id))
         }
       }
+    }
+    if (!itemSent) {
+      await db
+        .delete(schema.reminderDispatches)
+        .where(
+          and(
+            eq(schema.reminderDispatches.kind, item.kind),
+            eq(schema.reminderDispatches.entityId, item.entityId),
+            eq(schema.reminderDispatches.day, today)
+          )
+        )
     }
   }
   return { today, sent, skipped, failed }

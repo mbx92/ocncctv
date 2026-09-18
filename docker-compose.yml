@@ -17,6 +17,7 @@ services:
       SUPPLIER_CATALOG_SUPPLIER_NAME: ${SUPPLIER_CATALOG_SUPPLIER_NAME:-}
       ERP_SYNC_BASE_URL: ${ERP_SYNC_BASE_URL:-}
       ERP_SYNC_API_KEY: ${ERP_SYNC_API_KEY:-}
+      TZ: Asia/Jakarta
     ports:
       - "3018:3000"
     networks:

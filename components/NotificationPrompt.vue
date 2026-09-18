@@ -15,7 +15,8 @@ const {
   notifyLocal,
   subscribePush,
   syncPermission,
-  refreshItems
+  refreshItems,
+  wanted
 } = useReminders()
 
 const authUser = useState('authUser')
@@ -35,9 +36,11 @@ const publicPage = computed(() => {
 
 const canAsk = computed(() => supported.value && secure.value && !blocked.value)
 
-const showPrompt = computed(
-  () => ready.value && !!authUser.value && !publicPage.value && !granted.value && !dismissed.value
-)
+const showPrompt = computed(() => {
+  if (!ready.value || !authUser.value || publicPage.value || granted.value || dismissed.value) return false
+  if (import.meta.client && localStorage.getItem('ocn-notifications-enabled') === '0') return false
+  return true
+})
 
 function dismiss() {
   dismissed.value = true
@@ -54,9 +57,10 @@ let timer = null
 async function tick() {
   if (!authUser.value) return
   syncPermission()
-  if (!granted.value) return
+  if (!granted.value || !wanted.value) return
   try {
-    await subscribePush()
+    await subscribePush({ confirm: sessionStorage.getItem('ocn-push-confirmed') !== '1' })
+    sessionStorage.setItem('ocn-push-confirmed', '1')
   } catch {
     /* push opsional di dev tanpa service worker */
   }
@@ -121,7 +125,7 @@ onUnmounted(() => {
             <div class="min-w-0">
               <p class="text-sm font-medium text-ink-900">OCN ingin mengirim pengingat</p>
               <p class="text-sm text-ink-600 mt-1">
-                Jadwal kalender dan tagihan jatuh tempo akan muncul sebagai notifikasi di perangkat ini.
+                Jadwal kalender dan tagihan jatuh tempo akan muncul di HP, termasuk saat aplikasi tertutup.
               </p>
               <p v-if="!secure" class="text-xs text-amber-800 mt-2">
                 Browser memblokir izin di HTTP biasa. Buka lewat

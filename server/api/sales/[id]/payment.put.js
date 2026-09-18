@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm'
 import { useDb, schema } from '../../../db/index.js'
 import { logAudit } from '../../../utils/audit.js'
 import { parseSalePayment, resolveDueDate } from '../../../utils/salePayment.js'
+import { queueReminderDispatch } from '../../../utils/reminders.js'
 
 export default defineEventHandler(async (event) => {
   const id = Number(getRouterParam(event, 'id'))
@@ -38,5 +39,6 @@ export default defineEventHandler(async (event) => {
         ? `Tandai lunas penjualan id ${id}`
         : `Tandai belum bayar penjualan id ${id}`
   })
+  queueReminderDispatch('sale-payment')
   return row
 })

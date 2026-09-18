@@ -3,6 +3,7 @@ import { useDb, schema } from '../../db/index.js'
 import { logAudit } from '../../utils/audit.js'
 import { allocateInvoiceNumber } from '../../utils/invoice.js'
 import { parseSalePayment, resolveDueDate } from '../../utils/salePayment.js'
+import { queueReminderDispatch } from '../../utils/reminders.js'
 import { downPaymentTotal, loadProjectFinanceMap } from '../../utils/projectRevenue.js'
 
 export default defineEventHandler(async (event) => {
@@ -79,5 +80,6 @@ export default defineEventHandler(async (event) => {
     entityId: rows[0].id,
     summary: `Catat penjualan proyek id ${rows[0].productId}`
   })
+  queueReminderDispatch('sale-create')
   return rows[0]
 })

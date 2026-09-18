@@ -27,7 +27,6 @@ function signedPct(n) {
 <template>
   <div class="space-y-4" :class="{ 'network-dashboard': theme === 'professional' }">
     <CatalogSyncBanner />
-    <RemindersBanner />
     <NetworkingDashboard v-if="theme === 'professional'" :data="data" :month="monthLabel" :loading="status === 'pending'" @refresh="refresh()" />
     <div v-else class="flex items-center justify-between gap-2">
       <div>
@@ -38,6 +37,7 @@ function signedPct(n) {
         </p>
       </div>
       <div class="flex items-center gap-2">
+        <RemindersBanner />
         <NuxtLink to="/reports" class="btn-secondary"><ChartBarIcon class="w-4 h-4" />Laporan</NuxtLink>
         <button class="btn-secondary" :disabled="status === 'pending'" @click="refresh()">
           <ArrowPathIcon class="w-4 h-4" />Muat ulang

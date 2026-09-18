@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
 import { logAudit } from '../../utils/audit.js'
 import { parseCalendarEventBody } from '../../utils/calendarEvent.js'
+import { queueReminderDispatch } from '../../utils/reminders.js'
 
 export default defineEventHandler(async (event) => {
   const id = Number(getRouterParam(event, 'id'))
@@ -21,5 +22,6 @@ export default defineEventHandler(async (event) => {
     entityId: id,
     summary: `Ubah jadwal "${row.title}" ${row.date}`
   })
+  queueReminderDispatch('calendar-update')
   return row
 })

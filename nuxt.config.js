@@ -70,8 +70,14 @@ export default defineNuxtConfig({
     }
   },
   pwa: {
+    strategies: 'injectManifest',
+    srcDir: 'service-worker',
+    filename: 'sw.js',
     registerType: 'autoUpdate',
     injectRegister: 'auto',
+    injectManifest: {
+      globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}']
+    },
     manifest: {
       name: 'OCN — CCTV & Networking',
       short_name: 'OCN',
@@ -90,15 +96,6 @@ export default defineNuxtConfig({
         { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
         { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
       ]
-    },
-    workbox: {
-      globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}'],
-      navigateFallback: '/',
-      navigateFallbackDenylist: [/^\/api\//, /^\/i\//, /^\/q\//, /^\/p\//, /^\/manifest\.webmanifest$/, /^\/sw\.js$/, /^\/sw-push\.js$/],
-      cleanupOutdatedCaches: true,
-      clientsClaim: true,
-      skipWaiting: true,
-      importScripts: ['/sw-push.js']
     },
     client: {
       installPrompt: true,

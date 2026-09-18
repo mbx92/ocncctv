@@ -23,7 +23,10 @@
     "pdf-lib": "^1.17.1",
     "pg": "^8.13.1",
     "three": "^0.185.1",
-    "web-push": "^3.6.7"
+    "web-push": "^3.6.7",
+    "workbox-core": "^7.4.1",
+    "workbox-precaching": "^7.4.1",
+    "workbox-routing": "^7.4.1"
   },
   "devDependencies": {
     "@nuxtjs/tailwindcss": "^6.12.2",

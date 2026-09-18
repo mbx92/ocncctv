@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
+import { queueReminderDispatch } from '../../utils/reminders.js'
 
 export default defineEventHandler(async (event) => {
   const body = (await readBody(event).catch(() => null)) || {}
@@ -9,6 +10,7 @@ export default defineEventHandler(async (event) => {
   if (!endpoint || !p256dh || !auth) {
     throw createError({ statusCode: 400, statusMessage: 'Langganan push tidak lengkap' })
   }
+  const confirm = body.confirm === true
   const userId = event.context.auth?.id
   if (!userId) throw createError({ statusCode: 401, statusMessage: 'Belum login' })
   const userAgent = String(getHeader(event, 'user-agent') || '').slice(0, 240) || null
@@ -18,17 +20,37 @@ export default defineEventHandler(async (event) => {
     .from(schema.pushSubscriptions)
     .where(eq(schema.pushSubscriptions.endpoint, endpoint))
     .limit(1)
+  let row
   if (existing) {
-    const [row] = await db
+    ;[row] = await db
       .update(schema.pushSubscriptions)
       .set({ userId, p256dh, auth, userAgent, updatedAt: new Date() })
       .where(eq(schema.pushSubscriptions.id, existing.id))
       .returning()
-    return { ok: true, id: row.id }
+  } else {
+    ;[row] = await db
+      .insert(schema.pushSubscriptions)
+      .values({ userId, endpoint, p256dh, auth, userAgent })
+      .returning()
   }
-  const [row] = await db
-    .insert(schema.pushSubscriptions)
-    .values({ userId, endpoint, p256dh, auth, userAgent })
-    .returning()
+
+  const shouldConfirm = confirm || !existing
+  setTimeout(async () => {
+    try {
+      if (shouldConfirm) {
+        const { sendPushToSubscription } = await import('../../utils/push.js')
+        await sendPushToSubscription(row, {
+          title: 'Pengingat OCN aktif',
+          body: 'Notifikasi akan muncul meski aplikasi tertutup.',
+          url: '/',
+          tag: 'ocn-push-ready'
+        })
+      }
+    } catch (e) {
+      console.error('[OCN] Push uji langganan gagal:', e.message || e)
+    }
+    queueReminderDispatch('subscribe')
+  }, 400)
+
   return { ok: true, id: row.id }
 })
