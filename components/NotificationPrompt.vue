@@ -38,6 +38,7 @@ const canAsk = computed(() => supported.value && secure.value && !blocked.value)
 
 const showPrompt = computed(() => {
   if (!ready.value || !authUser.value || publicPage.value || granted.value || dismissed.value) return false
+  if (authUser.value.role === 'technician') return false
   if (import.meta.client && localStorage.getItem('ocn-notifications-enabled') === '0') return false
   return true
 })
@@ -56,6 +57,7 @@ let timer = null
 
 async function tick() {
   if (!authUser.value) return
+  if (authUser.value.role === 'technician') return
   syncPermission()
   if (!granted.value || !wanted.value) return
   try {

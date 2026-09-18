@@ -3,7 +3,10 @@ import { ArrowPathIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon, ChartBarIcon
 import { categoryBadgeProps } from '~/utils/expenseCategory.js'
 
 const { theme } = useTheme()
-const { data, refresh, status } = await useFetch('/api/dashboard')
+const isTechnician = computed(() => useState('authUser').value?.role === 'technician')
+const { data, refresh, status } = await useFetch('/api/dashboard', {
+  immediate: !isTechnician.value
+})
 
 const monthLabel = computed(() => {
   const key = data.value?.month
@@ -25,8 +28,8 @@ function signedPct(n) {
 </script>
 
 <template>
-  <div class="space-y-4" :class="{ 'network-dashboard': theme === 'professional' }">
-    <CatalogSyncBanner />
+  <TechnicianHome v-if="isTechnician" />
+  <div v-else class="space-y-4" :class="{ 'network-dashboard': theme === 'professional' }">
     <NetworkingDashboard v-if="theme === 'professional'" :data="data" :month="monthLabel" :loading="status === 'pending'" @refresh="refresh()" />
     <div v-else class="flex items-center justify-between gap-2">
       <div>
@@ -37,6 +40,7 @@ function signedPct(n) {
         </p>
       </div>
       <div class="flex items-center gap-2">
+        <CatalogSyncBanner />
         <RemindersBanner />
         <NuxtLink to="/reports" class="btn-secondary"><ChartBarIcon class="w-4 h-4" />Laporan</NuxtLink>
         <button class="btn-secondary" :disabled="status === 'pending'" @click="refresh()">

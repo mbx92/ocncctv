@@ -196,16 +196,12 @@ function invoiceDueState(s) {
   if (due === today) return 'today'
   return 'upcoming'
 }
-async function setDueDate(s, dueDate) {
-  try {
-    await $fetch(`/api/sales/${s.id}/payment`, {
-      method: 'PUT',
-      body: { paymentStatus: 'unpaid', dueDate: dueDate || null }
-    })
-    await refresh()
-  } catch (e) {
-    useToast().error(e.data?.statusMessage || 'Gagal menyimpan jatuh tempo')
-  }
+function dueDateNote(s) {
+  const state = invoiceDueState(s)
+  if (!state || !s?.dueDate) return ''
+  if (state === 'overdue') return `Telat · tempo ${formatDate(s.dueDate)}`
+  if (state === 'today') return 'Jatuh tempo hari ini'
+  return `Tempo ${formatDate(s.dueDate)}`
 }
 function discountLine(s) {
   if (!s.discountAmount) return ''
@@ -412,26 +408,8 @@ async function remove(s) {
             <dt>Sisa tagihan</dt>
             <dd class="font-mono text-amber-700">{{ formatIDR(remainingDue(s)) }}</dd>
           </div>
-          <div v-if="s.paymentStatus === 'unpaid'" class="col-span-2">
-            <label class="text-xs text-ink-500">Jatuh tempo</label>
-            <input
-              :value="s.dueDate || ''"
-              type="date"
-              class="input mt-0.5"
-              @change="setDueDate(s, $event.target.value)"
-            />
-            <p
-              v-if="invoiceDueState(s) === 'overdue'"
-              class="text-xs text-red-600 mt-0.5"
-            >
-              Telat
-            </p>
-            <p
-              v-else-if="invoiceDueState(s) === 'today'"
-              class="text-xs text-amber-700 mt-0.5"
-            >
-              Jatuh tempo hari ini
-            </p>
+          <div v-if="s.paymentStatus === 'unpaid' && dueDateNote(s)" class="col-span-2 text-xs" :class="invoiceDueState(s) === 'overdue' ? 'text-red-600' : 'text-amber-700'">
+            {{ dueDateNote(s) }}
           </div>
         </dl>
         <div class="pt-1 btn-actions">
@@ -463,7 +441,7 @@ async function remove(s) {
         <table class="table-std">
           <thead>
             <tr>
-              <th>Tanggal</th>
+              <th>Tgl. jual</th>
               <th>Proyek</th>
               <th class="text-right">Nilai</th>
               <th class="text-right">Bersih</th>
@@ -489,25 +467,12 @@ async function remove(s) {
                 <div v-if="s.paymentStatus === 'unpaid'" class="text-xs text-amber-700 font-normal">
                   Sisa {{ formatIDR(remainingDue(s)) }}
                 </div>
-                <div v-if="s.paymentStatus === 'unpaid'" class="mt-1">
-                  <input
-                    :value="s.dueDate || ''"
-                    type="date"
-                    class="input !h-8 !text-xs !py-0 max-w-[11rem]"
-                    @change="setDueDate(s, $event.target.value)"
-                  />
-                  <div
-                    v-if="invoiceDueState(s) === 'overdue'"
-                    class="text-xs text-red-600 font-normal mt-0.5"
-                  >
-                    Telat
-                  </div>
-                  <div
-                    v-else-if="invoiceDueState(s) === 'today'"
-                    class="text-xs text-amber-700 font-normal mt-0.5"
-                  >
-                    Jatuh tempo hari ini
-                  </div>
+                <div
+                  v-if="s.paymentStatus === 'unpaid' && dueDateNote(s)"
+                  class="text-xs font-normal mt-0.5"
+                  :class="invoiceDueState(s) === 'overdue' ? 'text-red-600' : 'text-ink-400'"
+                >
+                  {{ dueDateNote(s) }}
                 </div>
               </td>
               <td>

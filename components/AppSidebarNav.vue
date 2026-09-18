@@ -1,18 +1,23 @@
 <script setup>
 import { ChevronDownIcon } from '@heroicons/vue/24/outline'
-import { navigationGroups } from '~/utils/navigation.js'
+import { navigationForRole } from '~/utils/navigation.js'
 
 const props = defineProps({ query: { type: String, default: '' } })
 defineEmits(['navigate'])
 const route = useRoute()
-const groups = navigationGroups
+const authUser = useState('authUser')
+const groups = computed(() => navigationForRole(authUser.value?.role))
 const { synced: catalogSynced } = useCatalogNotice()
 const visibleGroups = computed(() => {
   const query = props.query.trim().toLocaleLowerCase('id')
-  return groups.map(group => ({
-    ...group,
-    items: group.items.filter(item => !query || `${group.label} ${item.label}`.toLocaleLowerCase('id').includes(query))
-  })).filter(group => group.items.length)
+  return groups.value
+    .map((group) => ({
+      ...group,
+      items: group.items.filter(
+        (item) => !query || `${group.label} ${item.label}`.toLocaleLowerCase('id').includes(query)
+      )
+    }))
+    .filter((group) => group.items.length)
 })
 
 function isActive(to) {
@@ -24,12 +29,24 @@ function groupHasActive(group) {
   return group.items.some((item) => isActive(item.to))
 }
 
-const expanded = ref(Object.fromEntries(groups.map((g) => [g.id, true])))
+const expanded = ref({})
+
+watch(
+  groups,
+  (list) => {
+    const next = { ...expanded.value }
+    for (const group of list) {
+      if (next[group.id] == null) next[group.id] = true
+    }
+    expanded.value = next
+  },
+  { immediate: true }
+)
 
 watch(
   () => route.path,
   () => {
-    for (const group of groups) {
+    for (const group of groups.value) {
       if (groupHasActive(group)) expanded.value[group.id] = true
     }
   },

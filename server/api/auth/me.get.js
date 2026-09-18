@@ -13,7 +13,12 @@ export default defineEventHandler(async (event) => {
 
   const db = useDb()
   const rows = await db
-    .select({ id: schema.users.id, username: schema.users.username, role: schema.users.role })
+    .select({
+      id: schema.users.id,
+      username: schema.users.username,
+      role: schema.users.role,
+      technicianId: schema.users.technicianId
+    })
     .from(schema.users)
     .where(eq(schema.users.id, auth.id))
   if (!rows.length) throw createError({ statusCode: 401, statusMessage: 'Belum login' })

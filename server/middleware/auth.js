@@ -1,4 +1,19 @@
 import { verifySessionToken, SESSION_COOKIE } from '../utils/session.js'
+import { isTechnician } from '../utils/rbac.js'
+
+function technicianApiAllowed(path, method) {
+  if (
+    path.startsWith('/api/auth/') ||
+    path.startsWith('/api/health') ||
+    path.startsWith('/api/public/') ||
+    path.startsWith('/api/me/') ||
+    path.startsWith('/api/push/')
+  ) {
+    return true
+  }
+  if ((path === '/api/settings' || path.startsWith('/api/settings?')) && method === 'GET') return true
+  return false
+}
 
 // Semua endpoint /api/* wajib login, kecuali /api/auth/* (login/logout/me).
 // event.context.auth = { id, role } dipakai handler untuk cek RBAC (lihat utils/rbac.js).
@@ -20,4 +35,8 @@ export default defineEventHandler((event) => {
     throw createError({ statusCode: 401, statusMessage: 'Belum login' })
   }
   event.context.auth = auth
+
+  if (isTechnician(event) && !technicianApiAllowed(path, event.method || getMethod(event))) {
+    throw createError({ statusCode: 403, statusMessage: 'Aksi ini tidak tersedia untuk teknisi' })
+  }
 })

@@ -175,7 +175,27 @@ const expenseCategoryBars = computed(() =>
       </div>
 
       <div class="panel">
-        <div class="panel-header"><span class="panel-title">Rincian Laba Rugi</span></div>
+        <div class="panel-header">
+          <span class="inline-flex items-center gap-1.5">
+            <span class="panel-title">Rincian Laba Rugi</span>
+            <InfoHint label="Keterangan laba rugi">
+              <p>
+                Pembelian perlengkapan periode ini
+                <span class="font-mono">{{ formatIDR(summary?.materialPurchases) }}</span>
+                tercatat di kas keluar. Biaya material proyek sudah dihitung di HPP penjualan (baris di atas).
+              </p>
+              <p>
+                Pembelian peralatan
+                <span class="font-mono">{{ formatIDR(summary?.machinePurchases) }}</span>
+                tidak dikurangkan dari laba (belanja aset). Tetap memotong estimasi kas.
+              </p>
+              <p>
+                Total kas keluar periode ini (perlengkapan + operasional + aset):
+                <span class="font-mono font-semibold text-ink-700">{{ formatIDR(summary?.totalCashOut) }}</span>
+              </p>
+            </InfoHint>
+          </span>
+        </div>
         <table class="table-std">
           <tbody>
             <tr>
@@ -210,20 +230,6 @@ const expenseCategoryBars = computed(() =>
             </tr>
           </tbody>
         </table>
-        <div class="p-3 space-y-2 border-t border-ink-200 text-xs text-ink-500">
-          <p>
-            Pembelian perlengkapan periode ini <span class="font-mono">{{ formatIDR(summary?.materialPurchases) }}</span>
-            tercatat di kas keluar. Biaya material proyek sudah dihitung di HPP penjualan (baris di atas).
-          </p>
-          <p>
-            Pembelian peralatan <span class="font-mono">{{ formatIDR(summary?.machinePurchases) }}</span>
-            tidak dikurangkan dari laba (belanja aset). Tetap memotong estimasi kas.
-          </p>
-          <p>
-            Total kas keluar periode ini (perlengkapan + operasional + aset):
-            <span class="font-mono font-semibold text-ink-700">{{ formatIDR(summary?.totalCashOut) }}</span>
-          </p>
-        </div>
       </div>
 
       <div class="panel">

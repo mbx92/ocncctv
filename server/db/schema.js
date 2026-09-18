@@ -12,7 +12,7 @@ import {
   boolean
 } from 'drizzle-orm/pg-core'
 
-export const userRoleEnum = pgEnum('user_role', ['admin', 'staff'])
+export const userRoleEnum = pgEnum('user_role', ['admin', 'staff', 'technician'])
 export const materialTypeEnum = pgEnum('material_type', ['filament', 'resin', 'part', 'consumable'])
 export const productStatusEnum = pgEnum('product_status', [
   'draft',
@@ -122,16 +122,22 @@ export const productSeries = pgTable('product_series', {
   createdAt: timestamp('created_at').notNull().defaultNow()
 })
 
-// Pengguna sistem. Admin: akses penuh. Staff: hanya boleh mencatat
-// Pengeluaran, Penjualan & Produksi, sisanya (Material/Mesin/Packaging/Produk/
-// Pengaturan/User) read-only — ditegakkan di server/utils/rbac.js.
-export const users = pgTable('users', {
-  id: serial('id').primaryKey(),
-  username: text('username').notNull().unique(),
-  passwordHash: text('password_hash').notNull(),
-  role: userRoleEnum('role').notNull().default('staff'),
-  createdAt: timestamp('created_at').notNull().defaultNow()
-})
+// Pengguna sistem. Admin: akses penuh. Staff: operasional. Teknisi: hanya
+// proyek dan upah sendiri (users.technician_id mengikat ke master teknisi).
+export const users = pgTable(
+  'users',
+  {
+    id: serial('id').primaryKey(),
+    username: text('username').notNull().unique(),
+    passwordHash: text('password_hash').notNull(),
+    role: userRoleEnum('role').notNull().default('staff'),
+    technicianId: integer('technician_id').references(() => technicians.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at').notNull().defaultNow()
+  },
+  (t) => ({
+    technicianUniq: uniqueIndex('users_technician_id_uidx').on(t.technicianId)
+  })
+)
 
 // Semua nilai uang disimpan sebagai integer rupiah (tanpa desimal).
 export const materials = pgTable('materials', {

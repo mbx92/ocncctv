@@ -33,8 +33,10 @@ const form = ref({
 })
 const savedMsg = ref('')
 const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
+const isTechnician = computed(() => useState('authUser').value?.role === 'technician')
 
 const tabs = computed(() => {
+  if (isTechnician.value) return [{ id: 'tampilan', label: 'Tampilan' }]
   const list = [
     { id: 'umum', label: 'Umum' },
     { id: 'tampilan', label: 'Tampilan' },
@@ -52,8 +54,8 @@ const route = useRoute()
 const router = useRouter()
 const tab = computed({
   get() {
-    const id = String(route.query.tab || 'umum')
-    return tabs.value.some((t) => t.id === id) ? id : 'umum'
+    const id = String(route.query.tab || (isTechnician.value ? 'tampilan' : 'umum'))
+    return tabs.value.some((t) => t.id === id) ? id : isTechnician.value ? 'tampilan' : 'umum'
   },
   set(id) {
     router.replace({ query: { ...route.query, tab: id } })
@@ -81,7 +83,8 @@ const previewSale = computed(() =>
 )
 
 const { data: minioStatus, refresh: refreshMinio, status: minioFetchStatus } = await useFetch(
-  '/api/system/minio-status'
+  '/api/system/minio-status',
+  { immediate: !isTechnician.value }
 )
 const minioStatusLabel = computed(() => {
   if (!minioStatus.value) return 'Memeriksa…'
@@ -219,7 +222,7 @@ async function confirmErpSync(projectIds) {
 <template>
   <div class="space-y-4" :class="tab === 'user' || tab === 'audit' ? 'max-w-5xl' : 'max-w-3xl'">
     <h1 class="text-xl font-bold">Pengaturan</h1>
-    <p v-if="!isAdmin && tab !== 'tampilan'" class="text-xs text-ink-500">Read-only — hanya admin yang bisa mengubah pengaturan usaha. Tema dapat diubah di tab Tampilan.</p>
+    <p v-if="!isAdmin && !isTechnician && tab !== 'tampilan'" class="text-xs text-ink-500">Read-only — hanya admin yang bisa mengubah pengaturan usaha. Tema dapat diubah di tab Tampilan.</p>
 
     <div class="settings-tabs flex gap-1 overflow-x-auto no-scrollbar border-b border-ink-200 -mb-px">
       <button
@@ -236,7 +239,7 @@ async function confirmErpSync(projectIds) {
     </div>
 
     <SettingsAppearance v-if="tab === 'tampilan'" />
-    <NotificationSettings v-if="tab === 'umum'" />
+    <NotificationSettings v-if="tab === 'umum' && !isTechnician" />
 
     <form v-if="formTabs.has(tab)" class="panel p-4 space-y-4" @submit.prevent="save">
       <template v-if="tab === 'umum'">
@@ -428,7 +431,7 @@ async function confirmErpSync(projectIds) {
     <div v-else-if="tab === 'audit'">
       <SettingsAuditLog />
     </div>
-    <div v-else class="space-y-4">
+    <div v-else-if="tab === 'integrasi' && !isTechnician" class="space-y-4">
       <div class="panel">
         <div class="panel-header">
           <span class="panel-title">MinIO (file 3D)</span>

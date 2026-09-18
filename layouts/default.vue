@@ -1,10 +1,10 @@
 <script setup>
 import { UserIcon, Bars3Icon, XMarkIcon, ArrowRightStartOnRectangleIcon } from '@heroicons/vue/24/outline'
+import { roleLabel } from '~/utils/roles.js'
 
 const { theme } = useTheme()
 const authUser = useState('authUser')
 const isAdmin = computed(() => authUser.value?.role === 'admin')
-const roleLabel = { admin: 'Admin', staff: 'Staff' }
 
 const drawerOpen = ref(false)
 const route = useRoute()
@@ -64,7 +64,7 @@ async function logout() {
                   class="badge text-[10px] mt-0.5"
                   :class="isAdmin ? 'bg-accent-500/20 text-accent-300' : 'bg-ink-700 text-ink-300'"
                 >
-                  {{ roleLabel[authUser.role] }}
+                  {{ roleLabel[authUser.role] || authUser.role }}
                 </span>
               </div>
               <button
@@ -103,7 +103,7 @@ async function logout() {
               class="badge text-[10px] mt-0.5"
               :class="isAdmin ? 'bg-accent-500/20 text-accent-300' : 'bg-ink-700 text-ink-300'"
             >
-              {{ roleLabel[authUser.role] }}
+              {{ roleLabel[authUser.role] || authUser.role }}
             </span>
           </div>
           <button

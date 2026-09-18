@@ -121,7 +121,19 @@ async function remove(t) {
 
     <!-- Rincian estimasi kas -->
     <div class="panel">
-      <div class="panel-header"><span class="panel-title">Rincian Estimasi Kas</span></div>
+      <div class="panel-header">
+        <span class="inline-flex items-center gap-1.5">
+          <span class="panel-title">Rincian Estimasi Kas</span>
+          <InfoHint label="Keterangan estimasi kas">
+            <p>Estimasi kas = modal kas + penjualan lunas − pengeluaran. Piutang belum masuk estimasi kas.</p>
+            <p>Pengeluaran dipecah per jenis (perlengkapan, produk, operasional, peralatan, dan kategori lain) dari sumber yang sama.</p>
+            <p>Beli peralatan baru memotong kas, tampil di baris Peralatan.</p>
+            <p>
+              Aset peralatan {{ formatIDR(summary.equipmentAssets) }} adalah alat yang sudah dimiliki — bukan kas, tidak dijumlah ke estimasi kas.
+            </p>
+          </InfoHint>
+        </span>
+      </div>
       <table class="table-std">
         <tbody>
           <tr>
@@ -161,14 +173,6 @@ async function remove(t) {
           </tr>
         </tbody>
       </table>
-      <div class="p-3 text-xs text-ink-500 border-t border-ink-200 space-y-1">
-        <p>Estimasi kas = modal kas + penjualan lunas − pengeluaran. Piutang belum masuk estimasi kas.</p>
-        <p>Pengeluaran dipecah per jenis (perlengkapan, produk, operasional, peralatan, dan kategori lain) dari sumber yang sama.</p>
-        <p>Beli peralatan baru memotong kas, tampil di baris Peralatan.</p>
-        <p>
-          Aset peralatan {{ formatIDR(summary.equipmentAssets) }} adalah alat yang sudah dimiliki — bukan kas, tidak dijumlah ke estimasi kas.
-        </p>
-      </div>
     </div>
 
     <!-- Filter -->

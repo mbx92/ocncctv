@@ -10,8 +10,11 @@ import {
 import { PRODUCT_STATUSES, productStatusLabel, productStatusClass, normalizeProductStatus } from '~/utils/productStatus.js'
 import { JOB_TYPES, jobTypeLabel, jobTypeClass } from '~/utils/jobType.js'
 
-const { data: products, refresh } = await useFetch('/api/products')
 const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
+const isTechnician = computed(() => useState('authUser').value?.role === 'technician')
+const { data: products, refresh } = await useFetch('/api/products', {
+  immediate: !isTechnician.value
+})
 
 const statusLabel = productStatusLabel
 
@@ -107,7 +110,8 @@ async function remove(p) {
 </script>
 
 <template>
-  <div class="space-y-4">
+  <TechnicianProjectList v-if="isTechnician" />
+  <div v-else class="space-y-4">
     <div class="flex items-center justify-between gap-2">
       <div>
         <h1 class="text-xl font-bold">Proyek</h1>

@@ -3,9 +3,11 @@ const NOTICE_KEY = 'catalog-notice'
 let pollStarted = false
 
 export function useCatalogNotice() {
+  const isTechnician = computed(() => useState('authUser').value?.role === 'technician')
   const { data, refresh } = useFetch('/api/catalog/notice', {
     key: NOTICE_KEY,
-    default: () => null
+    default: () => null,
+    immediate: !isTechnician.value
   })
 
   const seenAt = useState('catalogNoticeSeenAt', () => {
@@ -46,6 +48,7 @@ export function useCatalogNotice() {
   if (import.meta.client && !pollStarted) {
     pollStarted = true
     setInterval(() => {
+      if (useState('authUser').value?.role === 'technician') return
       refreshNuxtData(NOTICE_KEY)
     }, 5 * 60 * 1000)
   }

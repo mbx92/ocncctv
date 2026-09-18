@@ -1,5 +1,13 @@
 const PUBLIC_PATHS = new Set(['/login', '/manifest.webmanifest', '/sw.js', '/dev-sw.js'])
 
+function technicianAllowed(to) {
+  const path = to.path || ''
+  if (path === '/' || path === '/wages') return true
+  if (path === '/projects' || path.startsWith('/projects/')) return true
+  if (path === '/settings') return String(to.query.tab || 'tampilan') === 'tampilan'
+  return false
+}
+
 export default defineNuxtRouteMiddleware(async (to) => {
   if (
     PUBLIC_PATHS.has(to.path) ||
@@ -22,6 +30,16 @@ export default defineNuxtRouteMiddleware(async (to) => {
       return navigateTo('/login')
     }
   }
+
+  if (authUser.value.role === 'technician') {
+    if (to.path === '/settings' && String(to.query.tab || '') !== 'tampilan') {
+      return navigateTo({ path: '/settings', query: { tab: 'tampilan' } })
+    }
+    if (!technicianAllowed(to)) return navigateTo('/')
+    return
+  }
+
+  if (to.path === '/wages') return navigateTo('/')
 
   if (to.path === '/users') {
     return navigateTo(

@@ -1,15 +1,18 @@
 <script setup>
 import { Bars3Icon, ChevronRightIcon, CalendarDaysIcon, ClipboardDocumentListIcon } from '@heroicons/vue/24/outline'
-import { navigationGroups } from '~/utils/navigation.js'
+import { navigationForRole } from '~/utils/navigation.js'
 
 const route = useRoute()
 const authUser = useState('authUser')
+const isTechnician = computed(() => authUser.value?.role === 'technician')
 const currentModule = computed(() => {
-  for (const group of navigationGroups) {
-    const item = group.items.find(item => item.to === '/' ? route.path === '/' : route.path === item.to || route.path.startsWith(`${item.to}/`))
+  for (const group of navigationForRole(authUser.value?.role)) {
+    const item = group.items.find((item) =>
+      item.to === '/' ? route.path === '/' : route.path === item.to || route.path.startsWith(`${item.to}/`)
+    )
     if (item) return { ...item, group: group.label }
   }
-  return { label: 'Ruang kerja', group: 'Operasional', to: '/' }
+  return { label: 'Ruang kerja', group: isTechnician.value ? 'Teknisi' : 'Operasional', to: '/' }
 })
 const drawer = ref(null)
 const menuButton = ref(null)
@@ -59,13 +62,13 @@ async function logout() {
           <NuxtLink :to="currentModule.to" :aria-current="route.path === currentModule.to ? 'page' : undefined">{{ currentModule.label }}</NuxtLink>
           <template v-if="route.path !== currentModule.to"><ChevronRightIcon aria-hidden="true" /><span>Detail</span></template>
         </nav>
-        <div class="network-header__actions">
+        <div v-if="!isTechnician" class="network-header__actions">
           <NuxtLink to="/calendar" class="network-header-link"><CalendarDaysIcon /><span>Jadwal kerja</span></NuxtLink>
           <NuxtLink to="/rab" class="network-header-link network-header-link--primary"><ClipboardDocumentListIcon /><span>RAB & penawaran</span></NuxtLink>
         </div>
       </header>
       <main id="network-content" tabindex="-1" class="app-main network-content"><slot /></main>
-      <footer class="network-footer"><span>OCN / CCTV & Networking</span><span>Ruang kerja operasional</span></footer>
+      <footer class="network-footer"><span>OCN / CCTV & Networking</span><span>{{ isTechnician ? 'Portal teknisi' : 'Ruang kerja operasional' }}</span></footer>
     </div>
   </div>
 </template>

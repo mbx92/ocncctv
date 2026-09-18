@@ -1,7 +1,9 @@
 <script setup>
 import { PlusIcon, PencilSquareIcon, TrashIcon, CheckIcon, XMarkIcon } from '@heroicons/vue/24/outline'
+import { roleLabel, roleBadge } from '~/utils/roles.js'
 
 const { data: users, refresh } = await useFetch('/api/users')
+const { data: technicians } = await useFetch('/api/technicians')
 const authUser = useState('authUser')
 
 const { page, pageSize, paged, total, totalPages, rangeStart, rangeEnd } = usePagination(
@@ -9,33 +11,69 @@ const { page, pageSize, paged, total, totalPages, rangeStart, rangeEnd } = usePa
   10
 )
 
-const roleLabel = { admin: 'Admin', staff: 'Staff' }
-const roleBadge = { admin: 'bg-accent-100 text-accent-700', staff: 'bg-ink-100 text-ink-600' }
-
 const showForm = ref(false)
 const editing = ref(null)
 const form = ref({})
 const errorMsg = ref('')
 
+function emptyForm() {
+  return { username: '', password: '', role: 'staff', technicianId: '' }
+}
+
 function openAdd() {
   editing.value = null
-  form.value = { username: '', password: '', role: 'staff' }
+  form.value = emptyForm()
   errorMsg.value = ''
   showForm.value = true
 }
 function openEdit(u) {
   editing.value = u
-  form.value = { username: u.username, password: '', role: u.role }
+  form.value = {
+    username: u.username,
+    password: '',
+    role: u.role,
+    technicianId: u.technicianId != null ? String(u.technicianId) : ''
+  }
   errorMsg.value = ''
   showForm.value = true
 }
+
+const usedTechnicianIds = computed(() => {
+  const editingId = editing.value?.id
+  return new Set(
+    (users.value || [])
+      .filter((u) => u.technicianId && u.id !== editingId)
+      .map((u) => String(u.technicianId))
+  )
+})
+
+const technicianOptions = computed(() => {
+  const current = form.value.technicianId
+  return (technicians.value || []).filter(
+    (t) => String(t.id) === String(current) || !usedTechnicianIds.value.has(String(t.id))
+  )
+})
+
+watch(
+  () => form.value.role,
+  (role) => {
+    if (role !== 'technician') form.value.technicianId = ''
+  }
+)
+
 async function save() {
   errorMsg.value = ''
   try {
+    const body = {
+      username: form.value.username,
+      password: form.value.password,
+      role: form.value.role,
+      technicianId: form.value.role === 'technician' ? Number(form.value.technicianId) || null : null
+    }
     if (editing.value) {
-      await $fetch(`/api/users/${editing.value.id}`, { method: 'PUT', body: form.value })
+      await $fetch(`/api/users/${editing.value.id}`, { method: 'PUT', body })
     } else {
-      await $fetch('/api/users', { method: 'POST', body: form.value })
+      await $fetch('/api/users', { method: 'POST', body })
     }
     showForm.value = false
     await refresh()
@@ -58,7 +96,7 @@ async function remove(u) {
   <div class="space-y-4">
     <div class="flex items-center justify-between gap-2">
       <p class="text-xs text-ink-500">
-        Admin: akses penuh. Staff: hanya bisa mencatat Pengeluaran & Penjualan — sisanya tampil read-only.
+        Admin: akses penuh. Staff: operasional. Teknisi: hanya melihat proyek dan upah sendiri.
       </p>
       <button class="btn-primary shrink-0" @click="openAdd">
         <PlusIcon class="w-4 h-4" /><span class="hidden sm:inline">Tambah User</span><span class="sm:hidden">Tambah</span>
@@ -72,6 +110,7 @@ async function remove(u) {
             <tr>
               <th>Username</th>
               <th>Role</th>
+              <th>Teknisi</th>
               <th>Dibuat</th>
               <th></th>
             </tr>
@@ -82,7 +121,10 @@ async function remove(u) {
                 {{ u.username }}
                 <span v-if="u.id === authUser?.id" class="text-xs text-ink-400">(kamu)</span>
               </td>
-              <td><span class="badge" :class="roleBadge[u.role]">{{ roleLabel[u.role] }}</span></td>
+              <td>
+                <span class="badge" :class="roleBadge[u.role] || roleBadge.staff">{{ roleLabel[u.role] || u.role }}</span>
+              </td>
+              <td class="text-sm text-ink-600">{{ u.technicianName || '—' }}</td>
               <td class="text-sm text-ink-500">{{ formatDate(u.createdAt) }}</td>
               <td class="whitespace-nowrap text-right">
                 <div class="btn-actions justify-end">
@@ -98,7 +140,7 @@ async function remove(u) {
               </td>
             </tr>
             <tr v-if="!total">
-              <td colspan="4" class="text-center text-ink-500 py-6">Belum ada user.</td>
+              <td colspan="5" class="text-center text-ink-500 py-6">Belum ada user.</td>
             </tr>
           </tbody>
         </table>
@@ -107,9 +149,9 @@ async function remove(u) {
         v-model:page="page"
         v-model:pageSize="pageSize"
         :total-pages="totalPages"
-        :total="total"
         :range-start="rangeStart"
         :range-end="rangeEnd"
+        :total="total"
       />
     </div>
 
@@ -128,7 +170,16 @@ async function remove(u) {
           <select v-model="form.role" class="input">
             <option value="staff">Staff</option>
             <option value="admin">Admin</option>
+            <option value="technician">Teknisi</option>
           </select>
+        </div>
+        <div v-if="form.role === 'technician'">
+          <label class="label">Teknisi</label>
+          <select v-model="form.technicianId" class="input" required>
+            <option value="">Pilih teknisi</option>
+            <option v-for="t in technicianOptions" :key="t.id" :value="String(t.id)">{{ t.name }}</option>
+          </select>
+          <p class="text-xs text-ink-500 mt-1">Satu teknisi hanya bisa punya satu akun login.</p>
         </div>
         <p v-if="errorMsg" class="text-sm text-red-600">{{ errorMsg }}</p>
         <div class="flex justify-end gap-2 pt-2">

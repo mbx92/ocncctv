@@ -44,5 +44,5 @@ export default defineEventHandler(async (event) => {
     maxAge: SESSION_MAX_AGE,
     secure
   })
-  return { ok: true, user: { id: user.id, username: user.username, role: user.role } }
+  return { ok: true, user: { id: user.id, username: user.username, role: user.role, technicianId: user.technicianId || null } }
 })

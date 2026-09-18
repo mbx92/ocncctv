@@ -220,18 +220,23 @@ async function remove(e) {
 <template>
   <div class="space-y-4">
     <div class="flex items-center justify-between gap-2">
-      <h1 class="text-xl font-bold">Pengeluaran</h1>
+      <h1 class="text-xl font-bold inline-flex items-center gap-1.5">
+        Pengeluaran
+        <InfoHint label="Keterangan pengeluaran">
+          <p>
+            Pembelian perlengkapan ke toko sebaiknya dicatat lewat tombol <strong>Beli</strong> di
+            <NuxtLink to="/materials" class="text-accent-600 hover:underline">Perlengkapan</NuxtLink>
+            atau menu <NuxtLink to="/purchases" class="text-accent-600 hover:underline">Pembelian</NuxtLink>
+            agar stok dan kas ikut.
+          </p>
+          <p>Upah teknisi: pilih proyek lalu ambil nominal dari pembagian di tab Revenue proyek, atau pilih teknisi manual.</p>
+          <p>Halaman ini juga untuk pengeluaran lain (listrik, bensin).</p>
+        </InfoHint>
+      </h1>
       <button class="btn-primary" @click="openAdd">
         <PlusIcon class="w-4 h-4" /><span class="hidden sm:inline">Catat Pengeluaran</span><span class="sm:hidden">Catat</span>
       </button>
     </div>
-    <p class="text-xs text-ink-500">
-      Pembelian perlengkapan ke toko sebaiknya dicatat lewat tombol <strong>Beli</strong> di
-      <NuxtLink to="/materials" class="text-accent-600 hover:underline">Perlengkapan</NuxtLink>
-      atau menu <NuxtLink to="/purchases" class="text-accent-600 hover:underline">Pembelian</NuxtLink>
-      agar stok dan kas ikut. Upah teknisi: pilih proyek lalu ambil nominal dari pembagian di tab Revenue proyek, atau pilih teknisi manual.
-      Halaman ini juga untuk pengeluaran lain (listrik, bensin).
-    </p>
 
     <!-- Filter -->
     <div class="panel p-3 space-y-2 overflow-hidden">
@@ -305,7 +310,7 @@ async function remove(e) {
           <thead>
             <tr>
               <th>Tanggal</th>
-              <th>Kategori</th>
+              <th class="min-w-[10rem]">Kategori</th>
               <th>Deskripsi</th>
               <th>Item terkait</th>
               <th class="text-right">Jumlah</th>
@@ -315,7 +320,9 @@ async function remove(e) {
           <tbody>
             <tr v-for="e in paged" :key="e.id">
               <td class="whitespace-nowrap font-mono text-xs">{{ formatDate(e.date) }}</td>
-              <td><span v-bind="catBadge(e.category, e.categoryColor)">{{ e.categoryName || catName(e.category) }}</span></td>
+              <td class="min-w-[10rem] whitespace-nowrap">
+                <span v-bind="catBadge(e.category, e.categoryColor)">{{ e.categoryName || catName(e.category) }}</span>
+              </td>
               <td>{{ e.description }}</td>
               <td class="text-ink-500">{{ e.productName || '-' }}</td>
               <td class="num">{{ formatIDR(e.amount) }}</td>

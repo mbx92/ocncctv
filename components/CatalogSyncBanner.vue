@@ -1,6 +1,12 @@
 <script setup>
-import { BuildingStorefrontIcon, XMarkIcon } from '@heroicons/vue/24/outline'
+import { BuildingStorefrontIcon } from '@heroicons/vue/24/outline'
 
+defineProps({
+  variant: { type: String, default: 'default' }
+})
+
+const open = ref(false)
+const root = ref(null)
 const { notice, unread, markSeen } = useCatalogNotice()
 
 const counts = computed(() => {
@@ -13,39 +19,77 @@ const counts = computed(() => {
   return parts.join(' · ')
 })
 
-function dismiss() {
-  markSeen()
+function onDocClick(e) {
+  if (!open.value) return
+  if (root.value && !root.value.contains(e.target)) open.value = false
 }
+
+function toggle() {
+  open.value = !open.value
+  if (open.value && unread.value) markSeen()
+}
+
+onMounted(() => {
+  document.addEventListener('click', onDocClick)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', onDocClick)
+})
 </script>
 
 <template>
-  <div
-    v-if="unread && notice?.lastSyncedAt"
-    class="panel catalog-sync-banner flex items-start gap-3 p-3 sm:p-4 border border-teal-200 bg-teal-50"
-    role="status"
-  >
-    <BuildingStorefrontIcon class="w-5 h-5 mt-0.5 shrink-0 text-teal-700" />
-    <div class="min-w-0 flex-1">
-      <p class="text-sm font-semibold text-ink-900">Katalog supplier sudah diperbarui</p>
-      <p class="text-xs text-ink-600 mt-0.5">
-        {{ notice.message || 'Data harga dari supplier sudah di-sync.' }}
-      </p>
-      <p class="text-xs text-ink-500 mt-1">
-        {{ formatCatalogSyncTime(notice.lastSyncedAt) }}
-        <span v-if="notice.source === 'schedule'"> · otomatis</span>
-        <span v-if="counts"> · {{ counts }}</span>
-      </p>
-      <NuxtLink to="/catalog" class="inline-flex text-xs font-medium text-teal-800 hover:underline mt-2">
-        Buka katalog
-      </NuxtLink>
-    </div>
+  <div ref="root" class="relative">
     <button
+      v-if="variant === 'network'"
       type="button"
-      class="p-1 rounded text-ink-400 hover:text-ink-700 hover:bg-white/70"
-      aria-label="Tutup pemberitahuan"
-      @click="dismiss"
+      class="network-icon-button relative"
+      aria-label="Katalog supplier"
+      :aria-expanded="open"
+      @click.stop="toggle"
     >
-      <XMarkIcon class="w-4 h-4" />
+      <BuildingStorefrontIcon />
+      <span
+        v-if="unread"
+        class="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-teal-500 ring-2 ring-white"
+      />
     </button>
+    <button
+      v-else
+      type="button"
+      class="btn-secondary relative !px-2.5"
+      aria-label="Katalog supplier"
+      :aria-expanded="open"
+      @click.stop="toggle"
+    >
+      <BuildingStorefrontIcon class="w-4 h-4" />
+      <span
+        v-if="unread"
+        class="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-teal-500 ring-2 ring-white"
+      />
+    </button>
+
+    <div
+      v-if="open"
+      class="absolute right-0 top-full mt-2 z-30 w-[min(22rem,calc(100vw-2rem))] panel p-0 shadow-lg overflow-hidden"
+    >
+      <div class="px-3 py-2 border-b border-ink-100">
+        <div class="text-sm font-semibold">Katalog supplier</div>
+        <div class="text-[11px] text-ink-400">Pembaruan harga dari supplier</div>
+      </div>
+      <div v-if="notice?.lastSyncedAt" class="px-3 py-3 space-y-1.5">
+        <p class="text-sm font-medium text-ink-900">Katalog sudah diperbarui</p>
+        <p class="text-xs text-ink-600">{{ notice.message || 'Data harga dari supplier sudah di-sync.' }}</p>
+        <p class="text-xs text-ink-500">
+          {{ formatCatalogSyncTime(notice.lastSyncedAt) }}
+          <span v-if="notice.source === 'schedule'"> · otomatis</span>
+          <span v-if="counts"> · {{ counts }}</span>
+        </p>
+        <NuxtLink to="/catalog" class="inline-flex text-xs font-medium text-teal-800 hover:underline pt-1" @click="open = false">
+          Buka katalog
+        </NuxtLink>
+      </div>
+      <p v-else class="px-3 py-6 text-sm text-ink-400 text-center">Belum ada sync katalog.</p>
+    </div>
   </div>
 </template>
