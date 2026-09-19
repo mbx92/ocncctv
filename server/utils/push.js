@@ -28,13 +28,19 @@ export async function ensureVapidKeys() {
   return generated
 }
 
+function vapidSubject() {
+  const explicit = String(process.env.VAPID_SUBJECT || '').trim()
+  if (explicit) return explicit
+  const site = String(process.env.NUXT_PUBLIC_SITE_URL || process.env.SITE_URL || '')
+    .trim()
+    .replace(/\/$/, '')
+  if (/^https?:\/\//i.test(site)) return site
+  return 'mailto:admin@ocn.app'
+}
+
 export async function sendPushToSubscription(sub, payload) {
   const keys = await ensureVapidKeys()
-  webpush.setVapidDetails(
-    String(process.env.VAPID_SUBJECT || 'mailto:ocn@localhost').trim() || 'mailto:ocn@localhost',
-    keys.publicKey,
-    keys.privateKey
-  )
+  webpush.setVapidDetails(vapidSubject(), keys.publicKey, keys.privateKey)
   await webpush.sendNotification(
     {
       endpoint: sub.endpoint,
@@ -47,5 +53,5 @@ export async function sendPushToSubscription(sub, payload) {
 
 export function isGonePushError(err) {
   const status = Number(err?.statusCode || err?.status || 0)
-  return status === 404 || status === 410
+  return status === 401 || status === 403 || status === 404 || status === 410
 }

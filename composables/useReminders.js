@@ -106,6 +106,12 @@ export function useReminders() {
     }
     const vapid = await $fetch('/api/push/vapid')
     if (!vapid?.publicKey) throw new Error('Kunci push server belum tersedia.')
+    try {
+      const cache = await caches.open('ocn-push-meta')
+      await cache.put('/__ocn/vapid-public-key', new Response(vapid.publicKey, { headers: { 'content-type': 'text/plain' } }))
+    } catch {
+      /* Cache API opsional */
+    }
     let sub = await reg.pushManager.getSubscription()
     if (sub) {
       const currentKey = sub.options?.applicationServerKey

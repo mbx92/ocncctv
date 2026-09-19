@@ -1,6 +1,5 @@
 import { eq } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
-import { queueReminderDispatch } from '../../utils/reminders.js'
 
 export default defineEventHandler(async (event) => {
   const body = (await readBody(event).catch(() => null)) || {}
@@ -35,9 +34,9 @@ export default defineEventHandler(async (event) => {
   }
 
   const shouldConfirm = confirm || !existing
-  setTimeout(async () => {
-    try {
-      if (shouldConfirm) {
+  if (shouldConfirm) {
+    setTimeout(async () => {
+      try {
         const { sendPushToSubscription } = await import('../../utils/push.js')
         await sendPushToSubscription(row, {
           title: 'Pengingat OCN aktif',
@@ -45,12 +44,11 @@ export default defineEventHandler(async (event) => {
           url: '/',
           tag: 'ocn-push-ready'
         })
+      } catch (e) {
+        console.error('[OCN] Push uji langganan gagal:', e.message || e)
       }
-    } catch (e) {
-      console.error('[OCN] Push uji langganan gagal:', e.message || e)
-    }
-    queueReminderDispatch('subscribe')
-  }, 400)
+    }, 400)
+  }
 
   return { ok: true, id: row.id }
 })

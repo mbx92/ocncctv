@@ -12,7 +12,6 @@ const {
   busy,
   lastError,
   enable,
-  notifyLocal,
   subscribePush,
   syncPermission,
   refreshItems,
@@ -63,10 +62,10 @@ async function tick() {
   try {
     await subscribePush({ confirm: sessionStorage.getItem('ocn-push-confirmed') !== '1' })
     sessionStorage.setItem('ocn-push-confirmed', '1')
-  } catch {
-    /* push opsional di dev tanpa service worker */
+  } catch (e) {
+    lastError.value = e?.data?.statusMessage || e?.message || 'Push latar belakang belum tersambung.'
   }
-  await notifyLocal()
+  await refreshItems().catch(() => [])
 }
 
 function readDismissed() {

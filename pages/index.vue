@@ -31,20 +31,22 @@ function signedPct(n) {
   <TechnicianHome v-if="isTechnician" />
   <div v-else class="space-y-4" :class="{ 'network-dashboard': theme === 'professional' }">
     <NetworkingDashboard v-if="theme === 'professional'" :data="data" :month="monthLabel" :loading="status === 'pending'" @refresh="refresh()" />
-    <div v-else class="flex items-center justify-between gap-2">
-      <div>
+    <div v-else class="flex items-start justify-between gap-2">
+      <div class="min-w-0">
         <h1 class="text-xl font-bold">Dashboard</h1>
         <p class="text-xs text-ink-500">
           {{ monthLabel }} · {{ formatDate(data?.range?.from) }} – {{ formatDate(data?.range?.to) }}
           <span class="text-ink-400"> (vs periode sama bulan lalu)</span>
         </p>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-1.5 shrink-0">
         <CatalogSyncBanner />
         <RemindersBanner />
-        <NuxtLink to="/reports" class="btn-secondary"><ChartBarIcon class="w-4 h-4" />Laporan</NuxtLink>
-        <button class="btn-secondary" :disabled="status === 'pending'" @click="refresh()">
-          <ArrowPathIcon class="w-4 h-4" />Muat ulang
+        <NuxtLink to="/reports" class="btn-secondary !px-2.5" aria-label="Laporan">
+          <ChartBarIcon class="w-4 h-4" /><span class="hidden sm:inline">Laporan</span>
+        </NuxtLink>
+        <button class="btn-secondary !px-2.5" aria-label="Muat ulang" :disabled="status === 'pending'" @click="refresh()">
+          <ArrowPathIcon class="w-4 h-4" /><span class="hidden sm:inline">Muat ulang</span>
         </button>
       </div>
     </div>

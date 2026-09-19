@@ -5,39 +5,28 @@ defineProps({
   variant: { type: String, default: 'default' }
 })
 
-const open = ref(false)
-const root = ref(null)
+const { open, trigger, panel, panelStyle, toggle, close } = useAnchoredPanel()
 const { items, refreshItems } = useReminders()
 
-function onDocClick(e) {
-  if (!open.value) return
-  if (root.value && !root.value.contains(e.target)) open.value = false
-}
-
-function toggle() {
-  open.value = !open.value
+function onToggle() {
+  toggle()
   if (open.value) refreshItems().catch(() => [])
 }
 
 onMounted(() => {
   refreshItems().catch(() => [])
-  document.addEventListener('click', onDocClick)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('click', onDocClick)
 })
 </script>
 
 <template>
-  <div ref="root" class="relative">
+  <div ref="trigger" class="relative shrink-0">
     <button
       v-if="variant === 'network'"
       type="button"
       class="network-icon-button relative"
       aria-label="Pengingat"
       :aria-expanded="open"
-      @click.stop="toggle"
+      @click.stop="onToggle"
     >
       <BellIcon />
       <span
@@ -53,7 +42,7 @@ onUnmounted(() => {
       class="btn-secondary relative !px-2.5"
       aria-label="Pengingat"
       :aria-expanded="open"
-      @click.stop="toggle"
+      @click.stop="onToggle"
     >
       <BellIcon class="w-4 h-4" />
       <span
@@ -64,27 +53,32 @@ onUnmounted(() => {
       </span>
     </button>
 
-    <div
-      v-if="open"
-      class="absolute right-0 top-full mt-2 z-30 w-[min(22rem,calc(100vw-2rem))] panel p-0 shadow-lg overflow-hidden"
-    >
-      <div class="px-3 py-2 border-b border-ink-100">
-        <div class="text-sm font-semibold">Pengingat</div>
-        <div class="text-[11px] text-ink-400">Jadwal dan tagihan hari ini</div>
+    <Teleport to="body">
+      <div
+        v-if="open"
+        ref="panel"
+        class="panel p-0 shadow-lg overflow-hidden overflow-y-auto"
+        :style="panelStyle"
+        @click.stop
+      >
+        <div class="px-3 py-2 border-b border-ink-100">
+          <div class="text-sm font-semibold">Pengingat</div>
+          <div class="text-[11px] text-ink-400">Jadwal dan tagihan hari ini</div>
+        </div>
+        <ul v-if="items.length" class="divide-y divide-ink-100">
+          <li v-for="item in items" :key="item.id">
+            <NuxtLink
+              :to="item.url"
+              class="block px-3 py-2.5 hover:bg-ink-50"
+              @click="close"
+            >
+              <div class="text-sm font-medium text-ink-900">{{ item.title }}</div>
+              <div class="text-xs text-ink-500 mt-0.5 break-words">{{ item.body }}</div>
+            </NuxtLink>
+          </li>
+        </ul>
+        <p v-else class="px-3 py-6 text-sm text-ink-400 text-center">Tidak ada pengingat hari ini.</p>
       </div>
-      <ul v-if="items.length" class="max-h-72 overflow-y-auto divide-y divide-ink-100">
-        <li v-for="item in items" :key="item.id">
-          <NuxtLink
-            :to="item.url"
-            class="block px-3 py-2.5 hover:bg-ink-50"
-            @click="open = false"
-          >
-            <div class="text-sm font-medium text-ink-900">{{ item.title }}</div>
-            <div class="text-xs text-ink-500 mt-0.5 break-words">{{ item.body }}</div>
-          </NuxtLink>
-        </li>
-      </ul>
-      <p v-else class="px-3 py-6 text-sm text-ink-400 text-center">Tidak ada pengingat hari ini.</p>
-    </div>
+    </Teleport>
   </div>
 </template>

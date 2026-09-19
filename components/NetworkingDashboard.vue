@@ -21,7 +21,7 @@ function delta(value) { return value == null ? '—' : `${value > 0 ? '+' : ''}$
     <div class="network-page-heading">
       <div><p class="network-eyebrow">OVERVIEW / OPERASIONAL</p><h1>Dashboard</h1><p>Pekerjaan terarah. Kebutuhan lapangan siap.</p></div>
       <div class="network-page-heading__actions">
-        <span class="network-period"><CalendarDaysIcon />{{ month || 'Periode berjalan' }}</span>
+        <span class="network-period" :title="month || 'Periode berjalan'"><CalendarDaysIcon /><span class="network-period__text">{{ month || 'Periode berjalan' }}</span></span>
         <CatalogSyncBanner variant="network" />
         <RemindersBanner variant="network" />
         <button class="network-icon-button" type="button" aria-label="Muat ulang dashboard" :disabled="loading" @click="$emit('refresh')"><ArrowPathIcon :class="{ 'animate-spin': loading }" /></button>

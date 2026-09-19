@@ -87,13 +87,15 @@
 .network-drawer .network-sidebar__brand { padding-top: max(24px, env(safe-area-inset-top, 0px)); }
 .network-overview { display: flex; flex-direction: column; gap: 22px; }
 .network-dashboard .catalog-sync-banner { border-color: #b7e3e0; background: #eef8f7; }
-.network-page-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 18px; }
+.network-page-heading { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: nowrap; gap: 12px; }
+.network-page-heading > div:first-child { min-width: 0; }
 .network-eyebrow { font-size: 9px; font-weight: 600; letter-spacing: .16em; color: #5e7a8a; }
 .network-page-heading h1 { margin-top: 7px; }
 .network-page-heading h1 + p { font-size: 12px; margin-top: 7px; color: #607487; }
-.network-page-heading__actions { display: flex; align-items: center; gap: 8px; }
+.network-page-heading__actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .network-period { display: inline-flex; align-items: center; gap: 8px; padding: 10px 13px; border: 1px solid #dce4e9; border-radius: 7px; background: #fff; color: #516d7f; font-size: 11px; }
-.network-period > svg { width: 15px; height: 15px; }
+.network-period > svg { width: 15px; height: 15px; flex-shrink: 0; }
+.network-period__text { white-space: nowrap; }
 .network-operation { display: grid; grid-template-columns: 1fr 1.15fr; border: 1px solid #254757; border-radius: 13px; overflow: hidden; background: #153344; color: #edf7fa; }
 .network-operation__intro { padding: 30px; background-image: radial-gradient(rgb(159 201 210 / 13%) .7px, transparent .7px); background-size: 14px 14px; }
 .network-operation .network-eyebrow { color: #88b7c4; }
@@ -189,7 +191,10 @@
   .network-content { padding: 22px 16px; }
   .network-footer { margin: 0 16px; font-size: 9px; }
   .network-overview { gap: 18px; }
-  .network-page-heading { gap: 14px; }
+  .network-page-heading { gap: 10px; }
+  .network-page-heading > div:first-child { min-width: 0; }
+  .network-period { padding: 9px; }
+  .network-period__text { display: none; }
   .network-operation { grid-template-columns: 1fr; }
   .network-operation__intro { padding: 24px; }
   .network-operation__intro h2 br { display: none; }

@@ -5,6 +5,7 @@ function technicianApiAllowed(path, method) {
   if (
     path.startsWith('/api/auth/') ||
     path.startsWith('/api/health') ||
+    path.startsWith('/api/cron/') ||
     path.startsWith('/api/public/') ||
     path.startsWith('/api/me/') ||
     path.startsWith('/api/push/')
@@ -23,6 +24,7 @@ export default defineEventHandler((event) => {
     !path.startsWith('/api/') ||
     path.startsWith('/api/auth/') ||
     path.startsWith('/api/health') ||
+    path.startsWith('/api/cron/') ||
     path.startsWith('/api/public/')
   ) {
     return
