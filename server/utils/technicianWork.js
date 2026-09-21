@@ -64,7 +64,7 @@ export async function loadTechnicianWork(technicianId) {
   const db = useDb()
   const [technician] = await db.select().from(schema.technicians).where(eq(schema.technicians.id, technicianId))
   if (!technician) {
-    throw createError({ statusCode: 403, statusMessage: 'Akun teknisi belum terhubung. Hubungi admin.' })
+    throw createError({ statusCode: 404, statusMessage: 'Teknisi tidak ditemukan' })
   }
 
   const wageRows = await db
