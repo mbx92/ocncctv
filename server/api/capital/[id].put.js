@@ -9,6 +9,13 @@ export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   if (Number(body.amount) <= 0) throw createError({ statusCode: 400, statusMessage: 'Jumlah harus lebih dari 0' })
   const db = useDb()
+  const [existing] = await db.select().from(schema.capitalTransactions).where(eq(schema.capitalTransactions.id, id))
+  if (existing?.expenseId) {
+    throw createError({
+      statusCode: 409,
+      statusMessage: 'Penarikan ini dari pengeluaran pribadi. Ubah lewat halaman Pengeluaran.'
+    })
+  }
   const rows = await db
     .update(schema.capitalTransactions)
     .set({

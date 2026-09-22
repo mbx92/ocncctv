@@ -15,6 +15,12 @@ export function ownerCapital(rows) {
   }
 }
 
+export function personalDrawWithdrawals(rows) {
+  return (rows || [])
+    .filter((r) => r.type === 'withdrawal' && r.expenseId)
+    .reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
+}
+
 function saleRowSettled(row) {
   return saleSettled({
     salePricePerUnit: row.salePricePerUnit,
@@ -89,6 +95,8 @@ export function capitalPosition({ capitalRows, salesRows, expenseRows, machineRo
     totalExpenses,
     expensesByCategory: expensesByCategory(expenseRows),
     equipmentAssets,
-    estimatedCash: owner.netCapital + salesRevenue - totalExpenses
+    // Penarikan dari selisih pengeluaran pribadi sudah masuk pengeluaran,
+    // jadi tidak dikurangi lagi dari estimasi kas.
+    estimatedCash: owner.netCapital + salesRevenue - totalExpenses + personalDrawWithdrawals(capitalRows)
   }
 }

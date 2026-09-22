@@ -8,6 +8,7 @@ export const SYSTEM_CATEGORY_COLORS = {
   machine: '#475569',
   rnd: '#7e22ce',
   technician: '#047857',
+  pribadi: '#be123c',
   other: '#64748b'
 }
 

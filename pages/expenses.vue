@@ -2,6 +2,7 @@
 import { PlusIcon, PencilSquareIcon, TrashIcon, CheckIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 import { categoryBadgeProps, categoryColorFromList, categoryNameOf } from '~/utils/expenseCategory.js'
 import { technicianPayStatus } from '~/utils/technicianPortal.js'
+import { isPersonalCategory, personalCapitalShortfall } from '~/utils/personalExpense.js'
 
 const filters = ref({ category: '', productId: '', dateFrom: '', dateTo: '' })
 
@@ -43,6 +44,8 @@ const savingCategory = ref(false)
 const technicianWork = ref(null)
 const loadingTechnicianWork = ref(false)
 const selectedWageIds = ref([])
+const personalDraw = ref(null)
+const loadingPersonalDraw = ref(false)
 
 function isTechnicianExpense() {
   return form.value.category === 'technician'
@@ -50,6 +53,107 @@ function isTechnicianExpense() {
 function isWageCreate() {
   return isTechnicianExpense() && !editing.value
 }
+const selectedCategory = computed(() => (categories.value || []).find((c) => c.key === form.value.category))
+const formKind = computed(() => {
+  if (isPersonalCategory({ key: form.value.category, name: selectedCategory.value?.name })) return 'personal'
+  switch (form.value.category) {
+    case 'technician':
+      return 'technician'
+    case 'material':
+    case 'packaging':
+      return 'stock'
+    case 'machine':
+      return 'asset'
+    case 'electricity':
+      return 'utility'
+    case 'tool':
+      return 'tool'
+    case 'rnd':
+      return 'rnd'
+    default:
+      return 'general'
+  }
+})
+const formTitle = computed(() => {
+  if (editing.value) return 'Edit Pengeluaran'
+  if (formKind.value === 'personal') return 'Catat Pengeluaran Pribadi'
+  const titles = {
+    technician: 'Catat Upah Teknisi',
+    material: 'Catat Perlengkapan',
+    packaging: 'Catat Produk',
+    machine: 'Catat Peralatan',
+    electricity: 'Catat Listrik',
+    tool: 'Catat Alat',
+    rnd: 'Catat R&D',
+    other: 'Catat Pengeluaran'
+  }
+  return titles[form.value.category] || 'Catat Pengeluaran'
+})
+const descriptionPlaceholder = computed(() => {
+  if (formKind.value === 'personal') return 'Makan, bensin pribadi, belanja rumah…'
+  const placeholders = {
+    electricity: 'Token listrik / tagihan PLN',
+    tool: 'Tang, bor, konektor…',
+    rnd: 'Uji coba / sampel / riset',
+    material: 'Beli kabel / conduit (stok tidak bertambah)',
+    packaging: 'Beli kamera / NVR (stok tidak bertambah)',
+    machine: 'Beli alat (tanpa masuk daftar aset)',
+    other: 'Bensin, ongkir, sewa…',
+    technician: 'Upah teknisi'
+  }
+  return placeholders[form.value.category] || 'Keterangan pengeluaran'
+})
+const showProjectField = computed(() => {
+  if (isWageCreate()) return false
+  return ['stock', 'tool', 'rnd', 'general', 'technician'].includes(formKind.value)
+})
+const kindPanelClass = computed(() => {
+  const map = {
+    technician: 'border-emerald-200 bg-emerald-50/60',
+    stock: 'border-teal-200 bg-teal-50/70',
+    asset: 'border-slate-200 bg-slate-50',
+    utility: 'border-amber-200 bg-amber-50/70',
+    tool: 'border-stone-200 bg-stone-50',
+    rnd: 'border-purple-200 bg-purple-50/70',
+    personal: 'border-rose-200 bg-rose-50/70',
+    general: 'border-ink-200 bg-ink-50/80'
+  }
+  return map[formKind.value] || map.general
+})
+const kindTitleClass = computed(() => {
+  const map = {
+    technician: 'text-emerald-900',
+    stock: 'text-teal-900',
+    asset: 'text-slate-800',
+    utility: 'text-amber-900',
+    tool: 'text-stone-800',
+    rnd: 'text-purple-900',
+    personal: 'text-rose-900',
+    general: 'text-ink-800'
+  }
+  return map[formKind.value] || map.general
+})
+const kindBodyClass = computed(() => {
+  const map = {
+    technician: 'text-emerald-800/80',
+    stock: 'text-teal-800/80',
+    asset: 'text-slate-600',
+    utility: 'text-amber-800/80',
+    tool: 'text-stone-600',
+    rnd: 'text-purple-800/80',
+    personal: 'text-rose-800/80',
+    general: 'text-ink-500'
+  }
+  return map[formKind.value] || map.general
+})
+const personalRemaining = computed(() => {
+  const remaining = Number(personalDraw.value?.remaining) || 0
+  const current = editing.value && isPersonalCategory({ key: editing.value.category })
+    ? Number(editing.value.amount) || 0
+    : 0
+  return remaining + current
+})
+const personalShortfall = computed(() => personalCapitalShortfall(form.value.amount, personalRemaining.value))
 const wageProjects = computed(() => technicianWork.value?.projects || [])
 const unpaidWageProjects = computed(() => wageProjects.value.filter((p) => p.unpaidAmount > 0))
 const selectedWageTotal = computed(() =>
@@ -98,11 +202,29 @@ async function loadTechnicianProjects() {
   }
 }
 
+async function loadPersonalDraw() {
+  if (formKind.value !== 'personal') {
+    personalDraw.value = null
+    return
+  }
+  loadingPersonalDraw.value = true
+  try {
+    personalDraw.value = await $fetch('/api/expenses/personal-draw')
+    if (personalDraw.value?.technician?.id) {
+      form.value.technicianId = String(personalDraw.value.technician.id)
+    }
+  } catch {
+    personalDraw.value = null
+  } finally {
+    loadingPersonalDraw.value = false
+  }
+}
+
 function openAdd() {
   editing.value = null
   form.value = {
     date: todayStr(),
-    category: 'material',
+    category: 'other',
     description: '',
     amount: 0,
     relatedProductId: '',
@@ -110,6 +232,7 @@ function openAdd() {
   }
   technicianWork.value = null
   selectedWageIds.value = []
+  personalDraw.value = null
   errorMsg.value = ''
   showForm.value = true
 }
@@ -122,8 +245,10 @@ function openEdit(e) {
   }
   technicianWork.value = null
   selectedWageIds.value = []
+  personalDraw.value = null
   errorMsg.value = ''
   showForm.value = true
+  loadPersonalDraw()
 }
 function openTechnicians() {
   showTechnicians.value = true
@@ -139,12 +264,22 @@ function onExpenseTechnician() {
 }
 
 function onExpenseCategoryChange() {
-  if (!isWageCreate()) {
+  if (formKind.value === 'personal') {
     technicianWork.value = null
     selectedWageIds.value = []
+    form.value.relatedProductId = ''
+    loadPersonalDraw()
     return
   }
-  loadTechnicianProjects()
+  personalDraw.value = null
+  if (!isTechnicianExpense()) {
+    form.value.technicianId = ''
+    technicianWork.value = null
+    selectedWageIds.value = []
+  } else {
+    loadTechnicianProjects()
+  }
+  if (!showProjectField.value) form.value.relatedProductId = ''
 }
 
 async function onTechnicianCreated(created) {
@@ -168,6 +303,7 @@ async function saveCategory() {
     await refreshCategories()
     form.value.category = created.key
     categoryForm.value = { name: '' }
+    onExpenseCategoryChange()
     useToast().success(`Kategori "${created.name}" ditambahkan.`)
   } catch (e) {
     categoryError.value = e.data?.statusMessage || 'Gagal menambah kategori'
@@ -207,10 +343,17 @@ async function save() {
         }
       })
       useToast().success(`Tersimpan ${result.count} upah teknisi.`)
-    } else if (editing.value) {
-      await $fetch(`/api/expenses/${editing.value.id}`, { method: 'PUT', body: form.value })
     } else {
-      await $fetch('/api/expenses', { method: 'POST', body: form.value })
+      if (formKind.value === 'personal' && personalDraw.value?.technician?.id) {
+        form.value.technicianId = String(personalDraw.value.technician.id)
+        form.value.relatedProductId = ''
+      }
+      const saved = editing.value
+        ? await $fetch(`/api/expenses/${editing.value.id}`, { method: 'PUT', body: form.value })
+        : await $fetch('/api/expenses', { method: 'POST', body: form.value })
+      if (saved?.capitalWithdrawal?.amount) {
+        useToast().success(`Tersimpan. Penarikan modal ${formatIDR(saved.capitalWithdrawal.amount)}.`)
+      }
     }
     showForm.value = false
     await refresh()
@@ -239,8 +382,7 @@ async function remove(e) {
             atau menu <NuxtLink to="/purchases" class="text-accent-600 hover:underline">Pembelian</NuxtLink>
             agar stok dan kas ikut.
           </p>
-          <p>Upah teknisi: pilih teknisi, centang proyek yang upahnya dibayar, lalu simpan.</p>
-          <p>Halaman ini juga untuk pengeluaran lain (listrik, bensin).</p>
+          <p>Form menyesuaikan kategori: upah teknisi (centang proyek), pribadi dari gabungan upah Pande, stok lewat Pembelian, aset lewat Peralatan, listrik/alat/R&D punya field sendiri.</p>
         </InfoHint>
       </h1>
       <button class="btn-primary" @click="openAdd">
@@ -373,8 +515,8 @@ async function remove(e) {
 
     <AppModal
       v-if="showForm"
-      :title="editing ? 'Edit Pengeluaran' : 'Catat Pengeluaran'"
-      :size="isWageCreate() ? 'lg' : 'md'"
+      :title="formTitle"
+      :size="isWageCreate() || formKind === 'personal' ? 'lg' : 'md'"
       @close="showForm = false"
     >
       <form class="space-y-3" @submit.prevent="save">
@@ -395,16 +537,17 @@ async function remove(e) {
             </div>
           </div>
         </div>
-        <div>
-          <label class="label">{{ isTechnicianExpense() ? 'Teknisi' : 'Teknisi (opsional)' }}</label>
+
+        <div v-if="isTechnicianExpense()">
+          <label class="label">Teknisi</label>
           <div class="flex gap-2 min-w-0">
             <select
               v-model="form.technicianId"
               class="input min-w-0"
-              :required="isTechnicianExpense()"
+              required
               @change="onExpenseTechnician"
             >
-              <option value="">—</option>
+              <option value="">Pilih teknisi</option>
               <option v-for="t in technicians" :key="t.id" :value="String(t.id)">{{ t.name }}</option>
             </select>
             <button type="button" class="btn-secondary shrink-0" title="Kelola teknisi" @click="openTechnicians">
@@ -414,9 +557,9 @@ async function remove(e) {
         </div>
 
         <template v-if="isWageCreate()">
-          <div class="rounded-panel border border-emerald-200 bg-emerald-50/60 px-3 py-2.5 space-y-2">
+          <div class="rounded-panel border px-3 py-2.5 space-y-2" :class="kindPanelClass">
             <div class="flex items-center justify-between gap-2">
-              <div class="text-xs font-semibold text-emerald-900">Proyek & upah teknisi</div>
+              <div class="text-xs font-semibold" :class="kindTitleClass">Proyek & upah teknisi</div>
               <button
                 v-if="unpaidWageProjects.length"
                 type="button"
@@ -426,9 +569,9 @@ async function remove(e) {
                 {{ allUnpaidSelected ? 'Batal semua' : 'Pilih yang belum dibayar' }}
               </button>
             </div>
-            <p v-if="!form.technicianId" class="text-xs text-emerald-800/80">Pilih teknisi untuk melihat proyeknya.</p>
-            <p v-else-if="loadingTechnicianWork" class="text-xs text-emerald-800/80">Memuat proyek…</p>
-            <p v-else-if="!wageProjects.length" class="text-xs text-emerald-800/80">
+            <p v-if="!form.technicianId" class="text-xs" :class="kindBodyClass">Pilih teknisi untuk melihat proyeknya.</p>
+            <p v-else-if="loadingTechnicianWork" class="text-xs" :class="kindBodyClass">Memuat proyek…</p>
+            <p v-else-if="!wageProjects.length" class="text-xs" :class="kindBodyClass">
               Teknisi ini belum tercatat di pembagian upah proyek.
             </p>
             <div v-else class="overflow-x-auto -mx-1">
@@ -481,29 +624,158 @@ async function remove(e) {
                 </tbody>
               </table>
             </div>
-            <p class="text-xs text-emerald-900 font-medium">
+            <p class="text-xs font-medium" :class="kindTitleClass">
               Dipilih {{ selectedWageIds.length }} proyek · total {{ formatIDR(selectedWageTotal) }}
             </p>
           </div>
         </template>
 
-        <template v-else>
+        <template v-else-if="formKind === 'personal'">
+          <div class="rounded-panel border px-3 py-2.5 space-y-2" :class="kindPanelClass">
+            <p v-if="loadingPersonalDraw" class="text-xs" :class="kindBodyClass">Memuat upah Pande…</p>
+            <p v-else-if="!personalDraw?.technician" class="text-xs" :class="kindBodyClass">
+              Teknisi bernama Pande belum ada. Tambahkan di daftar teknisi supaya total upah muncul di sini.
+            </p>
+            <template v-else>
+              <div class="grid grid-cols-3 gap-2">
+                <div class="rounded-panel bg-white px-2 py-2">
+                  <div class="text-[10px] uppercase tracking-wide text-ink-400">Total upah</div>
+                  <div class="font-mono text-sm font-semibold">{{ formatIDR(personalDraw.wageTotal) }}</div>
+                </div>
+                <div class="rounded-panel bg-white px-2 py-2">
+                  <div class="text-[10px] uppercase tracking-wide text-ink-400">Sudah dipakai</div>
+                  <div class="font-mono text-sm font-semibold">{{ formatIDR(personalDraw.personalSpent) }}</div>
+                </div>
+                <div class="rounded-panel bg-white px-2 py-2">
+                  <div class="text-[10px] uppercase tracking-wide text-ink-400">Sisa</div>
+                  <div
+                    class="font-mono text-sm font-semibold"
+                    :class="personalRemaining < 0 ? 'text-red-600' : 'text-rose-800'"
+                  >
+                    {{ formatIDR(personalRemaining) }}
+                  </div>
+                </div>
+              </div>
+              <p class="text-xs" :class="kindBodyClass">
+                {{ personalDraw.projectCount }} proyek · {{ personalDraw.technician.name }}
+              </p>
+              <div v-if="personalDraw.projects.length" class="overflow-x-auto -mx-1">
+                <table class="table-std text-sm bg-white rounded-panel">
+                  <thead>
+                    <tr>
+                      <th>Proyek</th>
+                      <th class="text-right">Upah</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="p in personalDraw.projects" :key="p.id">
+                      <td class="font-medium">{{ p.name }}</td>
+                      <td class="num">{{ formatIDR(p.wageAmount) }}</td>
+                    </tr>
+                  </tbody>
+                  <tfoot>
+                    <tr class="font-semibold bg-rose-50/80">
+                      <td class="px-3 py-2">Gabungan</td>
+                      <td class="num px-3 py-2">{{ formatIDR(personalDraw.wageTotal) }}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </template>
+          </div>
+
           <div>
             <label class="label">Deskripsi</label>
-            <input v-model="form.description" class="input" required placeholder="Upah Andi / Beli PLA 2 roll" />
+            <input v-model="form.description" class="input" required :placeholder="descriptionPlaceholder" />
           </div>
           <div>
+            <label class="label">Jumlah</label>
+            <IdrInput v-model="form.amount" required />
+            <p v-if="personalDraw?.technician" class="text-xs text-ink-400 mt-1">
+              Sisa sumber pribadi {{ formatIDR(personalRemaining) }}.
+            </p>
+            <p v-if="personalShortfall > 0" class="text-xs text-amber-800 mt-1">
+              Selisih {{ formatIDR(personalShortfall) }} dicatat sebagai penarikan modal.
+            </p>
+          </div>
+        </template>
+
+        <template v-else>
+          <div class="rounded-panel border px-3 py-2.5 space-y-2" :class="kindPanelClass">
+            <div class="text-xs font-semibold" :class="kindTitleClass">
+              {{
+                formKind === 'stock'
+                  ? 'Pembelian stok'
+                  : formKind === 'asset'
+                    ? 'Belanja aset peralatan'
+                    : formKind === 'utility'
+                      ? 'Listrik & utilitas'
+                      : formKind === 'tool'
+                        ? 'Alat & perkakas'
+                        : formKind === 'rnd'
+                          ? 'Riset & uji coba'
+                          : formKind === 'technician'
+                            ? 'Upah teknisi'
+                            : formKind === 'personal'
+                              ? 'Pengeluaran pribadi'
+                              : 'Pengeluaran lain'
+              }}
+            </div>
+            <p class="text-xs" :class="kindBodyClass">
+              <template v-if="formKind === 'stock'">
+                Beli ke toko sebaiknya lewat
+                <NuxtLink to="/purchases" class="font-medium text-teal-800 hover:underline">Pembelian</NuxtLink>
+                atau tombol Beli di
+                <NuxtLink to="/materials" class="font-medium text-teal-800 hover:underline">Perlengkapan</NuxtLink>
+                agar stok dan kas ikut.
+              </template>
+              <template v-else-if="formKind === 'asset'">
+                Beli alat baru lewat
+                <NuxtLink to="/machines" class="font-medium text-slate-800 hover:underline">Peralatan</NuxtLink>
+                agar masuk aset. Di sini hanya memotong kas, tidak menambah daftar alat.
+              </template>
+              <template v-else-if="formKind === 'utility'">
+                Tagihan listrik, token, atau utilitas workshop. Masuk biaya operasional.
+              </template>
+              <template v-else-if="formKind === 'tool'">
+                Perkakas kecil atau bahan pasang habis pakai — bukan aset di menu Peralatan.
+              </template>
+              <template v-else-if="formKind === 'rnd'">
+                Bisa untuk proyek tertentu atau riset umum tanpa proyek.
+              </template>
+              <template v-else-if="formKind === 'technician'">
+                Ubah nominal atau proyek upah yang sudah tercatat.
+              </template>
+              <template v-else>
+                Pengeluaran operasional lain (bensin, ongkir, sewa, dan kategori kustom).
+              </template>
+            </p>
+            <div v-if="formKind === 'stock'" class="flex flex-wrap gap-2">
+              <NuxtLink to="/purchases" class="btn-secondary text-xs" @click="showForm = false">Catat pembelian</NuxtLink>
+              <NuxtLink to="/materials" class="btn-secondary text-xs" @click="showForm = false">Buka perlengkapan</NuxtLink>
+            </div>
+            <div v-else-if="formKind === 'asset'" class="flex flex-wrap gap-2">
+              <NuxtLink to="/machines" class="btn-secondary text-xs" @click="showForm = false">Kelola peralatan</NuxtLink>
+            </div>
+          </div>
+
+          <div>
+            <label class="label">{{ formKind === 'utility' ? 'Keterangan tagihan' : 'Deskripsi' }}</label>
+            <input v-model="form.description" class="input" required :placeholder="descriptionPlaceholder" />
+          </div>
+          <div v-if="showProjectField">
             <label class="label">Proyek terkait (opsional)</label>
             <select v-model="form.relatedProductId" class="input">
-              <option value="">—</option>
+              <option value="">{{ formKind === 'rnd' ? 'Tanpa proyek' : '—' }}</option>
               <option v-for="p in products" :key="p.id" :value="p.id">{{ p.name }}</option>
             </select>
+            <p v-if="formKind === 'rnd'" class="text-xs text-ink-400 mt-1">
+              Kosongkan jika uji coba/sampel tidak terikat proyek.
+            </p>
           </div>
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="label">Jumlah</label>
-              <IdrInput v-model="form.amount" required />
-            </div>
+          <div>
+            <label class="label">Jumlah</label>
+            <IdrInput v-model="form.amount" required />
           </div>
         </template>
 

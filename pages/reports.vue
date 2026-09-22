@@ -189,6 +189,7 @@ const expenseCategoryBars = computed(() =>
                 <span class="font-mono">{{ formatIDR(summary?.machinePurchases) }}</span>
                 tidak dikurangkan dari laba (belanja aset). Tetap memotong estimasi kas.
               </p>
+              <p>Pengeluaran pribadi dari upah Pande juga tidak masuk biaya operasional, tapi tetap memotong kas.</p>
               <p>
                 Total kas keluar periode ini (perlengkapan + operasional + aset):
                 <span class="font-mono font-semibold text-ink-700">{{ formatIDR(summary?.totalCashOut) }}</span>

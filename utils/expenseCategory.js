@@ -6,6 +6,7 @@ export const SYSTEM_CATEGORY_COLORS = {
   machine: '#475569',
   rnd: '#7e22ce',
   technician: '#047857',
+  pribadi: '#be123c',
   other: '#64748b'
 }
 
@@ -87,6 +88,7 @@ export function categoryBadgeClass(key, color) {
     machine: 'bg-slate-200 text-slate-700',
     rnd: 'bg-purple-100 text-purple-700',
     technician: 'bg-emerald-100 text-emerald-800',
+    pribadi: 'bg-rose-100 text-rose-700',
     other: 'bg-ink-100 text-ink-500'
   }
   if (known[key]) return known[key]

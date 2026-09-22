@@ -484,6 +484,20 @@
       "when": 1789600000026,
       "tag": "0068_technician_role",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1789600000027,
+      "tag": "0069_personal_expense",
+      "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1789600000028,
+      "tag": "0070_personal_capital_withdrawal",
+      "breakpoints": true
     }
   ]
 }

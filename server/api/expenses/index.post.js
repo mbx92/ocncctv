@@ -3,6 +3,7 @@ import { logAudit } from '../../utils/audit.js'
 import { setExpenseProducts } from '../../utils/expenseProducts.js'
 import { assertExpenseCategory } from '../../utils/expenseCategory.js'
 import { findTechnician } from '../../utils/technicians.js'
+import { resyncPersonalCapitalWithdrawals } from '../../utils/personalDraw.js'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
@@ -29,11 +30,13 @@ export default defineEventHandler(async (event) => {
     })
     .returning()
   await setExpenseProducts(db, schema, rows[0].id, relatedProductId ? [relatedProductId] : [])
+  const withdrawals = await resyncPersonalCapitalWithdrawals(db)
+  const capitalWithdrawal = withdrawals.get(rows[0].id) || null
   await logAudit(event, {
     action: 'create',
     entity: 'expense',
     entityId: rows[0].id,
     summary: `Catat pengeluaran "${rows[0].description}" (Rp ${rows[0].amount.toLocaleString('id-ID')})`
   })
-  return rows[0]
+  return { ...rows[0], capitalWithdrawal }
 })

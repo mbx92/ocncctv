@@ -8,6 +8,12 @@ export default defineEventHandler(async (event) => {
   const id = Number(getRouterParam(event, 'id'))
   const db = useDb()
   const existing = await db.select().from(schema.capitalTransactions).where(eq(schema.capitalTransactions.id, id))
+  if (existing[0]?.expenseId) {
+    throw createError({
+      statusCode: 409,
+      statusMessage: 'Penarikan ini dari pengeluaran pribadi. Hapus lewat halaman Pengeluaran.'
+    })
+  }
   await db.delete(schema.capitalTransactions).where(eq(schema.capitalTransactions.id, id))
   const r = existing[0]
   const label = r?.type === 'deposit' ? 'setoran' : 'penarikan'

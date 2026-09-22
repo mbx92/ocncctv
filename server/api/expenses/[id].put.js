@@ -5,6 +5,7 @@ import { setExpenseProducts } from '../../utils/expenseProducts.js'
 import { assertExpenseCategory } from '../../utils/expenseCategory.js'
 import { assertNotMachineLinkedExpense } from '../../utils/machineExpense.js'
 import { findTechnician } from '../../utils/technicians.js'
+import { resyncPersonalCapitalWithdrawals } from '../../utils/personalDraw.js'
 
 export default defineEventHandler(async (event) => {
   const id = Number(getRouterParam(event, 'id'))
@@ -50,6 +51,9 @@ export default defineEventHandler(async (event) => {
     await setExpenseProducts(db, schema, id, relatedProductId ? [relatedProductId] : [])
   }
 
+  const withdrawals = await resyncPersonalCapitalWithdrawals(db)
+  const capitalWithdrawal = withdrawals.get(id) || null
+
   await logAudit(event, { action: 'update', entity: 'expense', entityId: id, summary: `Ubah pengeluaran "${rows[0].description}"` })
-  return rows[0]
+  return { ...rows[0], capitalWithdrawal }
 })

@@ -701,14 +701,21 @@ export const packageShareLinks = pgTable(
 // Mutasi modal awal usaha: setoran (deposit) & penarikan (withdrawal).
 // Posisi modal = total setoran − total penarikan. Ekuitas pemilik, bukan laba rugi;
 // tidak dicampur dengan beli mesin.
-export const capitalTransactions = pgTable('capital_transactions', {
-  id: serial('id').primaryKey(),
-  date: date('date').notNull(),
-  type: capitalTypeEnum('type').notNull().default('deposit'),
-  amount: integer('amount').notNull().default(0),
-  notes: text('notes'),
-  createdAt: timestamp('created_at').notNull().defaultNow()
-})
+export const capitalTransactions = pgTable(
+  'capital_transactions',
+  {
+    id: serial('id').primaryKey(),
+    date: date('date').notNull(),
+    type: capitalTypeEnum('type').notNull().default('deposit'),
+    amount: integer('amount').notNull().default(0),
+    notes: text('notes'),
+    expenseId: integer('expense_id').references(() => expenses.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at').notNull().defaultNow()
+  },
+  (t) => ({
+    expenseIdUidx: uniqueIndex('capital_transactions_expense_id_uidx').on(t.expenseId)
+  })
+)
 
 export const purchaseItemTypeEnum = pgEnum('purchase_item_type', ['material', 'packaging'])
 

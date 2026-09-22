@@ -126,6 +126,7 @@ async function remove(t) {
           <span class="panel-title">Rincian Estimasi Kas</span>
           <InfoHint label="Keterangan estimasi kas">
             <p>Estimasi kas = modal kas + penjualan lunas − pengeluaran. Piutang belum masuk estimasi kas.</p>
+            <p>Selisih pengeluaran pribadi di atas upah Pande tercatat sebagai penarikan modal, tanpa memotong estimasi kas dua kali.</p>
             <p>Pengeluaran dipecah per jenis (perlengkapan, produk, operasional, peralatan, dan kategori lain) dari sumber yang sama.</p>
             <p>Beli peralatan baru memotong kas, tampil di baris Peralatan.</p>
             <p>
@@ -213,7 +214,8 @@ async function remove(t) {
           <span class="font-mono text-xs text-ink-500">{{ formatDate(t.date) }}</span>
         </div>
         <div v-if="t.notes" class="text-xs text-ink-400 break-words">{{ t.notes }}</div>
-        <div v-if="isAdmin" class="btn-actions pt-1">
+        <p v-if="t.expenseId" class="text-xs text-ink-400">Dari pengeluaran pribadi</p>
+        <div v-else-if="isAdmin" class="btn-actions pt-1">
           <button class="btn-action" @click="openEdit(t)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
           <button class="btn-action-danger" @click="remove(t)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
         </div>
@@ -259,7 +261,8 @@ async function remove(t) {
                 {{ t.type === 'deposit' ? '+' : '−' }}{{ formatIDR(t.amount) }}
               </td>
               <td v-if="isAdmin" class="whitespace-nowrap text-right">
-                <div class="btn-actions justify-end">
+                <span v-if="t.expenseId" class="text-xs text-ink-400">Dari pengeluaran pribadi</span>
+                <div v-else class="btn-actions justify-end">
                   <button class="btn-action" @click="openEdit(t)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
                   <button class="btn-action-danger" @click="remove(t)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
                 </div>

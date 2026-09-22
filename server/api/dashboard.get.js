@@ -191,7 +191,13 @@ export default defineEventHandler(async () => {
         .select({ c: count() })
         .from(schema.productions)
         .where(inArray(schema.productions.status, ['queued', 'in_progress'])),
-      db.select({ type: schema.capitalTransactions.type, amount: schema.capitalTransactions.amount }).from(schema.capitalTransactions),
+      db
+        .select({
+          type: schema.capitalTransactions.type,
+          amount: schema.capitalTransactions.amount,
+          expenseId: schema.capitalTransactions.expenseId
+        })
+        .from(schema.capitalTransactions),
       db
         .select({
           quantity: schema.sales.quantity,
