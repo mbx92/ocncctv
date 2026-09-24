@@ -2,6 +2,7 @@
 import { ArrowLeftIcon, PrinterIcon } from '@heroicons/vue/24/outline'
 import { buildProjectInvoicePreview } from '~/utils/invoiceItems.js'
 import { parseQuoteStyle } from '~/utils/quoteStyle.js'
+import { consumableLotItem } from '~/utils/consumableLot.js'
 
 definePageMeta({ layout: 'print' })
 
@@ -22,6 +23,10 @@ const invoiceStyle = computed({
   }
 })
 
+const materialCost = computed(() =>
+  (product.value?.materialUsages || []).reduce((sum, row) => sum + (Number(row.amount) || 0), 0)
+)
+
 const invoice = computed(() => {
   return buildProjectInvoicePreview({
     product: product.value,
@@ -30,7 +35,8 @@ const invoice = computed(() => {
     extraLines: product.value?.extraLines || [],
     sale: (projectSales.value || [])[0] || null,
     downPayment: product.value?.downPaymentTotal,
-    date: todayStr()
+    date: todayStr(),
+    consumableLot: consumableLotItem(materialCost.value, settings.value, product.value?.consumableLotSale)
   })
 })
 

@@ -139,3 +139,65 @@ export function purchaseStockMultiplier(packaging) {
   const n = Math.max(Math.round(Number(packaging?.unitsPerPurchase) || 0), 0)
   return n > 1 ? n : 1
 }
+
+export function purchaseUnitOf(item) {
+  if (purchaseStockMultiplier(item) > 1) {
+    return String(item?.purchaseUnit || '').trim() || 'pack'
+  }
+  return String(item?.unit || '').trim() || 'unit'
+}
+
+export function purchasePriceOf(item) {
+  const n = purchaseStockMultiplier(item)
+  const unitPrice = Math.max(Math.round(Number(item?.pricePerUnit) || 0), 0)
+  return n > 1 ? unitPrice * n : unitPrice
+}
+
+export function stockUnitPriceFromPurchase(item, purchasePrice) {
+  const n = purchaseStockMultiplier(item)
+  const price = Math.max(Math.round(Number(purchasePrice) || 0), 0)
+  return n > 1 ? Math.round(price / n) : price
+}
+
+export function stockQtyFromPurchase(item, purchaseQty) {
+  return Math.max(Math.round(Number(purchaseQty) || 0), 0) * purchaseStockMultiplier(item)
+}
+
+export function formatPurchaseConversion(item) {
+  const n = purchaseStockMultiplier(item)
+  if (n <= 1) return ''
+  return `1 ${purchaseUnitOf(item)} = ${n} ${item?.unit || 'unit'}`
+}
+
+const BUY_UNITS = /^(pack|box|roll|lusin|karton|dus)$/i
+const USE_UNITS = /^(pcs|pc|buah|meter|m|mtr|gram|gr|ml)$/i
+
+export function isInvertedMaterialConversion(item) {
+  const n = purchaseStockMultiplier(item)
+  if (n <= 1) return false
+  return BUY_UNITS.test(item?.unit) && USE_UNITS.test(item?.purchaseUnit)
+}
+
+export function normalizeMaterialConversion(item) {
+  const n = purchaseStockMultiplier(item)
+  const unit = String(item?.unit || '').trim() || 'pcs'
+  const purchaseUnit = String(item?.purchaseUnit || '').trim() || (n > 1 ? 'pack' : '')
+  const stockQuantity = Math.max(Math.round(Number(item?.stockQuantity) || 0), 0)
+  const pricePerUnit = Math.max(Math.round(Number(item?.pricePerUnit) || 0), 0)
+  if (!isInvertedMaterialConversion({ unit, purchaseUnit, unitsPerPurchase: n })) {
+    return {
+      unit,
+      purchaseUnit: purchaseUnit || null,
+      unitsPerPurchase: n,
+      stockQuantity,
+      pricePerUnit
+    }
+  }
+  return {
+    unit: purchaseUnit,
+    purchaseUnit: unit,
+    unitsPerPurchase: n,
+    stockQuantity: stockQuantity * n,
+    pricePerUnit: n > 1 ? Math.round(pricePerUnit / n) : pricePerUnit
+  }
+}

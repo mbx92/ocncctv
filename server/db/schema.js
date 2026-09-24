@@ -145,6 +145,8 @@ export const materials = pgTable('materials', {
   name: text('name').notNull(),
   type: materialTypeEnum('type').notNull().default('consumable'),
   unit: text('unit').notNull().default('pcs'),
+  purchaseUnit: text('purchase_unit'),
+  unitsPerPurchase: integer('units_per_purchase').notNull().default(1),
   pricePerUnit: integer('price_per_unit').notNull().default(0),
   stockQuantity: integer('stock_quantity').notNull().default(0),
   // ok = ada, low = menipis, empty = habis. Dihitung dari stockQuantity vs lowStockQuantity.
@@ -194,6 +196,8 @@ export const products = pgTable('products', {
   erpProjectId: text('erp_project_id'),
   erpTotalValue: integer('erp_total_value'),
   jobType: jobTypeEnum('job_type'),
+  // Harga jual 1 lot Consumable & Material ke pelanggan (50rb / 100rb / 150rb / custom).
+  consumableLotSale: integer('consumable_lot_sale').notNull().default(50000),
   createdAt: timestamp('created_at').notNull().defaultNow()
 }, (t) => ({
   erpProjectUniq: uniqueIndex('products_erp_project_id_uidx').on(t.erpProjectId)

@@ -15,6 +15,17 @@ export function parseLowStockQuantity(value, fallback = 2) {
   return Math.max(Math.round(n), 0)
 }
 
+export function parseUnitsPerPurchase(value) {
+  const n = Math.round(Number(value) || 0)
+  return n > 1 ? n : 1
+}
+
+export function parsePurchaseUnit(value, unitsPerPurchase = 1) {
+  const unit = String(value || '').trim()
+  if (unit) return unit
+  return unitsPerPurchase > 1 ? 'pack' : null
+}
+
 export function parseMaterialStockQuantity(value, fallback = 0) {
   const n = Number(value)
   if (!Number.isFinite(n) || n < 0) return fallback

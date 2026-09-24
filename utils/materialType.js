@@ -1,4 +1,5 @@
-export const MATERIAL_UNITS = ['pack', 'pcs', 'roll', 'box', 'meter']
+export const MATERIAL_UNITS = ['pcs', 'meter', 'pack', 'roll', 'box']
+export const MATERIAL_BUY_UNITS = ['pack', 'box', 'roll']
 
 export const MATERIAL_TYPES = [
   { id: 'consumable', label: 'Habis pakai', unit: 'pack' },

@@ -37,13 +37,14 @@ import {
 import { distributeWagesFromServiceSale, wageAllocationLeft } from '~/utils/projectWages.js'
 import { buildProjectInvoicePreview } from '~/utils/invoiceItems.js'
 import { parseQuoteStyle } from '~/utils/quoteStyle.js'
+import { consumableLotItem, CONSUMABLE_LOT_NAME } from '~/utils/consumableLot.js'
 
 const route = useRoute()
 const id = route.params.id
 const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
 
 const { data: product, refresh } = await useFetch(`/api/products/${id}`)
-const { data: materials } = await useFetch('/api/materials')
+const { data: materials, refresh: refreshMaterials } = await useFetch('/api/materials')
 const { data: settings } = await useFetch('/api/settings')
 const { data: suppliers, refresh: refreshSuppliers } = await useFetch('/api/suppliers')
 const { data: rabPurchaseStatus, refresh: refreshRabPurchaseStatus } = await useFetch(
@@ -477,8 +478,43 @@ async function onTechnicianCreated(created) {
 }
 
 const materialUsages = computed(() => product.value?.materialUsages || [])
-const materialCost = computed(() => materialUsages.value.reduce((sum, row) => sum + (Number(row.amount) || 0), 0))
-const liveFinance = computed(() => summarizeProjectRevenue(scopeLines.value, wageRows.value, materialCost.value))
+const materialUsageSummary = computed(() => {
+  const grouped = new Map()
+  for (const row of materialUsages.value) {
+    const key = Number(row.materialId) || row.materialName
+    const current = grouped.get(key) || {
+      materialId: key,
+      name: row.materialName,
+      unit: row.unit,
+      quantity: 0,
+      amount: 0
+    }
+    current.quantity += Math.max(Math.round(Number(row.quantity) || 0), 0)
+    current.amount += Math.max(Math.round(Number(row.amount) || 0), 0)
+    grouped.set(key, current)
+  }
+  return [...grouped.values()]
+})
+const materialCost = computed(() =>
+  materialUsages.value.reduce((sum, row) => {
+    const stored = Math.max(Math.round(Number(row.amount) || 0), 0)
+    if (stored > 0) return sum + stored
+    const qty = Math.max(Math.round(Number(row.quantity) || 0), 0)
+    const material = (materials.value || []).find((item) => Number(item.id) === Number(row.materialId))
+    const price = Math.max(Math.round(Number(material?.pricePerUnit || row.unitPrice) || 0), 0)
+    return sum + qty * price
+  }, 0)
+)
+const consumableLot = computed(() =>
+  consumableLotItem(materialCost.value, settings.value, product.value?.consumableLotSale)
+)
+
+async function onChecklistSaved() {
+  await Promise.all([refresh(), refreshMaterials()])
+}
+const liveFinance = computed(() =>
+  summarizeProjectRevenue(scopeLines.value, wageRows.value, materialCost.value, consumableLot.value.amount)
+)
 const jasaLines = computed(() => serviceLines(scopeLines.value).filter((line) => (Number(line.quantity) || 0) > 0))
 const wageUnallocated = computed(() => wageAllocationLeft(liveFinance.value.netService, wageRows.value))
 const financeMargin = computed(() => {
@@ -529,53 +565,6 @@ function autoDivideWages() {
   setTimeout(() => (wageMsg.value = ''), 4000)
 }
 
-const usageForm = ref({ materialId: '', quantity: 1, date: todayStr() })
-const usageError = ref('')
-const savingUsage = ref(false)
-const selectedUsageMaterial = computed(() =>
-  (materials.value || []).find((row) => String(row.id) === String(usageForm.value.materialId))
-)
-const usageAmount = computed(() => {
-  const qty = Math.max(Math.round(Number(usageForm.value.quantity) || 0), 0)
-  return qty * Math.max(Math.round(Number(selectedUsageMaterial.value?.pricePerUnit) || 0), 0)
-})
-
-async function saveUsage() {
-  usageError.value = ''
-  const materialId = Number(usageForm.value.materialId)
-  const quantity = Math.round(Number(usageForm.value.quantity) || 0)
-  if (!materialId) {
-    usageError.value = 'Pilih perlengkapan'
-    return
-  }
-  if (quantity <= 0) {
-    usageError.value = 'Qty pemakaian wajib diisi'
-    return
-  }
-  savingUsage.value = true
-  try {
-    await $fetch(`/api/materials/${materialId}/usages`, {
-      method: 'POST',
-      body: { productId: Number(id), quantity, date: usageForm.value.date }
-    })
-    usageForm.value = { materialId: '', quantity: 1, date: usageForm.value.date || todayStr() }
-    await refresh()
-  } catch (e) {
-    usageError.value = e.data?.statusMessage || 'Gagal mencatat pemakaian'
-  } finally {
-    savingUsage.value = false
-  }
-}
-
-async function removeUsage(row) {
-  if (!(await useConfirm().confirm(`Batalkan pemakaian ${row.materialName}? Stok dikembalikan.`))) return
-  try {
-    await $fetch(`/api/material-usages/${row.id}`, { method: 'DELETE' })
-    await refresh()
-  } catch (e) {
-    useToast().error(e.data?.statusMessage || 'Gagal membatalkan pemakaian')
-  }
-}
 
 const DP_METHODS = [
   { id: 'transfer', label: 'Transfer' },
@@ -831,7 +820,8 @@ const invoicePreview = computed(() =>
     extraLines: extraDraft.value,
     sale: projectSale.value,
     downPayment: liveDpTotal.value,
-    date: todayStr()
+    date: todayStr(),
+    consumableLot: consumableLot.value
   })
 )
 const invoiceStyle = computed({
@@ -861,6 +851,14 @@ const tab = computed({
     router.replace({ query: { ...route.query, tab: id } })
   }
 })
+
+watch(
+  tab,
+  (id) => {
+    if (id === 'items' || id === 'invoice' || id === 'revenue') refreshMaterials()
+  },
+  { immediate: true }
+)
 </script>
 
 <template>
@@ -917,7 +915,7 @@ const tab = computed({
                 <span v-if="clientName" class="inline-flex items-center gap-1.5">
                   <UserIcon class="w-4 h-4 text-ink-400" />{{ clientName }}
                 </span>
-                <span v-if="productPhase === 'waiting' && (plannedStartDate || product.plannedStartDate)" class="inline-flex items-center gap-1.5">
+                <span v-if="projectPhase === 'waiting' && (plannedStartDate || product.plannedStartDate)" class="inline-flex items-center gap-1.5">
                   <CalendarDaysIcon class="w-4 h-4 text-ink-400" />Rencana {{ formatDate(plannedStartDate || product.plannedStartDate) }}
                 </span>
                 <span v-else-if="product.startedAt" class="inline-flex items-center gap-1.5">
@@ -1505,6 +1503,21 @@ const tab = computed({
           <p v-else-if="extrasLocked" class="text-xs text-ink-400">Proyek selesai — tambahan tidak bisa diubah.</p>
         </div>
       </div>
+
+      <div class="panel overflow-hidden">
+        <div class="panel-header"><span class="panel-title">{{ CONSUMABLE_LOT_NAME }}</span></div>
+        <div class="p-3 sm:p-4">
+          <MaterialChecklist
+            :project-id="id"
+            :materials="materials"
+            :usages="materialUsages"
+            :settings="settings"
+            :lot-sale="product.consumableLotSale"
+            :can-edit="canEditExtras"
+            @saved="onChecklistSaved"
+          />
+        </div>
+      </div>
     </div>
 
     <div v-else-if="tab === 'invoice'" class="space-y-3">
@@ -1560,9 +1573,16 @@ const tab = computed({
           <div class="px-3 py-2.5 flex items-start justify-between gap-3">
             <div>
               <div class="text-sm">Pendapatan barang</div>
-              <div class="text-xs text-ink-400">Harga jual item (RAB disesuaikan + tambahan)</div>
+              <div class="text-xs text-ink-400">Harga jual item (RAB + tambahan + {{ CONSUMABLE_LOT_NAME }})</div>
             </div>
             <div class="num text-sm">{{ formatIDR(liveFinance.goodsSale) }}</div>
+          </div>
+          <div class="px-3 py-2.5 flex items-start justify-between gap-3 bg-ink-50/60">
+            <div>
+              <div class="text-sm">{{ CONSUMABLE_LOT_NAME }}</div>
+              <div class="text-xs text-ink-400">1 Lot di invoice pelanggan</div>
+            </div>
+            <div class="num text-sm">{{ formatIDR(liveFinance.lotSale) }}</div>
           </div>
           <div class="px-3 py-2.5 flex items-start justify-between gap-3">
             <div>
@@ -1596,8 +1616,8 @@ const tab = computed({
           </div>
           <div v-if="liveFinance.materialCost" class="px-3 py-2.5 flex items-start justify-between gap-3 bg-ink-50/60">
             <div>
-              <div class="text-sm">Perlengkapan di dalam jasa</div>
-              <div class="text-xs text-ink-400">Bukan potongan laba. Mengurangi dasar upah teknisi</div>
+              <div class="text-sm">Modal {{ CONSUMABLE_LOT_NAME }}</div>
+              <div class="text-xs text-ink-400">HPP lot. Juga mengurangi dasar upah teknisi</div>
             </div>
             <div class="num text-sm">− {{ formatIDR(liveFinance.materialCost) }}</div>
           </div>
@@ -1726,68 +1746,40 @@ const tab = computed({
       </div>
 
       <div class="panel overflow-hidden lg:col-span-2">
-        <div class="panel-header"><span class="panel-title">Pemakaian perlengkapan</span></div>
+        <div class="panel-header">
+          <span class="panel-title">{{ CONSUMABLE_LOT_NAME }}</span>
+          <button v-if="canEditExtras" type="button" class="text-xs text-accent-600 hover:underline ml-auto" @click="tab = 'items'">
+            Ubah qty
+          </button>
+        </div>
         <div class="p-3 sm:p-4 space-y-3">
           <p class="text-xs text-ink-500">
-            Stok berkurang dan nilainya dipotong dari pendapatan jasa sebelum dibagi menjadi upah teknisi.
-            Kas tidak terpotong lagi — sudah keluar saat perlengkapan dibeli.
+            Qty dicatat di tab Item. Stok berkurang, modal masuk HPP lot, dan dasar upah teknisi berkurang.
+            Pelanggan hanya melihat {{ CONSUMABLE_LOT_NAME }} 1 Lot.
           </p>
-          <form v-if="isAdmin" class="grid grid-cols-1 sm:grid-cols-4 gap-2 items-end" @submit.prevent="saveUsage">
-            <div class="sm:col-span-2 min-w-0">
-              <label class="label">Perlengkapan</label>
-              <select v-model="usageForm.materialId" class="input" required>
-                <option value="">Pilih perlengkapan</option>
-                <option v-for="m in materials" :key="m.id" :value="String(m.id)">
-                  {{ m.name }} · stok {{ formatNumber(m.stockQuantity) }} {{ m.unit }}
-                </option>
-              </select>
-            </div>
-            <div>
-              <label class="label">Qty</label>
-              <input v-model.number="usageForm.quantity" type="number" min="1" step="1" class="input-num" required />
-            </div>
-            <div class="date-field">
-              <label class="label">Tanggal</label>
-              <input v-model="usageForm.date" type="date" class="input" required />
-            </div>
-            <div class="sm:col-span-4 flex flex-col sm:flex-row sm:items-center gap-2">
-              <button type="submit" class="btn-primary" :disabled="savingUsage">
-                <CheckIcon class="w-4 h-4" />{{ savingUsage ? 'Menyimpan…' : 'Catat pemakaian' }}
-              </button>
-              <span v-if="selectedUsageMaterial" class="text-xs text-ink-500">
-                Nilai {{ formatIDR(usageAmount) }}
-                ({{ formatIDR(selectedUsageMaterial.pricePerUnit) }}/{{ selectedUsageMaterial.unit }})
-              </span>
-            </div>
-          </form>
-          <p v-if="usageError" class="text-sm text-red-600">{{ usageError }}</p>
           <div v-if="materialUsages.length" class="overflow-x-auto">
             <table class="table-std text-sm">
               <thead>
                 <tr>
-                  <th>Tanggal</th>
                   <th>Perlengkapan</th>
                   <th class="text-right">Qty</th>
                   <th class="text-right">Nilai</th>
-                  <th></th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="row in materialUsages" :key="row.id">
-                  <td class="whitespace-nowrap font-mono text-xs">{{ formatDate(row.date) }}</td>
-                  <td>{{ row.materialName }}</td>
+                <tr v-for="row in materialUsageSummary" :key="row.materialId">
+                  <td>{{ row.name }}</td>
                   <td class="num">{{ formatNumber(row.quantity) }} {{ row.unit }}</td>
                   <td class="num">{{ formatIDR(row.amount) }}</td>
-                  <td class="text-right">
-                    <button v-if="isAdmin" type="button" class="btn-action-danger" @click="removeUsage(row)">
-                      <TrashIcon class="w-3.5 h-3.5" />Batal
-                    </button>
-                  </td>
                 </tr>
               </tbody>
             </table>
           </div>
-          <p v-else class="text-sm text-ink-500">Belum ada perlengkapan yang dipakai di proyek ini.</p>
+          <p v-else class="text-sm text-ink-500">Belum ada perlengkapan yang dicentang di proyek ini.</p>
+          <div class="rounded-panel border border-ink-200 bg-ink-50 px-3 py-2.5 text-sm flex items-center justify-between gap-3">
+            <span>{{ CONSUMABLE_LOT_NAME }} · 1 Lot</span>
+            <span class="num font-medium">{{ formatIDR(liveFinance.lotSale) }}</span>
+          </div>
         </div>
       </div>
 

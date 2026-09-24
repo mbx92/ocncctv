@@ -1,7 +1,7 @@
 <script setup>
 import { PlusIcon, PencilSquareIcon, TrashIcon, CheckIcon, XMarkIcon, ClipboardDocumentIcon } from '@heroicons/vue/24/outline'
 import { sanitizeText } from '~/utils/sanitizeText.js'
-import { isMeterUnit } from '~/utils/cableRoll.js'
+import { purchasePriceOf, purchaseUnitOf, purchaseStockMultiplier } from '~/utils/cableRoll.js'
 
 const { data: purchases, refresh } = await useFetch('/api/purchases')
 const { data: materials } = await useFetch('/api/materials')
@@ -241,15 +241,10 @@ function onItemChange(line) {
   }
 }
 function itemPurchasePrice(item) {
-  if (!item) return 0
-  const n = Number(item.unitsPerPurchase || 0)
-  if (n > 1 && isMeterUnit(item.unit)) return Math.round((Number(item.pricePerUnit) || 0) * n)
-  return Math.round(Number(item.pricePerUnit) || 0)
+  return purchasePriceOf(item)
 }
 function itemPurchaseUnit(item) {
-  if (!item) return 'unit'
-  if (Number(item.unitsPerPurchase) > 1) return item.purchaseUnit || 'roll'
-  return item.unit || 'unit'
+  return purchaseUnitOf(item)
 }
 function lineTotal(line) {
   return Math.round(purchaseQty(line.quantity) * (Number(line.unitPrice) || 0))
@@ -527,8 +522,8 @@ async function remove(p) {
                   @input="line.stockQuantity = purchaseQty(line.stockQuantity)"
                 />
                 <p class="text-[11px] text-ink-400 mt-0.5">
-                  <template v-if="Number(selectedItem(line)?.unitsPerPurchase) > 1">
-                    Masuk stok {{ formatNumber(purchaseQty(line.stockQuantity) * Number(selectedItem(line).unitsPerPurchase)) }}
+                  <template v-if="purchaseStockMultiplier(selectedItem(line)) > 1">
+                    Masuk stok {{ formatNumber(purchaseQty(line.stockQuantity) * purchaseStockMultiplier(selectedItem(line))) }}
                     {{ selectedItem(line).unit }}
                     <span v-if="usedQty(line)">
                       · beli {{ formatNumber(line.quantity) }} {{ itemPurchaseUnit(selectedItem(line)) }}

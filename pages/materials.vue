@@ -12,6 +12,7 @@ import {
 
 import {
   MATERIAL_UNITS,
+  MATERIAL_BUY_UNITS,
   materialTypeLabel,
   materialTypeBadge,
   materialTypeOptions,
@@ -19,6 +20,13 @@ import {
   stockStatusBadge,
   materialNeedsRestock
 } from '~/utils/materialType.js'
+import {
+  formatPurchaseConversion,
+  purchasePriceOf,
+  purchaseStockMultiplier,
+  purchaseUnitOf,
+  stockQtyFromPurchase
+} from '~/utils/cableRoll.js'
 
 const { data: materials, refresh } = await useFetch('/api/materials')
 const { data: suppliers } = await useFetch('/api/suppliers')
@@ -71,6 +79,8 @@ const buyTotal = computed(() =>
   Math.round((Number(buyForm.value.quantity) || 0) * (Number(buyForm.value.unitPrice) || 0)) +
   Math.max(Math.round(Number(buyForm.value.shippingFee) || 0), 0)
 )
+const buyStockIn = computed(() => stockQtyFromPurchase(buyTarget.value, buyForm.value.quantity))
+const buyUnit = computed(() => purchaseUnitOf(buyTarget.value))
 
 const useTarget = ref(null)
 const useQty = ref(1)
@@ -79,12 +89,29 @@ const useDate = ref('')
 const useError = ref('')
 const useSaving = ref(false)
 
+const formConversion = computed(() =>
+  formatPurchaseConversion({
+    unit: form.value.unit,
+    purchaseUnit: form.value.purchaseUnit,
+    unitsPerPurchase: form.value.unitsPerPurchase
+  })
+)
+const formBuyPrice = computed(() =>
+  purchasePriceOf({
+    pricePerUnit: form.value.pricePerUnit,
+    unitsPerPurchase: form.value.unitsPerPurchase,
+    purchaseUnit: form.value.purchaseUnit
+  })
+)
+
 function openAdd() {
   editing.value = null
   form.value = {
     name: '',
     type: 'consumable',
-    unit: 'pack',
+    unit: 'pcs',
+    purchaseUnit: '',
+    unitsPerPurchase: 1,
     stockQuantity: 0,
     lowStockQuantity: 2,
     pricePerUnit: 0,
@@ -95,7 +122,12 @@ function openAdd() {
 }
 function openEdit(m) {
   editing.value = m
-  form.value = { ...m }
+  form.value = {
+    ...m,
+    purchaseUnit: m.purchaseUnit || '',
+    unitsPerPurchase: Number(m.unitsPerPurchase) > 1 ? Number(m.unitsPerPurchase) : 1,
+    pricePerUnit: Number(m.pricePerUnit) || 0
+  }
   errorMsg.value = ''
   showForm.value = true
 }
@@ -104,7 +136,9 @@ async function save() {
   try {
     const body = {
       ...form.value,
-      unit: form.value.unit || 'pack',
+      unit: form.value.unit || 'pcs',
+      purchaseUnit: form.value.purchaseUnit || '',
+      unitsPerPurchase: Number(form.value.unitsPerPurchase) || 1,
       pricePerUnit: Number(form.value.pricePerUnit) || 0,
       stockQuantity: Number(form.value.stockQuantity) || 0,
       lowStockQuantity: Number(form.value.lowStockQuantity) || 2
@@ -139,7 +173,7 @@ function openBuy(m) {
     date: todayStr(),
     supplier: m.supplier || suppliers.value?.[0]?.name || '',
     quantity: 1,
-    unitPrice: m.pricePerUnit || 0,
+    unitPrice: purchasePriceOf(m),
     shippingFee: 0,
     notes: ''
   }
@@ -288,6 +322,7 @@ async function saveUse() {
           <div class="rounded-panel bg-ink-50 px-2.5 py-2">
             <dt class="text-[10px] uppercase tracking-wide text-ink-500">Harga terakhir</dt>
             <dd class="font-mono font-medium mt-0.5">{{ formatIDR(m.pricePerUnit) }}/{{ m.unit }}</dd>
+            <dd v-if="formatPurchaseConversion(m)" class="text-[11px] text-sky-800 mt-0.5">{{ formatPurchaseConversion(m) }}</dd>
           </div>
         </dl>
         <div class="btn-actions border-t border-ink-100 pt-2">
@@ -339,6 +374,7 @@ async function saveUse() {
               <td class="font-medium">
                 <CopyableText :text="m.name">{{ m.name }}</CopyableText>
                 <div class="text-xs text-ink-400 font-normal mt-0.5">{{ formatIDR(m.pricePerUnit) }}/{{ m.unit }}</div>
+                <div v-if="formatPurchaseConversion(m)" class="text-[11px] text-sky-800 font-normal">{{ formatPurchaseConversion(m) }}</div>
               </td>
               <td>
                 <span class="badge" :class="materialTypeBadge(m.type)">{{ materialTypeLabel(m.type) }}</span>
@@ -390,22 +426,55 @@ async function saveUse() {
             </select>
           </div>
           <div>
-            <label class="label">Satuan beli</label>
+            <label class="label">Satuan pakai di proyek</label>
             <select v-model="form.unit" class="input">
               <option v-for="u in MATERIAL_UNITS" :key="u" :value="u">{{ u }}</option>
             </select>
+            <p class="text-xs text-ink-400 mt-1">Qty di checklist proyek memakai satuan ini.</p>
           </div>
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="label">Stok awal</label>
-            <input v-model.number="form.stockQuantity" type="number" min="0" step="1" class="input-num" />
-            <p class="text-xs text-ink-400 mt-1">Yang sudah ada di gudang. Tidak potong kas.</p>
+            <label class="label">Harga modal / satuan pakai</label>
+            <IdrInput v-model="form.pricePerUnit" required />
+            <p class="text-xs text-ink-400 mt-1">
+              Disimpan per {{ form.unit || 'pcs' }}.
+              <span v-if="formConversion">Harga pack dihitung otomatis saat beli.</span>
+            </p>
           </div>
           <div>
-            <label class="label">Menipis jika sisa ≤</label>
-            <input v-model.number="form.lowStockQuantity" type="number" min="0" step="1" class="input-num" />
+            <label class="label">Stok awal</label>
+            <input v-model.number="form.stockQuantity" type="number" min="0" step="1" class="input-num" />
+            <p class="text-xs text-ink-400 mt-1">Dalam satuan pakai. Tidak potong kas.</p>
           </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="label">Satuan beli</label>
+            <select v-model="form.purchaseUnit" class="input">
+              <option value="">Sama dengan satuan pakai</option>
+              <option v-for="u in MATERIAL_BUY_UNITS" :key="u" :value="u">{{ u }}</option>
+              <option
+                v-if="form.purchaseUnit && !MATERIAL_BUY_UNITS.includes(form.purchaseUnit)"
+                :value="form.purchaseUnit"
+              >
+                {{ form.purchaseUnit }}
+              </option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Isi per satuan beli</label>
+            <input v-model.number="form.unitsPerPurchase" type="number" min="1" step="1" class="input-num" />
+            <p class="text-[11px] text-ink-400 mt-0.5">1 pack = 50 pcs → satuan pakai pcs, satuan beli pack, isi 50.</p>
+          </div>
+        </div>
+        <div v-if="formConversion" class="rounded-panel border border-ink-200 bg-ink-50 px-3 py-2 text-xs text-ink-600">
+          {{ formConversion }}
+          <span v-if="form.pricePerUnit"> · beli {{ formatIDR(formBuyPrice) }}/{{ purchaseUnitOf(form) }}</span>
+        </div>
+        <div>
+          <label class="label">Menipis jika sisa ≤</label>
+          <input v-model.number="form.lowStockQuantity" type="number" min="0" step="1" class="input-num" />
         </div>
         <p v-if="errorMsg" class="text-sm text-red-600">{{ errorMsg }}</p>
         <div class="flex justify-end gap-2 pt-2">
@@ -443,11 +512,15 @@ async function saveUse() {
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="label">Qty ({{ buyTarget.unit }})</label>
+            <label class="label">Qty ({{ buyUnit }})</label>
             <input v-model.number="buyForm.quantity" type="number" min="1" step="1" class="input-num" required />
+            <p v-if="purchaseStockMultiplier(buyTarget) > 1" class="text-[11px] text-ink-400 mt-0.5">
+              Masuk stok {{ formatNumber(buyStockIn) }} {{ buyTarget.unit }}
+              ({{ formatPurchaseConversion(buyTarget) }})
+            </p>
           </div>
           <div>
-            <label class="label">Harga / {{ buyTarget.unit }}</label>
+            <label class="label">Harga / {{ buyUnit }}</label>
             <IdrInput v-model="buyForm.unitPrice" required />
           </div>
         </div>

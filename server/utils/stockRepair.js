@@ -32,14 +32,18 @@ export async function previewMaterialStockRepair(db, schema) {
     db
       .select({
         materialId: schema.supplierPurchaseLines.materialId,
-        purchasedIn: sql`coalesce(sum(${schema.supplierPurchaseLines.stockQuantity}), 0)`.mapWith(Number)
+        stockQuantity: schema.supplierPurchaseLines.stockQuantity
       })
       .from(schema.supplierPurchaseLines)
       .where(eq(schema.supplierPurchaseLines.itemType, 'material'))
-      .groupBy(schema.supplierPurchaseLines.materialId)
   ])
   const usedMap = new Map(usages.map((row) => [row.materialId, qtyOf(row.used)]))
-  const purchasedMap = new Map(lines.map((row) => [row.materialId, qtyOf(row.purchasedIn)]))
+  const materialMap = new Map(materials.map((row) => [row.id, row]))
+  const purchasedMap = new Map()
+  for (const line of lines) {
+    const qty = qtyOf(line.stockQuantity) * packagingMultiplier(materialMap.get(line.materialId))
+    purchasedMap.set(line.materialId, (purchasedMap.get(line.materialId) || 0) + qty)
+  }
 
   return materials
     .map((row) => {

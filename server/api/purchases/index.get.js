@@ -12,7 +12,15 @@ export default defineEventHandler(async () => {
   if (!purchases.length) return []
 
   const lines = await db.select().from(schema.supplierPurchaseLines)
-  const materials = await db.select({ id: schema.materials.id, name: schema.materials.name, unit: schema.materials.unit }).from(schema.materials)
+  const materials = await db
+    .select({
+      id: schema.materials.id,
+      name: schema.materials.name,
+      unit: schema.materials.unit,
+      purchaseUnit: schema.materials.purchaseUnit,
+      unitsPerPurchase: schema.materials.unitsPerPurchase
+    })
+    .from(schema.materials)
   const packaging = await db
     .select({
       id: schema.packaging.id,
@@ -50,8 +58,8 @@ export default defineEventHandler(async () => {
       itemName: sanitizeText(item?.name) || '(barang dihapus)',
       unit:
         sanitizeText(
-          line.itemType === 'packaging' && Number(item?.unitsPerPurchase) > 1
-            ? item?.purchaseUnit || 'roll'
+          Number(item?.unitsPerPurchase) > 1
+            ? item?.purchaseUnit || (line.itemType === 'packaging' ? 'roll' : 'pack')
             : item?.unit
         ) || '',
       stockUnit: sanitizeText(item?.unit) || '',

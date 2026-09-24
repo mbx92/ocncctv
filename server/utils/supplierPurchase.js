@@ -4,7 +4,14 @@ import { setExpenseProducts } from './expenseProducts.js'
 import { applyMaterialStockDelta } from './materialStock.js'
 import { assertLotCanBeRebuilt, createPurchaseLot, deletePurchaseLot } from './packagingLots.js'
 import { sanitizeText } from './sanitizeText.js'
-import { isMeterUnit, parseMetersPerRoll, purchaseStockMultiplier } from './cableRoll.js'
+import {
+  isMeterUnit,
+  parseMetersPerRoll,
+  purchaseStockMultiplier,
+  purchaseUnitOf,
+  stockQtyFromPurchase,
+  stockUnitPriceFromPurchase
+} from './cableRoll.js'
 
 function lineAmount(qty, unitPrice) {
   return Math.round((Number(qty) || 0) * (Number(unitPrice) || 0))
@@ -134,11 +141,18 @@ async function loadPackagingRow(tx, schema, packagingId) {
   return row || null
 }
 
+async function loadMaterialRow(tx, schema, materialId) {
+  const [row] = await tx.select().from(schema.materials).where(eq(schema.materials.id, materialId))
+  return row || null
+}
+
 export async function revertPurchaseLineStock(tx, schema, line) {
   const raw = Number(line.stockQuantity ?? line.quantity) || 0
   if (!raw) return
   if (line.itemType === 'material' && line.materialId) {
-    await applyMaterialStockDelta(tx, schema, { id: line.materialId, delta: -raw })
+    const material = await loadMaterialRow(tx, schema, line.materialId)
+    const delta = stockQtyFromPurchase(material, raw)
+    await applyMaterialStockDelta(tx, schema, { id: line.materialId, delta: -delta })
     return
   }
   if (line.itemType === 'packaging' && line.packagingId) {
@@ -170,22 +184,16 @@ async function insertPricedLines(tx, schema, purchase, priced) {
       .returning()
 
     if (line.itemType === 'material') {
-      let row
+      const material = await loadMaterialRow(tx, schema, line.materialId)
+      if (!material) throw createError({ statusCode: 400, statusMessage: 'Perlengkapan tidak ditemukan' })
       if (line.stockQuantity > 0) {
-        row = await applyMaterialStockDelta(tx, schema, {
+        await applyMaterialStockDelta(tx, schema, {
           id: line.materialId,
-          delta: line.stockQuantity,
-          pricePerUnit: line.landedUnit
+          delta: stockQtyFromPurchase(material, line.stockQuantity),
+          pricePerUnit: stockUnitPriceFromPurchase(material, line.landedUnit)
         })
-      } else {
-        const [found] = await tx
-          .select({ name: schema.materials.name, unit: schema.materials.unit })
-          .from(schema.materials)
-          .where(eq(schema.materials.id, line.materialId))
-        row = found
       }
-      if (!row) throw createError({ statusCode: 400, statusMessage: 'Perlengkapan tidak ditemukan' })
-      names.push(`${row.name} ${line.quantity} ${row.unit}`)
+      names.push(`${material.name} ${line.quantity} ${purchaseUnitOf(material)}`)
     } else {
       const packaging = await loadPackagingRow(tx, schema, line.packagingId)
       if (!packaging) throw createError({ statusCode: 400, statusMessage: 'Produk tidak ditemukan' })

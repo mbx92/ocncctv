@@ -2,6 +2,7 @@ import { asc, inArray } from 'drizzle-orm'
 import { loadRabLines, withRabTotals } from './customOrders.js'
 import { applyRabAdjustments, loadProjectExtraLines, loadProjectRabAdjustments } from './projectLines.js'
 import { loadMaterialUsagesByProduct, materialUsageTotal } from './materialUsage.js'
+import { parseConsumableLotSale } from './consumableLot.js'
 
 function lineAmount(line) {
   return Math.round((Number(line.quantity) || 0) * (Number(line.salePrice) || 0))
@@ -11,7 +12,7 @@ function lineCost(line) {
   return Math.round((Number(line.quantity) || 0) * (Number(line.costPrice) || 0))
 }
 
-export function summarizeProjectRevenue(lines, wages, materialCost = 0) {
+export function summarizeProjectRevenue(lines, wages, materialCost = 0, lotSale = 0) {
   let goodsSale = 0
   let goodsCost = 0
   let serviceSale = 0
@@ -25,6 +26,9 @@ export function summarizeProjectRevenue(lines, wages, materialCost = 0) {
     }
   }
   const supplies = Math.max(Math.round(Number(materialCost) || 0), 0)
+  const lot = Math.max(Math.round(Number(lotSale) || 0), 0)
+  goodsSale += lot
+  goodsCost += supplies
   const wageTotal = (wages || []).reduce((sum, row) => sum + Math.max(Math.round(Number(row.amount) || 0), 0), 0)
   const revenue = goodsSale + serviceSale
   return {
@@ -32,6 +36,7 @@ export function summarizeProjectRevenue(lines, wages, materialCost = 0) {
     goodsCost,
     serviceSale,
     materialCost: supplies,
+    lotSale: lot,
     netService: serviceSale - supplies,
     revenue,
     wageTotal,
@@ -119,12 +124,19 @@ export async function loadProjectFinanceMap(db, schema, productIds) {
     entry.rab.lines = applyRabAdjustments(entry.rab.lines, entry.rabAdjustments)
   }
 
-  for (const entry of map.values()) {
+  const projectRows = await db
+    .select({ id: schema.products.id, consumableLotSale: schema.products.consumableLotSale })
+    .from(schema.products)
+    .where(inArray(schema.products.id, ids))
+  const lotSaleById = new Map(projectRows.map((row) => [row.id, parseConsumableLotSale(row.consumableLotSale)]))
+  for (const [productId, entry] of map) {
     const rabLines = (entry.rab?.lines || []).map((line) => ({ ...line, source: line.source || 'rab' }))
+    const supplies = materialUsageTotal(entry.materialUsages)
     entry.summary = summarizeProjectRevenue(
       [...rabLines, ...entry.extraLines],
       entry.wages,
-      materialUsageTotal(entry.materialUsages)
+      supplies,
+      lotSaleById.get(productId) ?? parseConsumableLotSale(null)
     )
   }
   return map

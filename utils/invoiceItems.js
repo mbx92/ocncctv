@@ -1,3 +1,5 @@
+import { consumableLotItem } from './consumableLot.js'
+
 export const invoiceSectionTitle = {
   rab: 'Item RAB',
   extra: 'Tambahan / penggantian'
@@ -62,10 +64,12 @@ export function invoiceSectionsFromItems(items) {
   const list = items || []
   const rab = list.filter((item) => item.section === 'rab')
   const extra = list.filter((item) => item.section === 'extra')
-  const other = list.filter((item) => item.section !== 'rab' && item.section !== 'extra')
+  const lot = list.filter((item) => item.section === 'lot')
+  const other = list.filter((item) => item.section !== 'rab' && item.section !== 'extra' && item.section !== 'lot')
   return [
     rab.length ? { key: 'rab', title: invoiceSectionTitle.rab, items: rab } : null,
     extra.length ? { key: 'extra', title: invoiceSectionTitle.extra, items: extra } : null,
+    lot.length ? { key: 'lot', title: null, items: lot } : null,
     other.length ? { key: 'other', title: null, items: other } : null
   ].filter(Boolean)
 }
@@ -77,11 +81,13 @@ export function buildProjectInvoicePreview({
   extraLines,
   sale,
   downPayment,
-  date
+  date,
+  consumableLot
 } = {}) {
   const rabItems = itemsFromProjectLines(rabLines, 'rab')
   const extraItems = itemsFromProjectLines(extraLines, 'extra')
-  const items = [...rabItems, ...extraItems]
+  const lotItems = [consumableLot || consumableLotItem(0, settings, product?.consumableLotSale)]
+  const items = [...rabItems, ...extraItems, ...lotItems]
   const sections = invoiceSectionsFromItems(items)
   const subtotal = items.reduce((sum, item) => sum + item.amount, 0)
   const discount = Math.min(Math.max(Math.round(Number(sale?.discountAmount) || 0), 0), subtotal)

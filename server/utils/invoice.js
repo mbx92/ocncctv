@@ -4,6 +4,8 @@ import { clampDownPayment } from './salePayment.js'
 import { loadRabLines, presentRabLines } from './customOrders.js'
 import { applyRabAdjustments, loadProjectExtraLines, loadProjectRabAdjustments } from './projectLines.js'
 import { resolveOfficialInvoiceCopy } from './invoiceOfficial.js'
+import { loadMaterialUsagesByProduct, materialUsageTotal } from './materialUsage.js'
+import { consumableLotItem } from './consumableLot.js'
 
 const CHANNEL_LABEL = {
   tokopedia: 'Tokopedia',
@@ -177,21 +179,24 @@ function invoiceSectionsFromItems(items) {
   const list = items || []
   const rab = list.filter((item) => item.section === 'rab')
   const extra = list.filter((item) => item.section === 'extra')
-  const other = list.filter((item) => item.section !== 'rab' && item.section !== 'extra')
+  const lot = list.filter((item) => item.section === 'lot')
+  const other = list.filter((item) => item.section !== 'rab' && item.section !== 'extra' && item.section !== 'lot')
   return [
     rab.length ? { key: 'rab', title: 'Item RAB', items: rab } : null,
     extra.length ? { key: 'extra', title: 'Tambahan / penggantian', items: extra } : null,
+    lot.length ? { key: 'lot', title: null, items: lot } : null,
     other.length ? { key: 'other', title: null, items: other } : null
   ].filter(Boolean)
 }
 
-function buildInvoiceItems(row, rabLines, extraLines) {
+function buildInvoiceItems(row, rabLines, extraLines, lotItem = null) {
   const recordedQty = Math.max(Math.round(Number(row.quantity) || 0), 0)
   const recordedUnitPrice = Math.max(Math.round(Number(row.salePricePerUnit) || 0), 0)
   const recorded = recordedQty * recordedUnitPrice
   const rabItems = itemsFromRabLines(rabLines, 'rab')
   const extraItems = itemsFromRabLines(extraLines, 'extra')
-  const lineItems = [...rabItems, ...extraItems]
+  const lotItems = lotItem ? [lotItem] : []
+  const lineItems = [...rabItems, ...extraItems, ...lotItems]
   if (!lineItems.length) {
     const items = [
       {
@@ -226,8 +231,8 @@ function buildInvoiceItems(row, rabLines, extraLines) {
   return { items, sections: invoiceSectionsFromItems(items), subtotal: recorded }
 }
 
-export function toInvoicePayload(row, settings, rabLines = [], extraLines = []) {
-  const { items, sections, subtotal } = buildInvoiceItems(row, rabLines, extraLines)
+export function toInvoicePayload(row, settings, rabLines = [], extraLines = [], lotItem = null) {
+  const { items, sections, subtotal } = buildInvoiceItems(row, rabLines, extraLines, lotItem)
   const discount = Math.min(Math.max(Math.round(Number(row.discountAmount) || 0), 0), subtotal)
   const discountKind = row.discountKind === 'percent' ? 'percent' : 'amount'
   const discountPercent = Math.min(Math.max(Number(row.discountPercent) || 0, 0), 100)
@@ -313,7 +318,20 @@ export async function buildInvoicePayload(db, schema, row, settings) {
     )
     extraLines = extraMap.get(productId) || []
   }
-  return toInvoicePayload(row, settings, rabLines, extraLines)
+  let lotItem = null
+  if (row.productId) {
+    const usageMap = await loadMaterialUsagesByProduct(db, schema, [row.productId])
+    const [project] = await db
+      .select({ consumableLotSale: schema.products.consumableLotSale })
+      .from(schema.products)
+      .where(eq(schema.products.id, row.productId))
+    lotItem = consumableLotItem(
+      materialUsageTotal(usageMap.get(row.productId) || []),
+      settings,
+      project?.consumableLotSale
+    )
+  }
+  return toInvoicePayload(row, settings, rabLines, extraLines, lotItem)
 }
 
 export function newShareToken() {
