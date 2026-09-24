@@ -325,6 +325,7 @@ async function remove(p) {
               <td class="text-sm text-ink-600">
                 <div v-for="l in p.lines" :key="l.id">
                   {{ l.itemName }} — {{ formatNumber(l.quantity) }} {{ l.unit }}
+                  <span v-if="l.lotCode" class="font-mono text-ink-400"> · {{ l.lotCode }}</span>
                   <span v-if="Number(l.stockQuantity) > 0" class="text-ink-400">
                     · stok +{{ formatNumber(l.stockQuantity) }}
                   </span>
@@ -389,6 +390,7 @@ async function remove(p) {
         <div class="text-xs text-ink-500 space-y-0.5">
           <div v-for="l in p.lines" :key="l.id">
             {{ l.itemName }} — {{ formatNumber(l.quantity) }} {{ l.unit }}
+            <span v-if="l.lotCode" class="font-mono"> · {{ l.lotCode }}</span>
             <span v-if="Number(l.stockQuantity) > 0"> · stok +{{ formatNumber(l.stockQuantity) }}</span>
           </div>
         </div>

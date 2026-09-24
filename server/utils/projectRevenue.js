@@ -1,6 +1,7 @@
 import { asc, inArray } from 'drizzle-orm'
 import { loadRabLines, withRabTotals } from './customOrders.js'
 import { applyRabAdjustments, loadProjectExtraLines, loadProjectRabAdjustments } from './projectLines.js'
+import { loadMaterialUsagesByProduct, materialUsageTotal } from './materialUsage.js'
 
 function lineAmount(line) {
   return Math.round((Number(line.quantity) || 0) * (Number(line.salePrice) || 0))
@@ -10,7 +11,7 @@ function lineCost(line) {
   return Math.round((Number(line.quantity) || 0) * (Number(line.costPrice) || 0))
 }
 
-export function summarizeProjectRevenue(lines, wages) {
+export function summarizeProjectRevenue(lines, wages, materialCost = 0) {
   let goodsSale = 0
   let goodsCost = 0
   let serviceSale = 0
@@ -23,12 +24,15 @@ export function summarizeProjectRevenue(lines, wages) {
       goodsCost += cost
     }
   }
+  const supplies = Math.max(Math.round(Number(materialCost) || 0), 0)
   const wageTotal = (wages || []).reduce((sum, row) => sum + Math.max(Math.round(Number(row.amount) || 0), 0), 0)
   const revenue = goodsSale + serviceSale
   return {
     goodsSale,
     goodsCost,
     serviceSale,
+    materialCost: supplies,
+    netService: serviceSale - supplies,
     revenue,
     wageTotal,
     profit: revenue - goodsCost - wageTotal
@@ -65,6 +69,7 @@ export async function loadProjectFinanceMap(db, schema, productIds) {
         rabAdjustments: [],
         wages: [],
         downPayments: [],
+        materialUsages: [],
         summary: summarizeProjectRevenue([], [])
       }
     ])
@@ -80,6 +85,7 @@ export async function loadProjectFinanceMap(db, schema, productIds) {
     map.get(row.productId)?.wages.push(row)
   }
 
+  const usageMap = await loadMaterialUsagesByProduct(db, schema, ids)
   const extraMap = await loadProjectExtraLines(db, schema, ids)
   const adjMap = await loadProjectRabAdjustments(db, schema, ids)
   const dpRows = await db
@@ -95,6 +101,7 @@ export async function loadProjectFinanceMap(db, schema, productIds) {
     if (!entry) continue
     entry.extraLines = extraMap.get(id) || []
     entry.rabAdjustments = adjMap.get(id) || []
+    entry.materialUsages = usageMap.get(id) || []
   }
 
   const rabs = await db
@@ -114,7 +121,11 @@ export async function loadProjectFinanceMap(db, schema, productIds) {
 
   for (const entry of map.values()) {
     const rabLines = (entry.rab?.lines || []).map((line) => ({ ...line, source: line.source || 'rab' }))
-    entry.summary = summarizeProjectRevenue([...rabLines, ...entry.extraLines], entry.wages)
+    entry.summary = summarizeProjectRevenue(
+      [...rabLines, ...entry.extraLines],
+      entry.wages,
+      materialUsageTotal(entry.materialUsages)
+    )
   }
   return map
 }

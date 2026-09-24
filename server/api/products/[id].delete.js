@@ -2,6 +2,8 @@ import { eq } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
 import { requireAdmin } from '../../utils/rbac.js'
 import { logAudit } from '../../utils/audit.js'
+import { restoreMaterialUsageStock } from '../../utils/materialUsage.js'
+import { restoreProjectPackagingStock } from '../../utils/packagingStock.js'
 
 export default defineEventHandler(async (event) => {
   requireAdmin(event)
@@ -9,7 +11,11 @@ export default defineEventHandler(async (event) => {
   const db = useDb()
   const existing = await db.select().from(schema.products).where(eq(schema.products.id, id))
   try {
-    await db.delete(schema.products).where(eq(schema.products.id, id))
+    await db.transaction(async (tx) => {
+      await restoreMaterialUsageStock(tx, schema, id)
+      await restoreProjectPackagingStock(tx, schema, id)
+      await tx.delete(schema.products).where(eq(schema.products.id, id))
+    })
   } catch (e) {
     throw createError({
       statusCode: 409,

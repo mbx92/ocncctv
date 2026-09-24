@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
   } catch (e) {
     throw createError({
       statusCode: 409,
-      statusMessage: 'Perlengkapan dipakai di recipe proyek, tidak bisa dihapus'
+      statusMessage: 'Perlengkapan masih dipakai di proyek atau recipe, tidak bisa dihapus'
     })
   }
   await logAudit(event, { action: 'delete', entity: 'material', entityId: id, summary: `Hapus material "${existing[0]?.name || id}"` })

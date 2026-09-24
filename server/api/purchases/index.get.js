@@ -23,6 +23,9 @@ export default defineEventHandler(async () => {
     })
     .from(schema.packaging)
   const projects = await db.select({ id: schema.products.id, name: schema.products.name }).from(schema.products)
+  const lots = await db
+    .select({ id: schema.packagingLots.id, purchaseLineId: schema.packagingLots.purchaseLineId })
+    .from(schema.packagingLots)
   const expenseIds = [...new Set(purchases.map((p) => p.expenseId).filter(Boolean))]
   const expenses = expenseIds.length
     ? await db
@@ -34,6 +37,9 @@ export default defineEventHandler(async () => {
   const packMap = new Map(packaging.map((p) => [p.id, p]))
   const projectMap = new Map(projects.map((p) => [p.id, p]))
   const expenseMap = new Map(expenses.map((e) => [e.id, e]))
+  const lotByLine = new Map(
+    lots.filter((lot) => lot.purchaseLineId).map((lot) => [lot.purchaseLineId, lot.id])
+  )
 
   const linesByPurchase = new Map()
   for (const line of lines) {
@@ -49,7 +55,8 @@ export default defineEventHandler(async () => {
             : item?.unit
         ) || '',
       stockUnit: sanitizeText(item?.unit) || '',
-      unitsPerPurchase: Number(item?.unitsPerPurchase) || 1
+      unitsPerPurchase: Number(item?.unitsPerPurchase) || 1,
+      lotCode: lotByLine.get(line.id) ? `LOT-${lotByLine.get(line.id)}` : null
     }
     const arr = linesByPurchase.get(line.purchaseId) || []
     arr.push(row)

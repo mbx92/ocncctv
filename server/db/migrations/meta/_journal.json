@@ -498,6 +498,27 @@
       "when": 1789600000028,
       "tag": "0070_personal_capital_withdrawal",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1789600000029,
+      "tag": "0071_material_usages",
+      "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1789600000030,
+      "tag": "0072_packaging_usages",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1789600000031,
+      "tag": "0073_packaging_lots",
+      "breakpoints": true
     }
   ]
 }

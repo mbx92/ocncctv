@@ -2,6 +2,7 @@ import { eq, sql } from 'drizzle-orm'
 import { assertExpenseCategory } from './expenseCategory.js'
 import { setExpenseProducts } from './expenseProducts.js'
 import { applyMaterialStockDelta } from './materialStock.js'
+import { assertLotCanBeRebuilt, createPurchaseLot, deletePurchaseLot } from './packagingLots.js'
 import { sanitizeText } from './sanitizeText.js'
 import { isMeterUnit, parseMetersPerRoll, purchaseStockMultiplier } from './cableRoll.js'
 
@@ -150,20 +151,23 @@ export async function revertPurchaseLineStock(tx, schema, line) {
   }
 }
 
-async function insertPricedLines(tx, schema, purchaseId, priced) {
+async function insertPricedLines(tx, schema, purchase, priced) {
   const names = []
   for (const line of priced) {
     const amount = lineAmount(line.quantity, line.unitPrice)
-    await tx.insert(schema.supplierPurchaseLines).values({
-      purchaseId,
-      itemType: line.itemType,
-      materialId: line.materialId,
-      packagingId: line.packagingId,
-      quantity: line.quantity,
-      stockQuantity: line.stockQuantity,
-      unitPrice: line.unitPrice,
-      amount
-    })
+    const [savedLine] = await tx
+      .insert(schema.supplierPurchaseLines)
+      .values({
+        purchaseId: purchase.id,
+        itemType: line.itemType,
+        materialId: line.materialId,
+        packagingId: line.packagingId,
+        quantity: line.quantity,
+        stockQuantity: line.stockQuantity,
+        unitPrice: line.unitPrice,
+        amount
+      })
+      .returning()
 
     if (line.itemType === 'material') {
       let row
@@ -201,6 +205,14 @@ async function insertPricedLines(tx, schema, purchaseId, priced) {
           .returning({ name: schema.packaging.name, unit: schema.packaging.unit })
         if (!updated) throw createError({ statusCode: 400, statusMessage: 'Produk tidak ditemukan' })
       }
+      const quantityIn = packagingStockDelta(packaging, line.quantity)
+      const stockIn = packagingStockDelta(packaging, line.stockQuantity)
+      await createPurchaseLot(tx, schema, {
+        line: savedLine,
+        purchase,
+        quantityIn,
+        usedNow: Math.max(quantityIn - stockIn, 0)
+      })
       names.push(`${packaging.name} ${line.quantity} ${purchaseUnit}`)
     }
   }
@@ -271,7 +283,7 @@ export async function createSupplierPurchase(tx, schema, body) {
     })
     .returning()
 
-  const names = await insertPricedLines(tx, schema, purchase.id, parsed.priced)
+  const names = await insertPricedLines(tx, schema, purchase, parsed.priced)
   const expense = await syncPurchaseExpense(tx, schema, {
     purchase,
     parsed,
@@ -294,6 +306,10 @@ export async function updateSupplierPurchase(tx, schema, id, body) {
     .from(schema.supplierPurchaseLines)
     .where(eq(schema.supplierPurchaseLines.purchaseId, id))
   for (const line of oldLines) {
+    await assertLotCanBeRebuilt(tx, schema, line.id)
+  }
+  for (const line of oldLines) {
+    await deletePurchaseLot(tx, schema, line.id)
     await revertPurchaseLineStock(tx, schema, line)
   }
   await tx.delete(schema.supplierPurchaseLines).where(eq(schema.supplierPurchaseLines.purchaseId, id))
@@ -312,7 +328,7 @@ export async function updateSupplierPurchase(tx, schema, id, body) {
     .where(eq(schema.supplierPurchases.id, id))
     .returning()
 
-  const names = await insertPricedLines(tx, schema, purchase.id, parsed.priced)
+  const names = await insertPricedLines(tx, schema, purchase, parsed.priced)
   const expense = await syncPurchaseExpense(tx, schema, {
     purchase,
     parsed,

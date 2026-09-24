@@ -20,6 +20,7 @@ const { page, pageSize, paged, total, totalPages, rangeStart, rangeEnd, reset } 
 watch(search, reset)
 
 const showForm = ref(false)
+const traceItem = ref(null)
 const showSuppliers = ref(false)
 const editing = ref(null)
 const form = ref({})
@@ -87,9 +88,12 @@ async function remove(p) {
         <h1 class="text-xl font-bold">Produk</h1>
         <p class="text-sm text-ink-500">Barang yang dijual atau distok (kamera, kabel, NVR). Perlengkapan pasang ada di menu Perlengkapan.</p>
       </div>
-      <button v-if="isAdmin" class="btn-primary" @click="openAdd">
-        <PlusIcon class="w-4 h-4" /><span class="hidden sm:inline">Tambah Produk</span><span class="sm:hidden">Tambah</span>
-      </button>
+      <div v-if="isAdmin" class="flex items-center gap-2">
+        <StockRepairButton kind="packaging" @done="refresh" />
+        <button class="btn-primary" @click="openAdd">
+          <PlusIcon class="w-4 h-4" /><span class="hidden sm:inline">Tambah Produk</span><span class="sm:hidden">Tambah</span>
+        </button>
+      </div>
     </div>
 
     <div class="relative w-full md:max-w-xs">
@@ -121,9 +125,12 @@ async function remove(p) {
             1 {{ p.purchaseUnit || 'roll' }} = {{ formatNumber(p.unitsPerPurchase) }} {{ p.unit }}
           </div>
           <div class="text-xs text-ink-400">{{ p.supplier || 'tanpa supplier' }}</div>
-          <div v-if="isAdmin" class="btn-actions pt-1">
+          <div class="btn-actions pt-1">
+            <button class="btn-action" @click="traceItem = p">Jejak</button>
+            <template v-if="isAdmin">
             <button class="btn-action" @click="openEdit(p)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
             <button class="btn-action-danger" @click="remove(p)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+            </template>
           </div>
         </div>
       </div>
@@ -175,11 +182,13 @@ async function remove(p) {
               </td>
               <td class="text-ink-500">{{ p.supplier || '-' }}</td>
               <td class="whitespace-nowrap text-right">
-                <div v-if="isAdmin" class="btn-actions justify-end">
+                <div class="btn-actions justify-end">
+                  <button class="btn-action" @click="traceItem = p">Jejak</button>
+                  <template v-if="isAdmin">
                   <button class="btn-action" @click="openEdit(p)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
                   <button class="btn-action-danger" @click="remove(p)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+                  </template>
                 </div>
-                <span v-else class="text-ink-300 text-xs">—</span>
               </td>
             </tr>
           <tr v-if="!total">
@@ -263,6 +272,10 @@ async function remove(p) {
           <button type="submit" class="btn-primary"><CheckIcon class="w-4 h-4" />Simpan</button>
         </div>
       </form>
+    </AppModal>
+
+    <AppModal v-if="traceItem" :title="`Jejak ${traceItem.name}`" size="lg" @close="traceItem = null">
+      <StockLotTrace :packaging-id="traceItem.id" />
     </AppModal>
 
     <SupplierManageModal

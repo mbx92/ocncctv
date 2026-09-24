@@ -199,6 +199,49 @@ export const products = pgTable('products', {
   erpProjectUniq: uniqueIndex('products_erp_project_id_uidx').on(t.erpProjectId)
 }))
 
+// Pemakaian stok perlengkapan pada proyek. Harga disalin saat dipakai
+// agar perubahan harga beli berikutnya tidak mengubah revenue lama.
+export const materialUsages = pgTable(
+  'material_usages',
+  {
+    id: serial('id').primaryKey(),
+    date: date('date').notNull(),
+    materialId: integer('material_id')
+      .notNull()
+      .references(() => materials.id),
+    productId: integer('product_id')
+      .notNull()
+      .references(() => products.id, { onDelete: 'cascade' }),
+    quantity: integer('quantity').notNull().default(0),
+    unitPrice: integer('unit_price').notNull().default(0),
+    amount: integer('amount').notNull().default(0),
+    notes: text('notes'),
+    createdAt: timestamp('created_at').notNull().defaultNow()
+  },
+  (t) => ({
+    productIdx: pgIndex('material_usages_product_id_idx').on(t.productId),
+    materialIdx: pgIndex('material_usages_material_id_idx').on(t.materialId)
+  })
+)
+
+// Stok produk (gudang) yang terpakai di proyek. Dipakai untuk mengurangi stok awal.
+export const packagingUsages = pgTable(
+  'packaging_usages',
+  {
+    id: serial('id').primaryKey(),
+    packagingId: integer('packaging_id')
+      .notNull()
+      .references(() => packaging.id),
+    productId: integer('product_id')
+      .notNull()
+      .references(() => products.id, { onDelete: 'cascade' }),
+    quantity: integer('quantity').notNull().default(0)
+  },
+  (t) => ({
+    productPackagingUniq: uniqueIndex('packaging_usages_product_packaging_uidx').on(t.productId, t.packagingId)
+  })
+)
+
 export const productImages = pgTable('product_images', {
   id: serial('id').primaryKey(),
   productId: integer('product_id')
@@ -774,3 +817,43 @@ export const supplierPurchaseLines = pgTable('supplier_purchase_lines', {
   unitPrice: integer('unit_price').notNull().default(0),
   amount: integer('amount').notNull().default(0)
 })
+
+// Satu lot = satu kedatangan stok produk. origin_project_id adalah proyek pertama
+// dan tidak berubah meskipun sisa dipakai proyek lain.
+export const packagingLots = pgTable(
+  'packaging_lots',
+  {
+    id: serial('id').primaryKey(),
+    packagingId: integer('packaging_id')
+      .notNull()
+      .references(() => packaging.id),
+    originProjectId: integer('origin_project_id').references(() => products.id, { onDelete: 'set null' }),
+    purchaseLineId: integer('purchase_line_id').references(() => supplierPurchaseLines.id, { onDelete: 'cascade' }),
+    source: text('source').notNull().default('purchase'),
+    quantityIn: integer('quantity_in').notNull().default(0),
+    receivedDate: date('received_date').notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow()
+  },
+  (t) => ({
+    purchaseLineUniq: uniqueIndex('packaging_lots_purchase_line_uidx').on(t.purchaseLineId),
+    packagingIdx: pgIndex('packaging_lots_packaging_id_idx').on(t.packagingId)
+  })
+)
+
+export const packagingLotMoves = pgTable(
+  'packaging_lot_moves',
+  {
+    id: serial('id').primaryKey(),
+    lotId: integer('lot_id')
+      .notNull()
+      .references(() => packagingLots.id, { onDelete: 'cascade' }),
+    projectId: integer('project_id').references(() => products.id, { onDelete: 'set null' }),
+    quantity: integer('quantity').notNull().default(0),
+    date: date('date').notNull(),
+    affectsStock: boolean('affects_stock').notNull().default(true),
+    createdAt: timestamp('created_at').notNull().defaultNow()
+  },
+  (t) => ({
+    lotIdx: pgIndex('packaging_lot_moves_lot_id_idx').on(t.lotId)
+  })
+)

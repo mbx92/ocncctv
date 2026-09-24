@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
 import { logAudit } from '../../utils/audit.js'
 import { revertPurchaseLineStock } from '../../utils/supplierPurchase.js'
+import { assertLotCanBeRebuilt, deletePurchaseLot } from '../../utils/packagingLots.js'
 
 export default defineEventHandler(async (event) => {
   const id = Number(getRouterParam(event, 'id'))
@@ -13,6 +14,10 @@ export default defineEventHandler(async (event) => {
 
   await db.transaction(async (tx) => {
     for (const line of lines) {
+      await assertLotCanBeRebuilt(tx, schema, line.id)
+    }
+    for (const line of lines) {
+      await deletePurchaseLot(tx, schema, line.id)
       await revertPurchaseLineStock(tx, schema, line)
     }
     if (purchase.expenseId) {

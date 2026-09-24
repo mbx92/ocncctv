@@ -22,6 +22,7 @@ import {
 
 const { data: materials, refresh } = await useFetch('/api/materials')
 const { data: suppliers } = await useFetch('/api/suppliers')
+const { data: projects } = await useFetch('/api/products')
 const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
 
 const search = ref('')
@@ -72,7 +73,11 @@ const buyTotal = computed(() =>
 )
 
 const useTarget = ref(null)
-const useQty = ref(0)
+const useQty = ref(1)
+const useProjectId = ref('')
+const useDate = ref('')
+const useError = ref('')
+const useSaving = ref(false)
 
 function openAdd() {
   editing.value = null
@@ -184,19 +189,34 @@ async function saveBuy() {
 function openUse(m) {
   useTarget.value = m
   useQty.value = 1
+  useProjectId.value = ''
+  useDate.value = todayStr()
+  useError.value = ''
 }
 async function saveUse() {
-  const qty = Number(useQty.value) || 0
-  if (qty <= 0) return
+  const qty = Math.round(Number(useQty.value) || 0)
+  useError.value = ''
+  if (!useProjectId.value) {
+    useError.value = 'Pilih proyek'
+    return
+  }
+  if (qty <= 0) {
+    useError.value = 'Qty pemakaian wajib diisi'
+    return
+  }
+  useSaving.value = true
   try {
-    await $fetch(`/api/materials/${useTarget.value.id}/adjust-stock`, {
+    await $fetch(`/api/materials/${useTarget.value.id}/usages`, {
       method: 'POST',
-      body: { delta: -qty }
+      body: { productId: Number(useProjectId.value), quantity: qty, date: useDate.value }
     })
+    useToast().success('Pemakaian tercatat. Stok berkurang dan masuk revenue proyek.')
     useTarget.value = null
     await refresh()
   } catch (e) {
-    useToast().error(e.data?.statusMessage || 'Gagal mengurangi stok')
+    useError.value = e.data?.statusMessage || 'Gagal mencatat pemakaian'
+  } finally {
+    useSaving.value = false
   }
 }
 </script>
@@ -207,12 +227,15 @@ async function saveUse() {
       <div>
         <h1 class="text-xl font-bold">Perlengkapan</h1>
         <p class="text-xs text-ink-500">
-          Beli pakai qty — kas terpotong otomatis. Pakai mengurangi stok tanpa menyentuh kas.
+          Beli pakai qty — kas terpotong otomatis. Pakai mencatat pemakaian ke proyek dan mengurangi stok, tanpa memotong kas lagi.
         </p>
       </div>
-      <button v-if="isAdmin" class="btn-primary" @click="openAdd">
-        <PlusIcon class="w-4 h-4" /><span class="hidden sm:inline">Tambah</span>
-      </button>
+      <div v-if="isAdmin" class="flex items-center gap-2">
+        <StockRepairButton kind="materials" @done="refresh" />
+        <button class="btn-primary" @click="openAdd">
+          <PlusIcon class="w-4 h-4" /><span class="hidden sm:inline">Tambah</span>
+        </button>
+      </div>
     </div>
 
     <div class="grid grid-cols-3 gap-2 sm:gap-3">
@@ -457,17 +480,37 @@ async function saveUse() {
         <p class="text-sm text-ink-600">
           Stok sekarang
           <span class="font-mono font-semibold">{{ formatNumber(useTarget.stockQuantity) }} {{ useTarget.unit }}</span>.
-          Tidak memotong kas — sudah dibayar saat beli.
+          Nilai pemakaian dipotong dari jasa proyek. Kas tidak terpotong lagi.
         </p>
         <div>
-          <label class="label">Qty dipakai</label>
-          <input v-model.number="useQty" type="number" min="0.1" step="0.1" class="input-num" required />
+          <label class="label">Proyek</label>
+          <select v-model="useProjectId" class="input" required>
+            <option value="">Pilih proyek</option>
+            <option v-for="p in projects" :key="p.id" :value="String(p.id)">{{ p.name }}</option>
+          </select>
         </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="label">Qty dipakai</label>
+            <input v-model.number="useQty" type="number" min="1" step="1" class="input-num" required />
+          </div>
+          <div class="date-field">
+            <label class="label">Tanggal</label>
+            <input v-model="useDate" type="date" class="input" required />
+          </div>
+        </div>
+        <p class="text-xs text-ink-500">
+          Nilai {{ formatIDR((Number(useQty) || 0) * (Number(useTarget.pricePerUnit) || 0)) }}
+          ({{ formatIDR(useTarget.pricePerUnit) }}/{{ useTarget.unit }}).
+        </p>
+        <p v-if="useError" class="text-sm text-red-600">{{ useError }}</p>
         <div class="flex justify-end gap-2 pt-2">
           <button type="button" class="btn-secondary" @click="useTarget = null">
             <XMarkIcon class="w-4 h-4" />Batal
           </button>
-          <button type="submit" class="btn-primary"><CheckIcon class="w-4 h-4" />Kurangi stok</button>
+          <button type="submit" class="btn-primary" :disabled="useSaving">
+            <CheckIcon class="w-4 h-4" />{{ useSaving ? 'Menyimpan…' : 'Catat pemakaian' }}
+          </button>
         </div>
       </form>
     </AppModal>

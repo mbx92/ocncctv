@@ -51,6 +51,12 @@ function invoiceItems(invoice) {
   return invoice.item ? [invoice.item] : []
 }
 
+function invoiceSections(invoice) {
+  if (invoice.sections?.length) return invoice.sections.filter((section) => section.items?.length)
+  const items = invoiceItems(invoice)
+  return items.length ? [{ key: 'all', title: null, items }] : []
+}
+
 function invoiceItemQty(item) {
   const qty = Number(item?.quantity) || 0
   return Number.isInteger(qty) ? String(qty) : String(qty)
@@ -230,26 +236,35 @@ async function buildCompactInvoicePdf(invoice) {
 
   drawTableHeader()
 
-  const items = invoiceItems(invoice)
-  items.forEach((item, index) => {
-    const nameBits = [item.name]
-    if (item.lineType === 'service') nameBits.push('Jasa')
-    const nameLines = wrapText(font, nameBits.filter(Boolean).join(' · '), 10, 250)
-    const rowH = Math.max(nameLines.length, 1) * 12 + 8
-    if (y - rowH < bottom + 80) {
-      newPage()
-      drawTableHeader()
+  let itemNo = 0
+  for (const section of invoiceSections(invoice)) {
+    if (section.title) {
+      ensure(28)
+      page.drawText(String(section.title).toUpperCase(), { x: left, y, size: 8, font: fontBold, color: muted })
+      y -= 14
     }
-    page.drawText(String(index + 1), { x: colNo, y, size: 10, font, color: muted })
-    for (const [i, row] of nameLines.entries()) {
-      page.drawText(row, { x: colName, y: y - i * 12, size: 10, font, color: ink })
+    for (const item of section.items) {
+      itemNo += 1
+      const nameBits = [item.name]
+      if (item.lineType === 'service') nameBits.push('Jasa')
+      if (item.note) nameBits.push(item.note)
+      const nameLines = wrapText(font, nameBits.filter(Boolean).join(' · '), 10, 250)
+      const rowH = Math.max(nameLines.length, 1) * 12 + 8
+      if (y - rowH < bottom + 80) {
+        newPage()
+        drawTableHeader()
+      }
+      page.drawText(String(itemNo), { x: colNo, y, size: 10, font, color: muted })
+      for (const [i, row] of nameLines.entries()) {
+        page.drawText(row, { x: colName, y: y - i * 12, size: 10, font, color: ink })
+      }
+      page.drawText(invoiceItemQty(item), { x: colQty, y, size: 10, font, color: ink })
+      page.drawText(invoiceItemUnit(item), { x: colUnit, y, size: 10, font, color: muted })
+      page.drawText(formatInvoiceIDR(item.unitPrice), { x: colPrice, y, size: 10, font, color: ink })
+      textRight(formatInvoiceIDR(item.amount), right, 10, font, ink)
+      y -= rowH
     }
-    page.drawText(invoiceItemQty(item), { x: colQty, y, size: 10, font, color: ink })
-    page.drawText(invoiceItemUnit(item), { x: colUnit, y, size: 10, font, color: muted })
-    page.drawText(formatInvoiceIDR(item.unitPrice), { x: colPrice, y, size: 10, font, color: ink })
-    textRight(formatInvoiceIDR(item.amount), right, 10, font, ink)
-    y -= rowH
-  })
+  }
 
   ensure(110)
   page.drawLine({ start: { x: 330, y }, end: { x: right, y }, thickness: 0.5, color: line })
@@ -447,31 +462,44 @@ async function buildOfficialInvoicePdf(invoice) {
 
   drawOfficialHeader()
 
-  const items = invoiceItems(invoice)
-  if (!items.length) {
+  const sections = invoiceSections(invoice)
+  if (!sections.length) {
     page.drawText('Belum ada item.', { x: left, y, size: 10, font, color: muted })
     y -= 18
   }
 
-  items.forEach((item, index) => {
-    const nameBits = [item.name]
-    if (item.lineType === 'service') nameBits.push('Jasa')
-    const nameLines = wrapText(font, nameBits.join(' · '), 10, 250)
-    const rowH = Math.max(nameLines.length, 1) * 12 + 8
-    if (y - rowH < bottom + 110) {
-      newPage()
-      drawOfficialHeader()
+  let itemNo = 0
+  for (const section of sections) {
+    if (section.title) {
+      if (y < bottom + 130) {
+        newPage()
+        drawOfficialHeader()
+      }
+      page.drawText(String(section.title).toUpperCase(), { x: left, y, size: 8, font: fontBold, color: muted })
+      y -= 14
     }
-    page.drawText(String(index + 1), { x: colNo, y, size: 10, font, color: muted })
-    for (const [i, row] of nameLines.entries()) {
-      page.drawText(row, { x: colName, y: y - i * 12, size: 10, font, color: ink })
+    for (const item of section.items) {
+      itemNo += 1
+      const nameBits = [item.name]
+      if (item.lineType === 'service') nameBits.push('Jasa')
+      if (item.note) nameBits.push(item.note)
+      const nameLines = wrapText(font, nameBits.join(' · '), 10, 250)
+      const rowH = Math.max(nameLines.length, 1) * 12 + 8
+      if (y - rowH < bottom + 110) {
+        newPage()
+        drawOfficialHeader()
+      }
+      page.drawText(String(itemNo), { x: colNo, y, size: 10, font, color: muted })
+      for (const [i, row] of nameLines.entries()) {
+        page.drawText(row, { x: colName, y: y - i * 12, size: 10, font, color: ink })
+      }
+      page.drawText(invoiceItemQty(item), { x: colQty, y, size: 10, font, color: ink })
+      page.drawText(invoiceItemUnit(item), { x: colUnit, y, size: 10, font, color: muted })
+      page.drawText(formatInvoiceIDR(item.unitPrice), { x: colPrice, y, size: 10, font, color: ink })
+      textRight(formatInvoiceIDR(item.amount), right, 10, font, ink)
+      y -= rowH
     }
-    page.drawText(invoiceItemQty(item), { x: colQty, y, size: 10, font, color: ink })
-    page.drawText(invoiceItemUnit(item), { x: colUnit, y, size: 10, font, color: muted })
-    page.drawText(formatInvoiceIDR(item.unitPrice), { x: colPrice, y, size: 10, font, color: ink })
-    textRight(formatInvoiceIDR(item.amount), right, 10, font, ink)
-    y -= rowH
-  })
+  }
 
   ensure(90)
   page.drawLine({ start: { x: left, y }, end: { x: right, y }, thickness: 1, color: ink })

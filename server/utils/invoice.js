@@ -138,25 +138,31 @@ function invoiceMergeKey(line, unitPrice) {
   return `name:${invoiceLineType(line)}:${String(line.name || '').trim().toLowerCase()}:${line.code || ''}:${unit}:${unitPrice}`
 }
 
-function itemsFromRabLines(lines) {
+function itemsFromRabLines(lines, section) {
   const merged = []
   const index = new Map()
   for (const line of lines || []) {
     const quantity = Math.max(Math.round(Number(line.quantity) || 0), 0)
     if (quantity <= 0) continue
+    const originalQuantity = Math.max(Math.round(Number(line.originalQuantity ?? line.quantity) || 0), 0)
     const unitPrice = Math.max(Math.round(Number(line.salePrice) || 0), 0)
     const key = invoiceMergeKey(line, unitPrice)
     const existing = index.get(key)
     if (existing) {
       existing.quantity += quantity
+      existing.originalQuantity = Math.max(existing.originalQuantity || 0, originalQuantity)
       existing.amount = existing.quantity * existing.unitPrice
+      existing.note = existing.originalQuantity > existing.quantity ? `Qty RAB ${existing.originalQuantity}` : ''
       continue
     }
     const item = {
       name: String(line.name || '').trim() || 'Item',
       code: line.code || '',
       lineType: invoiceLineType(line),
+      section,
       quantity,
+      originalQuantity,
+      note: originalQuantity > quantity ? `Qty RAB ${originalQuantity}` : '',
       unit: String(line.unit || '').trim() || (line.lineType === 'service' ? 'titik' : ''),
       unitPrice,
       amount: quantity * unitPrice
@@ -167,26 +173,39 @@ function itemsFromRabLines(lines) {
   return merged
 }
 
-function buildInvoiceItems(row, lines) {
+function invoiceSectionsFromItems(items) {
+  const list = items || []
+  const rab = list.filter((item) => item.section === 'rab')
+  const extra = list.filter((item) => item.section === 'extra')
+  const other = list.filter((item) => item.section !== 'rab' && item.section !== 'extra')
+  return [
+    rab.length ? { key: 'rab', title: 'Item RAB', items: rab } : null,
+    extra.length ? { key: 'extra', title: 'Tambahan / penggantian', items: extra } : null,
+    other.length ? { key: 'other', title: null, items: other } : null
+  ].filter(Boolean)
+}
+
+function buildInvoiceItems(row, rabLines, extraLines) {
   const recordedQty = Math.max(Math.round(Number(row.quantity) || 0), 0)
   const recordedUnitPrice = Math.max(Math.round(Number(row.salePricePerUnit) || 0), 0)
   const recorded = recordedQty * recordedUnitPrice
-  const lineItems = itemsFromRabLines(lines)
+  const rabItems = itemsFromRabLines(rabLines, 'rab')
+  const extraItems = itemsFromRabLines(extraLines, 'extra')
+  const lineItems = [...rabItems, ...extraItems]
   if (!lineItems.length) {
-    return {
-      items: [
-        {
-          name: row.productName || row.customTitle || 'Proyek',
-          code: '',
-          lineType: 'catalog',
-          quantity: recordedQty || 1,
-          unit: '',
-          unitPrice: recordedUnitPrice,
-          amount: recorded
-        }
-      ],
-      subtotal: recorded
-    }
+    const items = [
+      {
+        name: row.productName || row.customTitle || 'Proyek',
+        code: '',
+        lineType: 'catalog',
+        section: 'rab',
+        quantity: recordedQty || 1,
+        unit: '',
+        unitPrice: recordedUnitPrice,
+        amount: recorded
+      }
+    ]
+    return { items, sections: invoiceSectionsFromItems(items), subtotal: recorded }
   }
 
   const lineSum = lineItems.reduce((sum, item) => sum + item.amount, 0)
@@ -197,17 +216,18 @@ function buildInvoiceItems(row, lines) {
       name: 'Penyesuaian',
       code: '',
       lineType: 'catalog',
+      section: 'extra',
       quantity: 1,
       unit: '',
       unitPrice: diff,
       amount: diff
     })
   }
-  return { items, subtotal: recorded }
+  return { items, sections: invoiceSectionsFromItems(items), subtotal: recorded }
 }
 
-export function toInvoicePayload(row, settings, lines = []) {
-  const { items, subtotal } = buildInvoiceItems(row, lines)
+export function toInvoicePayload(row, settings, rabLines = [], extraLines = []) {
+  const { items, sections, subtotal } = buildInvoiceItems(row, rabLines, extraLines)
   const discount = Math.min(Math.max(Math.round(Number(row.discountAmount) || 0), 0), subtotal)
   const discountKind = row.discountKind === 'percent' ? 'percent' : 'amount'
   const discountPercent = Math.min(Math.max(Number(row.discountPercent) || 0, 0), 100)
@@ -235,6 +255,7 @@ export function toInvoicePayload(row, settings, lines = []) {
     isCustom: !!row.customOrderId,
     item: items[0] || null,
     items,
+    sections,
     subtotal,
     discount,
     discountKind,
@@ -292,7 +313,7 @@ export async function buildInvoicePayload(db, schema, row, settings) {
     )
     extraLines = extraMap.get(productId) || []
   }
-  return toInvoicePayload(row, settings, [...rabLines, ...extraLines])
+  return toInvoicePayload(row, settings, rabLines, extraLines)
 }
 
 export function newShareToken() {

@@ -76,7 +76,7 @@ export function applyRabAdjustments(lines, adjustments) {
   })
 }
 
-export function summarizeProjectRevenue(lines, wages) {
+export function summarizeProjectRevenue(lines, wages, materialCost = 0) {
   let goodsSale = 0
   let goodsCost = 0
   let serviceSale = 0
@@ -89,12 +89,15 @@ export function summarizeProjectRevenue(lines, wages) {
       goodsCost += cost
     }
   }
+  const supplies = Math.max(Math.round(Number(materialCost) || 0), 0)
   const wageTotal = (wages || []).reduce((sum, row) => sum + Math.max(Math.round(Number(row.amount) || 0), 0), 0)
   const revenue = goodsSale + serviceSale
   return {
     goodsSale,
     goodsCost,
     serviceSale,
+    materialCost: supplies,
+    netService: serviceSale - supplies,
     revenue,
     wageTotal,
     profit: revenue - goodsCost - wageTotal

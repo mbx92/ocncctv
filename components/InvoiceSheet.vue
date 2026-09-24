@@ -8,6 +8,12 @@ function invoiceItems(invoice) {
   return invoice.item ? [invoice.item] : []
 }
 
+function invoiceSections(invoice) {
+  if (invoice.sections?.length) return invoice.sections.filter((section) => section.items?.length)
+  const items = invoiceItems(invoice)
+  return items.length ? [{ key: 'all', title: null, items }] : []
+}
+
 function formatInvoiceQty(item) {
   const qty = Number(item?.quantity) || 0
   return Number.isInteger(qty) ? String(qty) : String(qty)
@@ -15,6 +21,12 @@ function formatInvoiceQty(item) {
 
 function itemUnit(item) {
   return String(item?.unit || '').trim() || (item?.lineType === 'service' ? 'ls' : 'pcs')
+}
+
+function sectionStart(invoice, sectionIndex) {
+  return invoiceSections(invoice)
+    .slice(0, sectionIndex)
+    .reduce((sum, section) => sum + (section.items?.length || 0), 0)
 }
 </script>
 
@@ -60,21 +72,31 @@ function itemUnit(item) {
     </section>
 
     <div class="sm:hidden print:hidden border border-ink-300">
-      <div v-for="(item, i) in invoiceItems(invoice)" :key="i" class="border-b border-ink-200 px-3 py-3 last:border-b-0">
-        <div class="flex gap-2 items-start">
-          <span class="font-mono text-ink-500 shrink-0 w-5">{{ i + 1 }}</span>
-          <div class="min-w-0 flex-1">
-            <div class="break-words">
-              {{ item.name }}
-              <span v-if="item.lineType === 'service'" class="text-xs text-ink-400"> · Jasa</span>
-            </div>
-            <div class="mt-1.5 flex items-baseline justify-between gap-3 text-sm">
-              <span class="min-w-0 text-ink-500 font-mono break-words">{{ formatInvoiceQty(item) }} {{ itemUnit(item) }} × {{ formatIDR(item.unitPrice) }}</span>
-              <span class="font-mono font-medium shrink-0">{{ formatIDR(item.amount) }}</span>
+      <template v-for="(section, s) in invoiceSections(invoice)" :key="section.key || s">
+        <div v-if="section.title" class="bg-ink-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-ink-500 border-b border-ink-200">
+          {{ section.title }}
+        </div>
+        <div
+          v-for="(item, i) in section.items"
+          :key="`${section.key}-${i}`"
+          class="border-b border-ink-200 px-3 py-3 last:border-b-0"
+        >
+          <div class="flex gap-2 items-start">
+            <span class="font-mono text-ink-500 shrink-0 w-5">{{ sectionStart(invoice, s) + i + 1 }}</span>
+            <div class="min-w-0 flex-1">
+              <div class="break-words">
+                {{ item.name }}
+                <span v-if="item.lineType === 'service'" class="text-xs text-ink-400"> · Jasa</span>
+              </div>
+              <div v-if="item.note" class="text-[11px] text-ink-400 mt-0.5">{{ item.note }}</div>
+              <div class="mt-1.5 flex items-baseline justify-between gap-3 text-sm">
+                <span class="min-w-0 text-ink-500 font-mono break-words">{{ formatInvoiceQty(item) }} {{ itemUnit(item) }} × {{ formatIDR(item.unitPrice) }}</span>
+                <span class="font-mono font-medium shrink-0">{{ formatIDR(item.amount) }}</span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </template>
       <div v-if="!invoiceItems(invoice).length" class="py-6 text-center text-sm text-ink-400">Belum ada item.</div>
     </div>
 
@@ -90,21 +112,29 @@ function itemUnit(item) {
         </tr>
       </thead>
       <tbody>
-        <tr
-          v-for="(item, i) in invoiceItems(invoice)"
-          :key="i"
-          class="border-t border-ink-200 align-top"
-        >
-          <td class="py-2 px-2 text-center font-mono text-ink-500">{{ i + 1 }}</td>
-          <td class="py-2 px-2 break-words">
-            {{ item.name }}
-            <span v-if="item.lineType === 'service'" class="text-xs text-ink-400"> · Jasa</span>
-          </td>
-          <td class="py-2 px-2 text-right font-mono whitespace-nowrap">{{ formatInvoiceQty(item) }}</td>
-          <td class="py-2 px-2 text-right text-ink-600">{{ itemUnit(item) }}</td>
-          <td class="py-2 px-2 text-right font-mono whitespace-nowrap">{{ formatIDR(item.unitPrice) }}</td>
-          <td class="py-2 px-2 text-right font-mono whitespace-nowrap">{{ formatIDR(item.amount) }}</td>
-        </tr>
+        <template v-for="(section, s) in invoiceSections(invoice)" :key="section.key || s">
+          <tr v-if="section.title" class="bg-ink-50">
+            <td colspan="6" class="py-2 px-2 text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+              {{ section.title }}
+            </td>
+          </tr>
+          <tr
+            v-for="(item, i) in section.items"
+            :key="`${section.key}-${i}`"
+            class="border-t border-ink-200 align-top"
+          >
+            <td class="py-2 px-2 text-center font-mono text-ink-500">{{ sectionStart(invoice, s) + i + 1 }}</td>
+            <td class="py-2 px-2 break-words">
+              {{ item.name }}
+              <span v-if="item.lineType === 'service'" class="text-xs text-ink-400"> · Jasa</span>
+              <div v-if="item.note" class="text-[11px] text-ink-400 mt-0.5">{{ item.note }}</div>
+            </td>
+            <td class="py-2 px-2 text-right font-mono whitespace-nowrap">{{ formatInvoiceQty(item) }}</td>
+            <td class="py-2 px-2 text-right text-ink-600">{{ itemUnit(item) }}</td>
+            <td class="py-2 px-2 text-right font-mono whitespace-nowrap">{{ formatIDR(item.unitPrice) }}</td>
+            <td class="py-2 px-2 text-right font-mono whitespace-nowrap">{{ formatIDR(item.amount) }}</td>
+          </tr>
+        </template>
         <tr v-if="!invoiceItems(invoice).length">
           <td colspan="6" class="py-6 text-center text-ink-400">Belum ada item.</td>
         </tr>

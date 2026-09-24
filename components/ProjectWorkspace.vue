@@ -19,7 +19,8 @@ import {
   BanknotesIcon,
   PlayIcon,
   CheckCircleIcon,
-  TruckIcon
+  TruckIcon,
+  PrinterIcon
 } from '@heroicons/vue/24/outline'
 import { productStatusLabel, productStatusClass, normalizeProductStatus } from '~/utils/productStatus.js'
 import { jobTypeLabel, jobTypeClass } from '~/utils/jobType.js'
@@ -34,17 +35,21 @@ import {
   summarizeProjectRevenue
 } from '~/utils/rab.js'
 import { distributeWagesFromServiceSale, wageAllocationLeft } from '~/utils/projectWages.js'
+import { buildProjectInvoicePreview } from '~/utils/invoiceItems.js'
+import { parseQuoteStyle } from '~/utils/quoteStyle.js'
 
 const route = useRoute()
 const id = route.params.id
 const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
 
 const { data: product, refresh } = await useFetch(`/api/products/${id}`)
+const { data: materials } = await useFetch('/api/materials')
 const { data: settings } = await useFetch('/api/settings')
 const { data: suppliers, refresh: refreshSuppliers } = await useFetch('/api/suppliers')
 const { data: rabPurchaseStatus, refresh: refreshRabPurchaseStatus } = await useFetch(
   `/api/products/${id}/rab-purchase-status`
 )
+const { data: projectSales } = await useFetch(`/api/sales?productId=${id}`)
 
 const info = ref({
   name: product.value?.name,
@@ -471,9 +476,11 @@ async function onTechnicianCreated(created) {
   }
 }
 
-const liveFinance = computed(() => summarizeProjectRevenue(scopeLines.value, wageRows.value))
+const materialUsages = computed(() => product.value?.materialUsages || [])
+const materialCost = computed(() => materialUsages.value.reduce((sum, row) => sum + (Number(row.amount) || 0), 0))
+const liveFinance = computed(() => summarizeProjectRevenue(scopeLines.value, wageRows.value, materialCost.value))
 const jasaLines = computed(() => serviceLines(scopeLines.value).filter((line) => (Number(line.quantity) || 0) > 0))
-const wageUnallocated = computed(() => wageAllocationLeft(liveFinance.value.serviceSale, wageRows.value))
+const wageUnallocated = computed(() => wageAllocationLeft(liveFinance.value.netService, wageRows.value))
 const financeMargin = computed(() => {
   const revenue = liveFinance.value.revenue
   if (!revenue) return null
@@ -510,9 +517,64 @@ function autoDivideWages() {
     useToast().error('Belum ada pendapatan jasa di RAB proyek ini.')
     return
   }
-  wageRows.value = distributeWagesFromServiceSale(liveFinance.value.serviceSale, wageRows.value)
-  wageMsg.value = `Upah dibagi rata dari jasa ${formatIDR(liveFinance.value.serviceSale)}.`
+  const pool = liveFinance.value.netService
+  if (pool <= 0) {
+    useToast().error('Perlengkapan terpakai sudah menutup pendapatan jasa.')
+    return
+  }
+  wageRows.value = distributeWagesFromServiceSale(pool, wageRows.value)
+  wageMsg.value = liveFinance.value.materialCost
+    ? `Upah dibagi rata dari jasa ${formatIDR(liveFinance.value.serviceSale)} setelah perlengkapan ${formatIDR(liveFinance.value.materialCost)}.`
+    : `Upah dibagi rata dari jasa ${formatIDR(liveFinance.value.serviceSale)}.`
   setTimeout(() => (wageMsg.value = ''), 4000)
+}
+
+const usageForm = ref({ materialId: '', quantity: 1, date: todayStr() })
+const usageError = ref('')
+const savingUsage = ref(false)
+const selectedUsageMaterial = computed(() =>
+  (materials.value || []).find((row) => String(row.id) === String(usageForm.value.materialId))
+)
+const usageAmount = computed(() => {
+  const qty = Math.max(Math.round(Number(usageForm.value.quantity) || 0), 0)
+  return qty * Math.max(Math.round(Number(selectedUsageMaterial.value?.pricePerUnit) || 0), 0)
+})
+
+async function saveUsage() {
+  usageError.value = ''
+  const materialId = Number(usageForm.value.materialId)
+  const quantity = Math.round(Number(usageForm.value.quantity) || 0)
+  if (!materialId) {
+    usageError.value = 'Pilih perlengkapan'
+    return
+  }
+  if (quantity <= 0) {
+    usageError.value = 'Qty pemakaian wajib diisi'
+    return
+  }
+  savingUsage.value = true
+  try {
+    await $fetch(`/api/materials/${materialId}/usages`, {
+      method: 'POST',
+      body: { productId: Number(id), quantity, date: usageForm.value.date }
+    })
+    usageForm.value = { materialId: '', quantity: 1, date: usageForm.value.date || todayStr() }
+    await refresh()
+  } catch (e) {
+    usageError.value = e.data?.statusMessage || 'Gagal mencatat pemakaian'
+  } finally {
+    savingUsage.value = false
+  }
+}
+
+async function removeUsage(row) {
+  if (!(await useConfirm().confirm(`Batalkan pemakaian ${row.materialName}? Stok dikembalikan.`))) return
+  try {
+    await $fetch(`/api/material-usages/${row.id}`, { method: 'DELETE' })
+    await refresh()
+  } catch (e) {
+    useToast().error(e.data?.statusMessage || 'Gagal membatalkan pemakaian')
+  }
 }
 
 const DP_METHODS = [
@@ -759,13 +821,36 @@ function formatSize(bytes) {
   return bytes + ' B'
 }
 
+const router = useRouter()
+const projectSale = computed(() => (projectSales.value || [])[0] || null)
+const invoicePreview = computed(() =>
+  buildProjectInvoicePreview({
+    product: product.value,
+    settings: settings.value,
+    rabLines: rabLive.value,
+    extraLines: extraDraft.value,
+    sale: projectSale.value,
+    downPayment: liveDpTotal.value,
+    date: todayStr()
+  })
+)
+const invoiceStyle = computed({
+  get: () => parseQuoteStyle(route.query.tampilan),
+  set(value) {
+    const query = { ...route.query }
+    if (value === 'resmi') query.tampilan = 'resmi'
+    else delete query.tampilan
+    router.replace({ query })
+  }
+})
+
 const tabs = [
   { id: 'info', label: 'Info' },
   { id: 'files', label: 'File' },
   { id: 'items', label: 'Item' },
+  { id: 'invoice', label: 'Invoice' },
   { id: 'revenue', label: 'Revenue' }
 ]
-const router = useRouter()
 const tab = computed({
   get() {
     const raw = String(route.query.tab || 'info')
@@ -931,6 +1016,9 @@ const tab = computed({
         </button>
         <button type="button" class="btn-action" @click="tab = 'files'">
           <FolderIcon class="w-3.5 h-3.5" />{{ fileCount }} file
+        </button>
+        <button type="button" class="btn-action" @click="tab = 'invoice'">
+          <DocumentTextIcon class="w-3.5 h-3.5" />Invoice
         </button>
         <button type="button" class="btn-action" @click="tab = 'revenue'">
           <BanknotesIcon class="w-3.5 h-3.5" />Revenue
@@ -1400,7 +1488,7 @@ const tab = computed({
         </div>
         <div class="p-4 space-y-3">
           <p class="text-xs text-ink-500">
-            Barang katalog, stok Produk, atau jasa yang muncul di lapangan. Tidak mengubah penawaran RAB. Stok gudang tidak terpotong otomatis.
+            Barang katalog, stok Produk, atau jasa yang muncul di lapangan. Tidak mengubah penawaran RAB.
           </p>
           <RabLinesEditor
             v-model="extraDraft"
@@ -1416,6 +1504,52 @@ const tab = computed({
           </div>
           <p v-else-if="extrasLocked" class="text-xs text-ink-400">Proyek selesai — tambahan tidak bisa diubah.</p>
         </div>
+      </div>
+    </div>
+
+    <div v-else-if="tab === 'invoice'" class="space-y-3">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <p class="text-xs text-ink-500">
+          Preview tagihan dari qty aktual. Item RAB terpisah dari tambahan atau penggantian di lapangan.
+          <span v-if="invoicePreview.preview"> Nomor invoice muncul setelah penjualan dicatat.</span>
+        </p>
+        <div class="flex flex-wrap items-center gap-2 shrink-0">
+          <div class="inline-flex rounded-panel overflow-hidden border border-ink-200 h-9">
+            <button
+              type="button"
+              class="px-3 text-sm"
+              :class="invoiceStyle === 'ringkas' ? 'bg-ink-900 text-white' : 'text-ink-600 hover:bg-ink-50'"
+              @click="invoiceStyle = 'ringkas'"
+            >
+              Ringkas
+            </button>
+            <button
+              type="button"
+              class="px-3 text-sm"
+              :class="invoiceStyle === 'resmi' ? 'bg-ink-900 text-white' : 'text-ink-600 hover:bg-ink-50'"
+              @click="invoiceStyle = 'resmi'"
+            >
+              Resmi
+            </button>
+          </div>
+          <NuxtLink
+            v-if="projectSale"
+            :to="`/sales/${projectSale.id}/invoice`"
+            class="btn-secondary"
+          >
+            Invoice penjualan
+          </NuxtLink>
+          <NuxtLink
+            :to="`/projects/${id}/invoice${invoiceStyle === 'resmi' ? '?tampilan=resmi' : ''}`"
+            class="btn-primary"
+          >
+            <PrinterIcon class="w-4 h-4" />Cetak
+          </NuxtLink>
+        </div>
+      </div>
+      <div class="overflow-x-auto rounded-panel border border-ink-200 bg-ink-100">
+        <InvoiceOfficialSheet v-if="invoiceStyle === 'resmi'" :invoice="invoicePreview" />
+        <InvoiceSheet v-else :invoice="invoicePreview" />
       </div>
     </div>
 
@@ -1460,12 +1594,23 @@ const tab = computed({
             </div>
             <div class="num text-sm">− {{ formatIDR(liveFinance.goodsCost) }}</div>
           </div>
+          <div v-if="liveFinance.materialCost" class="px-3 py-2.5 flex items-start justify-between gap-3 bg-ink-50/60">
+            <div>
+              <div class="text-sm">Perlengkapan di dalam jasa</div>
+              <div class="text-xs text-ink-400">Bukan potongan laba. Mengurangi dasar upah teknisi</div>
+            </div>
+            <div class="num text-sm">− {{ formatIDR(liveFinance.materialCost) }}</div>
+          </div>
+          <div v-if="liveFinance.materialCost" class="px-3 py-2.5 flex items-center justify-between gap-3 font-medium">
+            <span>Sisa jasa untuk upah</span>
+            <span class="num">{{ formatIDR(liveFinance.netService) }}</span>
+          </div>
           <div class="px-3 py-2.5 flex items-start justify-between gap-3">
             <div>
               <div class="text-sm">Upah teknisi</div>
               <div class="text-xs text-ink-400">
-                Pembagian di panel kanan
-                <span v-if="liveFinance.serviceSale"> · sisa jasa {{ formatIDR(wageUnallocated) }}</span>
+                Dari sisa jasa {{ formatIDR(liveFinance.netService) }}
+                <span v-if="liveFinance.serviceSale"> · belum dibagi {{ formatIDR(wageUnallocated) }}</span>
               </div>
             </div>
             <div class="num text-sm">− {{ formatIDR(liveFinance.wageTotal) }}</div>
@@ -1492,10 +1637,10 @@ const tab = computed({
           Belum ada RAB atau item tambahan. Pendapatan 0 sampai ada baris item.
         </p>
         <p
-          v-else-if="liveFinance.wageTotal > liveFinance.serviceSale"
+          v-else-if="liveFinance.wageTotal > liveFinance.netService"
           class="px-3 py-3 text-xs text-amber-700 border-t border-ink-100"
         >
-          Upah teknisi lebih besar dari pendapatan jasa.
+          Upah teknisi lebih besar dari sisa jasa setelah perlengkapan.
         </p>
       </div>
 
@@ -1507,7 +1652,7 @@ const tab = computed({
               v-if="liveFinance.serviceSale"
               type="button"
               class="btn-secondary shrink-0"
-              title="Bagi rata pendapatan jasa ke teknisi yang sudah dipilih"
+              title="Bagi rata sisa jasa setelah perlengkapan"
               @click="autoDivideWages"
             >
               Bagi otomatis
@@ -1519,8 +1664,9 @@ const tab = computed({
         </div>
         <div class="p-3 sm:p-4 space-y-3">
           <p class="text-xs text-ink-500">
-            Pilih teknisi lalu klik <strong>Bagi otomatis</strong> untuk membagi rata pendapatan jasa
-            ({{ formatIDR(liveFinance.serviceSale) }}). Simpan pembagian di sini; catat kas di Pengeluaran saat sudah dibayar.
+            Pilih teknisi lalu klik <strong>Bagi otomatis</strong> untuk membagi rata sisa jasa
+            ({{ formatIDR(liveFinance.netService) }}). Perlengkapan terpakai dipotong dulu dari pendapatan jasa.
+            Simpan pembagian di sini; catat kas di Pengeluaran saat sudah dibayar.
           </p>
           <div v-for="(row, i) in wageRows" :key="i" class="flex items-start gap-2">
             <div class="flex-1 min-w-0 space-y-2 sm:space-y-0 sm:grid sm:grid-cols-2 sm:gap-2">
@@ -1576,6 +1722,79 @@ const tab = computed({
             </button>
             <span v-if="wageMsg" class="text-sm text-green-600">{{ wageMsg }}</span>
           </div>
+        </div>
+      </div>
+
+      <div class="panel overflow-hidden lg:col-span-2">
+        <div class="panel-header"><span class="panel-title">Pemakaian perlengkapan</span></div>
+        <div class="p-3 sm:p-4 space-y-3">
+          <p class="text-xs text-ink-500">
+            Stok berkurang dan nilainya dipotong dari pendapatan jasa sebelum dibagi menjadi upah teknisi.
+            Kas tidak terpotong lagi — sudah keluar saat perlengkapan dibeli.
+          </p>
+          <form v-if="isAdmin" class="grid grid-cols-1 sm:grid-cols-4 gap-2 items-end" @submit.prevent="saveUsage">
+            <div class="sm:col-span-2 min-w-0">
+              <label class="label">Perlengkapan</label>
+              <select v-model="usageForm.materialId" class="input" required>
+                <option value="">Pilih perlengkapan</option>
+                <option v-for="m in materials" :key="m.id" :value="String(m.id)">
+                  {{ m.name }} · stok {{ formatNumber(m.stockQuantity) }} {{ m.unit }}
+                </option>
+              </select>
+            </div>
+            <div>
+              <label class="label">Qty</label>
+              <input v-model.number="usageForm.quantity" type="number" min="1" step="1" class="input-num" required />
+            </div>
+            <div class="date-field">
+              <label class="label">Tanggal</label>
+              <input v-model="usageForm.date" type="date" class="input" required />
+            </div>
+            <div class="sm:col-span-4 flex flex-col sm:flex-row sm:items-center gap-2">
+              <button type="submit" class="btn-primary" :disabled="savingUsage">
+                <CheckIcon class="w-4 h-4" />{{ savingUsage ? 'Menyimpan…' : 'Catat pemakaian' }}
+              </button>
+              <span v-if="selectedUsageMaterial" class="text-xs text-ink-500">
+                Nilai {{ formatIDR(usageAmount) }}
+                ({{ formatIDR(selectedUsageMaterial.pricePerUnit) }}/{{ selectedUsageMaterial.unit }})
+              </span>
+            </div>
+          </form>
+          <p v-if="usageError" class="text-sm text-red-600">{{ usageError }}</p>
+          <div v-if="materialUsages.length" class="overflow-x-auto">
+            <table class="table-std text-sm">
+              <thead>
+                <tr>
+                  <th>Tanggal</th>
+                  <th>Perlengkapan</th>
+                  <th class="text-right">Qty</th>
+                  <th class="text-right">Nilai</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in materialUsages" :key="row.id">
+                  <td class="whitespace-nowrap font-mono text-xs">{{ formatDate(row.date) }}</td>
+                  <td>{{ row.materialName }}</td>
+                  <td class="num">{{ formatNumber(row.quantity) }} {{ row.unit }}</td>
+                  <td class="num">{{ formatIDR(row.amount) }}</td>
+                  <td class="text-right">
+                    <button v-if="isAdmin" type="button" class="btn-action-danger" @click="removeUsage(row)">
+                      <TrashIcon class="w-3.5 h-3.5" />Batal
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p v-else class="text-sm text-ink-500">Belum ada perlengkapan yang dipakai di proyek ini.</p>
+        </div>
+      </div>
+
+      <div class="panel overflow-hidden lg:col-span-2">
+        <div class="panel-header"><span class="panel-title">Jejak stok produk</span></div>
+        <div class="p-3 sm:p-4">
+          <StockLotTrace :project-id="id" />
         </div>
       </div>
 
