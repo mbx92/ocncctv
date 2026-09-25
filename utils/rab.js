@@ -81,7 +81,14 @@ export function projectExpenseTotal(expenses) {
   return expenses.reduce((sum, row) => sum + Math.max(Math.round(Number(row.allocatedAmount ?? row.amount) || 0), 0), 0)
 }
 
-export function summarizeProjectRevenue(lines, wages, materialCost = 0, lotSale = 0, projectExpenses = 0) {
+export function summarizeProjectRevenue(
+  lines,
+  wages,
+  materialCost = 0,
+  lotSale = 0,
+  projectExpenses = 0,
+  discountAmount = 0
+) {
   let goodsSale = 0
   let goodsCost = 0
   let serviceSale = 0
@@ -100,7 +107,9 @@ export function summarizeProjectRevenue(lines, wages, materialCost = 0, lotSale 
   goodsCost += supplies
   const wageTotal = (wages || []).reduce((sum, row) => sum + Math.max(Math.round(Number(row.amount) || 0), 0), 0)
   const expenseTotal = projectExpenseTotal(projectExpenses)
-  const revenue = goodsSale + serviceSale
+  const grossRevenue = goodsSale + serviceSale
+  const discount = Math.min(Math.max(Math.round(Number(discountAmount) || 0), 0), grossRevenue)
+  const revenue = grossRevenue - discount
   return {
     goodsSale,
     goodsCost,
@@ -108,6 +117,8 @@ export function summarizeProjectRevenue(lines, wages, materialCost = 0, lotSale 
     materialCost: supplies,
     lotSale: lot,
     netService: serviceSale - supplies,
+    grossRevenue,
+    discountAmount: discount,
     revenue,
     wageTotal,
     expenseTotal,

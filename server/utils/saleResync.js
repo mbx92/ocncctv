@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm'
-import { loadProjectFinanceMap, downPaymentTotal } from './projectRevenue.js'
+import { loadProjectFinanceMap, downPaymentTotal, projectGrossRevenue } from './projectRevenue.js'
 import { resolveDiscount } from './salePayment.js'
 
 export function saleRecordedAmount(sale) {
@@ -58,7 +58,7 @@ export async function loadSaleScopeSync(db, schema, productId) {
   const sale = await loadSaleForProduct(db, schema, productId)
   if (!sale) return saleSyncState(null, 0)
   const financeMap = await loadProjectFinanceMap(db, schema, [productId])
-  return saleSyncState(sale, financeMap.get(productId)?.summary?.revenue || 0)
+  return saleSyncState(sale, projectGrossRevenue(financeMap.get(productId)?.summary))
 }
 
 export async function resyncProjectSale(tx, schema, productId) {
@@ -66,7 +66,7 @@ export async function resyncProjectSale(tx, schema, productId) {
   if (!sale) throw createError({ statusCode: 404, statusMessage: 'Penjualan proyek ini belum dicatat' })
   const financeMap = await loadProjectFinanceMap(tx, schema, [productId])
   const finance = financeMap.get(productId)
-  const current = Math.max(Math.round(Number(finance?.summary?.revenue) || 0), 0)
+  const current = projectGrossRevenue(finance?.summary)
   const previous = saleSyncState(sale, current)
   if (!previous.outOfSync) return { ...previous, updated: false }
   const discount = resolveDiscount(
@@ -98,7 +98,7 @@ export async function keepProjectSaleInvoice(tx, schema, productId) {
   const sale = await loadSaleForProduct(tx, schema, productId)
   if (!sale) throw createError({ statusCode: 404, statusMessage: 'Penjualan proyek ini belum dicatat' })
   const financeMap = await loadProjectFinanceMap(tx, schema, [productId])
-  const current = Math.max(Math.round(Number(financeMap.get(productId)?.summary?.revenue) || 0), 0)
+  const current = projectGrossRevenue(financeMap.get(productId)?.summary)
   const recorded = saleRecordedAmount(sale)
   const qty = Math.max(Math.round(Number(sale.quantity) || 0), 1)
   const gap = Math.max(current - recorded, 0)

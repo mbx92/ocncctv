@@ -76,7 +76,7 @@ function preferredProduct() {
 
 function applyProject(p) {
   form.value.quantity = 1
-  form.value.salePricePerUnit = p?.revenue || 0
+  form.value.salePricePerUnit = p?.grossRevenue || p?.revenue || 0
   form.value.customerName = p?.customerName || ''
   form.value.downPaymentAmount = p?.downPaymentTotal || 0
 }
@@ -87,7 +87,7 @@ function openAdd() {
     date: todayStr(),
     productId: p?.id || '',
     quantity: 1,
-    salePricePerUnit: p?.revenue || 0,
+    salePricePerUnit: p?.grossRevenue || p?.revenue || 0,
     customerName: p?.customerName || '',
     notes: '',
     discountAmount: 0,
@@ -128,7 +128,7 @@ const preview = computed(() => {
   return {
     goodsCost,
     hasCost: !!selectedProduct.value?.hasRab,
-    rabRevenue: selectedProduct.value?.revenue || 0,
+    rabRevenue: selectedProduct.value?.grossRevenue || selectedProduct.value?.revenue || 0,
     goodsSale: selectedProduct.value?.goodsSale || 0,
     serviceSale: selectedProduct.value?.serviceSale || 0,
     gross,
@@ -531,7 +531,7 @@ async function remove(s) {
             <select v-model="form.productId" class="input" required :disabled="!sellableProducts.length">
               <option v-if="!sellableProducts.length" value="">Tidak ada proyek yang belum tercatat</option>
               <option v-for="p in sellableProducts" :key="p.id" :value="p.id">
-                {{ p.name }}{{ p.customerName ? ` · ${p.customerName}` : '' }}{{ p.hasRab ? ` — ${formatIDR(p.revenue)}` : '' }}{{ p.downPaymentTotal ? ` · DP ${formatIDR(p.downPaymentTotal)}` : '' }}
+                {{ p.name }}{{ p.customerName ? ` · ${p.customerName}` : '' }}{{ p.hasRab ? ` — ${formatIDR(p.grossRevenue || p.revenue)}` : '' }}{{ p.downPaymentTotal ? ` · DP ${formatIDR(p.downPaymentTotal)}` : '' }}
               </option>
             </select>
             <div v-if="selectedProduct" class="mt-2 space-y-1">
@@ -542,7 +542,7 @@ async function remove(s) {
                 <span v-if="selectedProduct.hasRab" class="badge bg-ink-100 text-ink-600">RAB</span>
               </div>
               <p v-if="selectedProduct.hasRab" class="text-xs text-ink-500">
-                Nilai RAB {{ formatIDR(selectedProduct.revenue) }}
+                Nilai RAB {{ formatIDR(selectedProduct.grossRevenue || selectedProduct.revenue) }}
                 <span v-if="selectedProduct.goodsCost"> · modal {{ formatIDR(selectedProduct.goodsCost) }}</span>
                 <span v-if="selectedProduct.downPaymentTotal"> · DP {{ formatIDR(selectedProduct.downPaymentTotal) }}</span>
               </p>
@@ -565,7 +565,7 @@ async function remove(s) {
                 v-if="selectedProduct?.hasRab"
                 type="button"
                 class="text-xs font-medium text-accent-600 hover:text-accent-700"
-                @click="form.salePricePerUnit = selectedProduct.revenue || 0"
+                @click="form.salePricePerUnit = selectedProduct.grossRevenue || selectedProduct.revenue || 0"
               >
                 Pakai nilai RAB
               </button>

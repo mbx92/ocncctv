@@ -13,7 +13,14 @@ function lineCost(line) {
   return Math.round((Number(line.quantity) || 0) * (Number(line.costPrice) || 0))
 }
 
-export function summarizeProjectRevenue(lines, wages, materialCost = 0, lotSale = 0, projectExpenses = 0) {
+export function summarizeProjectRevenue(
+  lines,
+  wages,
+  materialCost = 0,
+  lotSale = 0,
+  projectExpenses = 0,
+  discountAmount = 0
+) {
   let goodsSale = 0
   let goodsCost = 0
   let serviceSale = 0
@@ -34,7 +41,9 @@ export function summarizeProjectRevenue(lines, wages, materialCost = 0, lotSale 
   const expenseTotal = Array.isArray(projectExpenses)
     ? sumProjectExpenses(projectExpenses)
     : Math.max(Math.round(Number(projectExpenses) || 0), 0)
-  const revenue = goodsSale + serviceSale
+  const grossRevenue = goodsSale + serviceSale
+  const discount = Math.min(Math.max(Math.round(Number(discountAmount) || 0), 0), grossRevenue)
+  const revenue = grossRevenue - discount
   return {
     goodsSale,
     goodsCost,
@@ -42,11 +51,20 @@ export function summarizeProjectRevenue(lines, wages, materialCost = 0, lotSale 
     materialCost: supplies,
     lotSale: lot,
     netService: serviceSale - supplies,
+    grossRevenue,
+    discountAmount: discount,
     revenue,
     wageTotal,
     expenseTotal,
     profit: revenue - goodsCost - wageTotal - expenseTotal
   }
+}
+
+export function projectGrossRevenue(summary) {
+  if (!summary) return 0
+  const gross = Math.max(Math.round(Number(summary.grossRevenue) || 0), 0)
+  if (gross) return gross
+  return Math.max(Math.round(Number(summary.revenue) || 0), 0)
 }
 
 export function downPaymentTotal(rows) {
@@ -100,6 +118,22 @@ export async function loadProjectFinanceMap(db, schema, productIds) {
   const extraMap = await loadProjectExtraLines(db, schema, ids)
   const adjMap = await loadProjectRabAdjustments(db, schema, ids)
   const expenseMap = await loadProjectExpensesByProduct(db, schema, ids)
+  const saleRows = await db
+    .select({
+      productId: schema.sales.productId,
+      discountAmount: schema.sales.discountAmount
+    })
+    .from(schema.sales)
+    .where(inArray(schema.sales.productId, ids))
+  const discountById = new Map()
+  for (const row of saleRows) {
+    const productId = Number(row.productId)
+    if (!productId) continue
+    discountById.set(
+      productId,
+      (discountById.get(productId) || 0) + Math.max(Math.round(Number(row.discountAmount) || 0), 0)
+    )
+  }
   const dpRows = await db
     .select()
     .from(schema.projectDownPayments)
@@ -145,7 +179,8 @@ export async function loadProjectFinanceMap(db, schema, productIds) {
       entry.wages,
       supplies,
       lotSaleById.get(productId) ?? parseConsumableLotSale(null),
-      entry.projectExpenses
+      entry.projectExpenses,
+      discountById.get(productId) || 0
     )
   }
   return map

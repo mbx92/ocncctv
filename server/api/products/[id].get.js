@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
 import { getHppForProduct } from '../../utils/productHpp.js'
-import { loadProjectFinanceMap } from '../../utils/projectRevenue.js'
+import { loadProjectFinanceMap, projectGrossRevenue } from '../../utils/projectRevenue.js'
 import { loadSaleForProduct, saleSyncState } from '../../utils/saleResync.js'
 
 export default defineEventHandler(async (event) => {
@@ -33,7 +33,7 @@ export default defineEventHandler(async (event) => {
       0
     ),
     finance: finance?.summary || null,
-    saleSync: saleSyncState(sale, finance?.summary?.revenue || 0),
+    saleSync: saleSyncState(sale, projectGrossRevenue(finance?.summary)),
     hpp: hpp.total,
     breakdown: hpp.breakdown,
     materialLines: hpp.materialLines,

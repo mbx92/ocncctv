@@ -565,13 +565,16 @@ async function promptSaleResync(sync) {
   if (ok) await recallSale()
 }
 const projectExpenses = computed(() => product.value?.projectExpenses || [])
+const projectSale = computed(() => (projectSales.value || [])[0] || null)
+const saleDiscount = computed(() => Math.max(Math.round(Number(projectSale.value?.discountAmount) || 0), 0))
 const liveFinance = computed(() =>
   summarizeProjectRevenue(
     scopeLines.value,
     wageRows.value,
     materialCost.value,
     consumableLot.value.amount,
-    projectExpenses.value
+    projectExpenses.value,
+    saleDiscount.value
   )
 )
 const jasaLines = computed(() => serviceLines(scopeLines.value).filter((line) => (Number(line.quantity) || 0) > 0))
@@ -870,7 +873,6 @@ function formatSize(bytes) {
 }
 
 const router = useRouter()
-const projectSale = computed(() => (projectSales.value || [])[0] || null)
 const invoicePreview = computed(() =>
   buildProjectInvoicePreview({
     product: product.value,
@@ -1058,6 +1060,7 @@ watch(
             <div class="mt-1 font-mono font-semibold text-base sm:text-lg text-teal-700">{{ formatIDR(liveFinance.revenue) }}</div>
             <div class="text-xs text-ink-400 mt-0.5">
               {{ goods.length }} barang · {{ jasa.length }} jasa
+              <span v-if="liveFinance.discountAmount"> · diskon {{ formatIDR(liveFinance.discountAmount) }}</span>
               <span v-if="liveDpTotal"> · DP {{ formatIDR(liveDpTotal) }}</span>
             </div>
           </div>
@@ -1687,6 +1690,25 @@ watch(
                 <span class="num shrink-0">{{ formatIDR(lineAmount(line)) }}</span>
               </li>
             </ul>
+          </div>
+          <div
+            v-if="liveFinance.discountAmount"
+            class="px-3 py-2.5 flex items-center justify-between gap-3 font-medium"
+          >
+            <span>Total sebelum diskon</span>
+            <span class="num">{{ formatIDR(liveFinance.grossRevenue) }}</span>
+          </div>
+          <div v-if="liveFinance.discountAmount" class="px-3 py-2.5 flex items-start justify-between gap-3 bg-ink-50/60">
+            <div>
+              <div class="text-sm">Diskon</div>
+              <div class="text-xs text-ink-400">
+                Dari penjualan
+                <span v-if="projectSale?.discountKind === 'percent' && projectSale?.discountPercent">
+                  · {{ projectSale.discountPercent }}%
+                </span>
+              </div>
+            </div>
+            <div class="num text-sm">− {{ formatIDR(liveFinance.discountAmount) }}</div>
           </div>
           <div class="px-3 py-2.5 flex items-center justify-between gap-3 font-medium bg-ink-50">
             <span>Total pendapatan</span>

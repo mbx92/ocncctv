@@ -13,6 +13,8 @@ function presentProjectFinance(p, finance) {
   const wageTotal = summary?.wageTotal ?? 0
   const goodsCost = summary?.goodsCost ?? 0
   const expenseTotal = summary?.expenseTotal ?? 0
+  const discountAmount = summary?.discountAmount ?? 0
+  const grossRevenue = summary?.grossRevenue ?? scopeRevenue
   const profit = scopeRevenue > 0 ? (summary?.profit ?? 0) : fallbackRevenue - goodsCost - wageTotal - expenseTotal
 
   return {
@@ -23,6 +25,8 @@ function presentProjectFinance(p, finance) {
     goodsSale: summary?.goodsSale ?? 0,
     goodsCost,
     serviceSale: summary?.serviceSale ?? 0,
+    grossRevenue: scopeRevenue > 0 ? grossRevenue : fallbackRevenue,
+    discountAmount,
     revenue,
     profit,
     wageTotal,
