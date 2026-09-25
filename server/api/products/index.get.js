@@ -12,7 +12,8 @@ function presentProjectFinance(p, finance) {
   const revenue = scopeRevenue > 0 ? scopeRevenue : fallbackRevenue
   const wageTotal = summary?.wageTotal ?? 0
   const goodsCost = summary?.goodsCost ?? 0
-  const profit = scopeRevenue > 0 ? (summary?.profit ?? 0) : fallbackRevenue - goodsCost - wageTotal
+  const expenseTotal = summary?.expenseTotal ?? 0
+  const profit = scopeRevenue > 0 ? (summary?.profit ?? 0) : fallbackRevenue - goodsCost - wageTotal - expenseTotal
 
   return {
     hasRab,
@@ -25,6 +26,7 @@ function presentProjectFinance(p, finance) {
     revenue,
     profit,
     wageTotal,
+    expenseTotal,
     downPaymentTotal: (finance?.downPayments || []).reduce(
       (sum, row) => sum + Math.max(Math.round(Number(row.amount) || 0), 0),
       0

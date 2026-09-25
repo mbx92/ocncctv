@@ -564,8 +564,15 @@ async function promptSaleResync(sync) {
   )
   if (ok) await recallSale()
 }
+const projectExpenses = computed(() => product.value?.projectExpenses || [])
 const liveFinance = computed(() =>
-  summarizeProjectRevenue(scopeLines.value, wageRows.value, materialCost.value, consumableLot.value.amount)
+  summarizeProjectRevenue(
+    scopeLines.value,
+    wageRows.value,
+    materialCost.value,
+    consumableLot.value.amount,
+    projectExpenses.value
+  )
 )
 const jasaLines = computed(() => serviceLines(scopeLines.value).filter((line) => (Number(line.quantity) || 0) > 0))
 const wageUnallocated = computed(() => wageAllocationLeft(liveFinance.value.netService, wageRows.value))
@@ -1057,7 +1064,10 @@ watch(
           <div class="p-3 sm:p-4">
             <div class="text-[10px] uppercase font-semibold tracking-wide text-ink-400">Modal</div>
             <div class="mt-1 font-mono font-semibold text-base sm:text-lg">{{ formatIDR(liveFinance.goodsCost) }}</div>
-            <div class="text-xs text-ink-400 mt-0.5">harga pokok barang</div>
+            <div class="text-xs text-ink-400 mt-0.5">
+              harga pokok barang
+              <span v-if="liveFinance.expenseTotal"> · pengeluaran {{ formatIDR(liveFinance.expenseTotal) }}</span>
+            </div>
           </div>
           <div class="p-3 sm:p-4">
             <div class="text-[10px] uppercase font-semibold tracking-wide text-ink-400">Upah teknisi</div>
@@ -1709,6 +1719,33 @@ watch(
               </div>
             </div>
             <div class="num text-sm">− {{ formatIDR(liveFinance.wageTotal) }}</div>
+          </div>
+          <div class="px-3 py-2.5 flex items-start justify-between gap-3 bg-ink-50/60">
+            <div>
+              <div class="text-sm">Pengeluaran terkait</div>
+              <div class="text-xs text-ink-400">
+                {{
+                  projectExpenses.length
+                    ? `${projectExpenses.length} catatan di pengeluaran`
+                    : 'Bensin, ongkir, dan biaya lain yang diikat ke proyek ini'
+                }}
+              </div>
+            </div>
+            <div class="num text-sm">− {{ formatIDR(liveFinance.expenseTotal) }}</div>
+          </div>
+          <div v-if="projectExpenses.length" class="px-3 py-2 border-t border-ink-100 bg-ink-50/50">
+            <ul class="space-y-1 text-xs text-ink-600">
+              <li v-for="row in projectExpenses" :key="row.id" class="flex justify-between gap-3">
+                <span class="min-w-0 truncate">
+                  {{ row.categoryName || row.category }}
+                  <span class="text-ink-400">· {{ row.description }}</span>
+                </span>
+                <span class="num shrink-0">{{ formatIDR(row.allocatedAmount ?? row.amount) }}</span>
+              </li>
+            </ul>
+            <NuxtLink :to="`/expenses?productId=${id}`" class="mt-2 inline-block text-xs text-accent-600 hover:underline">
+              Lihat di pengeluaran
+            </NuxtLink>
           </div>
           <div class="px-3 py-3 flex items-center justify-between gap-3 font-semibold bg-ink-50">
             <span>Laba proyek</span>

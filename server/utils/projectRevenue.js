@@ -3,6 +3,7 @@ import { loadRabLines, withRabTotals } from './customOrders.js'
 import { applyRabAdjustments, loadProjectExtraLines, loadProjectRabAdjustments } from './projectLines.js'
 import { loadMaterialUsagesByProduct, materialUsageTotal } from './materialUsage.js'
 import { parseConsumableLotSale } from './consumableLot.js'
+import { loadProjectExpensesByProduct, sumProjectExpenses } from './projectExpenses.js'
 
 function lineAmount(line) {
   return Math.round((Number(line.quantity) || 0) * (Number(line.salePrice) || 0))
@@ -12,7 +13,7 @@ function lineCost(line) {
   return Math.round((Number(line.quantity) || 0) * (Number(line.costPrice) || 0))
 }
 
-export function summarizeProjectRevenue(lines, wages, materialCost = 0, lotSale = 0) {
+export function summarizeProjectRevenue(lines, wages, materialCost = 0, lotSale = 0, projectExpenses = 0) {
   let goodsSale = 0
   let goodsCost = 0
   let serviceSale = 0
@@ -30,6 +31,9 @@ export function summarizeProjectRevenue(lines, wages, materialCost = 0, lotSale 
   goodsSale += lot
   goodsCost += supplies
   const wageTotal = (wages || []).reduce((sum, row) => sum + Math.max(Math.round(Number(row.amount) || 0), 0), 0)
+  const expenseTotal = Array.isArray(projectExpenses)
+    ? sumProjectExpenses(projectExpenses)
+    : Math.max(Math.round(Number(projectExpenses) || 0), 0)
   const revenue = goodsSale + serviceSale
   return {
     goodsSale,
@@ -40,7 +44,8 @@ export function summarizeProjectRevenue(lines, wages, materialCost = 0, lotSale 
     netService: serviceSale - supplies,
     revenue,
     wageTotal,
-    profit: revenue - goodsCost - wageTotal
+    expenseTotal,
+    profit: revenue - goodsCost - wageTotal - expenseTotal
   }
 }
 
@@ -75,6 +80,7 @@ export async function loadProjectFinanceMap(db, schema, productIds) {
         wages: [],
         downPayments: [],
         materialUsages: [],
+        projectExpenses: [],
         summary: summarizeProjectRevenue([], [])
       }
     ])
@@ -93,6 +99,7 @@ export async function loadProjectFinanceMap(db, schema, productIds) {
   const usageMap = await loadMaterialUsagesByProduct(db, schema, ids)
   const extraMap = await loadProjectExtraLines(db, schema, ids)
   const adjMap = await loadProjectRabAdjustments(db, schema, ids)
+  const expenseMap = await loadProjectExpensesByProduct(db, schema, ids)
   const dpRows = await db
     .select()
     .from(schema.projectDownPayments)
@@ -107,6 +114,7 @@ export async function loadProjectFinanceMap(db, schema, productIds) {
     entry.extraLines = extraMap.get(id) || []
     entry.rabAdjustments = adjMap.get(id) || []
     entry.materialUsages = usageMap.get(id) || []
+    entry.projectExpenses = expenseMap.get(id) || []
   }
 
   const rabs = await db
@@ -136,7 +144,8 @@ export async function loadProjectFinanceMap(db, schema, productIds) {
       [...rabLines, ...entry.extraLines],
       entry.wages,
       supplies,
-      lotSaleById.get(productId) ?? parseConsumableLotSale(null)
+      lotSaleById.get(productId) ?? parseConsumableLotSale(null),
+      entry.projectExpenses
     )
   }
   return map

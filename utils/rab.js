@@ -76,7 +76,12 @@ export function applyRabAdjustments(lines, adjustments) {
   })
 }
 
-export function summarizeProjectRevenue(lines, wages, materialCost = 0, lotSale = 0) {
+export function projectExpenseTotal(expenses) {
+  if (!Array.isArray(expenses)) return Math.max(Math.round(Number(expenses) || 0), 0)
+  return expenses.reduce((sum, row) => sum + Math.max(Math.round(Number(row.allocatedAmount ?? row.amount) || 0), 0), 0)
+}
+
+export function summarizeProjectRevenue(lines, wages, materialCost = 0, lotSale = 0, projectExpenses = 0) {
   let goodsSale = 0
   let goodsCost = 0
   let serviceSale = 0
@@ -94,6 +99,7 @@ export function summarizeProjectRevenue(lines, wages, materialCost = 0, lotSale 
   goodsSale += lot
   goodsCost += supplies
   const wageTotal = (wages || []).reduce((sum, row) => sum + Math.max(Math.round(Number(row.amount) || 0), 0), 0)
+  const expenseTotal = projectExpenseTotal(projectExpenses)
   const revenue = goodsSale + serviceSale
   return {
     goodsSale,
@@ -104,7 +110,8 @@ export function summarizeProjectRevenue(lines, wages, materialCost = 0, lotSale 
     netService: serviceSale - supplies,
     revenue,
     wageTotal,
-    profit: revenue - goodsCost - wageTotal
+    expenseTotal,
+    profit: revenue - goodsCost - wageTotal - expenseTotal
   }
 }
 

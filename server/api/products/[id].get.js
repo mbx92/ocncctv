@@ -26,6 +26,7 @@ export default defineEventHandler(async (event) => {
     rabAdjustments: finance?.rabAdjustments || [],
     wages: finance?.wages || [],
     materialUsages: finance?.materialUsages || [],
+    projectExpenses: finance?.projectExpenses || [],
     downPayments: finance?.downPayments || [],
     downPaymentTotal: (finance?.downPayments || []).reduce(
       (sum, row) => sum + Math.max(Math.round(Number(row.amount) || 0), 0),

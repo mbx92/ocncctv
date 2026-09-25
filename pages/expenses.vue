@@ -4,7 +4,13 @@ import { categoryBadgeProps, categoryColorFromList, categoryNameOf } from '~/uti
 import { technicianPayStatus } from '~/utils/technicianPortal.js'
 import { isPersonalCategory, personalCapitalShortfall } from '~/utils/personalExpense.js'
 
-const filters = ref({ category: '', productId: '', dateFrom: '', dateTo: '' })
+const route = useRoute()
+const filters = ref({
+  category: '',
+  productId: Number(route.query.productId) || '',
+  dateFrom: '',
+  dateTo: ''
+})
 
 const query = computed(() => {
   const q = {}
