@@ -114,6 +114,7 @@ export async function loadSaleInvoiceRow(tx, schema, id) {
       discountKind: schema.sales.discountKind,
       discountPercent: schema.sales.discountPercent,
       downPaymentAmount: schema.sales.downPaymentAmount,
+      invoiceLocked: schema.sales.invoiceLocked,
       dueDate: schema.sales.dueDate
     })
     .from(schema.sales)
@@ -210,29 +211,35 @@ function buildInvoiceItems(row, rabLines, extraLines, lotItem = null) {
         amount: recorded
       }
     ]
-    return { items, sections: invoiceSectionsFromItems(items), subtotal: recorded }
+    return {
+      items,
+      sections: invoiceSectionsFromItems(items),
+      subtotal: recorded,
+      saleRecorded: recorded,
+      saleOutOfSync: false,
+      invoiceLocked: !!row.invoiceLocked
+    }
   }
 
   const lineSum = lineItems.reduce((sum, item) => sum + item.amount, 0)
-  const items = [...lineItems]
-  const diff = recorded - lineSum
-  if (diff !== 0) {
-    items.push({
-      name: 'Penyesuaian',
-      code: '',
-      lineType: 'catalog',
-      section: 'extra',
-      quantity: 1,
-      unit: '',
-      unitPrice: diff,
-      amount: diff
-    })
+  const locked = !!row.invoiceLocked
+  return {
+    items: lineItems,
+    sections: invoiceSectionsFromItems(lineItems),
+    subtotal: lineSum,
+    saleRecorded: recorded,
+    saleOutOfSync: !locked && recorded !== lineSum,
+    invoiceLocked: locked
   }
-  return { items, sections: invoiceSectionsFromItems(items), subtotal: recorded }
 }
 
 export function toInvoicePayload(row, settings, rabLines = [], extraLines = [], lotItem = null) {
-  const { items, sections, subtotal } = buildInvoiceItems(row, rabLines, extraLines, lotItem)
+  const { items, sections, subtotal, saleRecorded, saleOutOfSync, invoiceLocked } = buildInvoiceItems(
+    row,
+    rabLines,
+    extraLines,
+    lotItem
+  )
   const discount = Math.min(Math.max(Math.round(Number(row.discountAmount) || 0), 0), subtotal)
   const discountKind = row.discountKind === 'percent' ? 'percent' : 'amount'
   const discountPercent = Math.min(Math.max(Number(row.discountPercent) || 0, 0), 100)
@@ -245,6 +252,7 @@ export function toInvoicePayload(row, settings, rabLines = [], extraLines = [], 
   const businessName = settings.invoiceBusinessName || 'OCN'
   return {
     id: row.id,
+    productId: row.productId || null,
     invoiceNumber: row.invoiceNumber,
     date: row.date,
     title,
@@ -275,6 +283,9 @@ export function toInvoicePayload(row, settings, rabLines = [], extraLines = [], 
     downPaymentLabel: downPayment > 0 ? 'Uang muka (DP)' : null,
     dueDate: row.dueDate || null,
     total: afterDiscount - downPayment,
+    saleRecorded,
+    saleOutOfSync,
+    invoiceLocked: !!invoiceLocked,
     official: resolveOfficialInvoiceCopy(settings, {
       title: title || 'pekerjaan ini',
       customerName,

@@ -20,7 +20,9 @@ import {
   PlayIcon,
   CheckCircleIcon,
   TruckIcon,
-  PrinterIcon
+  PrinterIcon,
+  ExclamationTriangleIcon,
+  ArrowPathIcon
 } from '@heroicons/vue/24/outline'
 import { productStatusLabel, productStatusClass, normalizeProductStatus } from '~/utils/productStatus.js'
 import { jobTypeLabel, jobTypeClass } from '~/utils/jobType.js'
@@ -50,7 +52,7 @@ const { data: suppliers, refresh: refreshSuppliers } = await useFetch('/api/supp
 const { data: rabPurchaseStatus, refresh: refreshRabPurchaseStatus } = await useFetch(
   `/api/products/${id}/rab-purchase-status`
 )
-const { data: projectSales } = await useFetch(`/api/sales?productId=${id}`)
+const { data: projectSales, refresh: refreshSales } = await useFetch(`/api/sales?productId=${id}`)
 
 const info = ref({
   name: product.value?.name,
@@ -509,8 +511,58 @@ const consumableLot = computed(() =>
   consumableLotItem(materialCost.value, settings.value, product.value?.consumableLotSale)
 )
 
-async function onChecklistSaved() {
-  await Promise.all([refresh(), refreshMaterials()])
+async function onChecklistSaved(saved) {
+  await Promise.all([refresh(), refreshMaterials(), refreshSales()])
+  await promptSaleResync(saved?.saleSync || product.value?.saleSync)
+}
+
+const saleSync = computed(() => product.value?.saleSync || null)
+const saleOutOfSync = computed(() => !!saleSync.value?.outOfSync)
+const recallingSale = ref(false)
+
+async function recallSale() {
+  const saleId = projectSale.value?.id || saleSync.value?.saleId
+  if (!saleId || recallingSale.value) return
+  recallingSale.value = true
+  try {
+    await $fetch(`/api/sales/${saleId}/resync`, { method: 'POST' })
+    await Promise.all([refresh(), refreshSales()])
+    useToast().success('Perhitungan penjualan diperbarui dari lingkup terbaru.')
+  } catch (e) {
+    useToast().error(e.data?.statusMessage || 'Gagal menghitung ulang penjualan')
+  } finally {
+    recallingSale.value = false
+  }
+}
+
+async function keepSaleInvoice() {
+  const saleId = projectSale.value?.id || saleSync.value?.saleId
+  if (!saleId || recallingSale.value) return
+  recallingSale.value = true
+  try {
+    await $fetch(`/api/sales/${saleId}/keep-invoice`, { method: 'POST' })
+    await Promise.all([refresh(), refreshSales()])
+    useToast().success('Nilai invoice dikunci sesuai yang sudah diterbitkan.')
+  } catch (e) {
+    useToast().error(e.data?.statusMessage || 'Gagal mengunci nilai invoice')
+  } finally {
+    recallingSale.value = false
+  }
+}
+
+async function promptSaleResync(sync) {
+  if (!sync?.outOfSync || !isAdmin.value) return
+  const invoice = sync.invoiceNumber ? `Invoice ${sync.invoiceNumber}` : 'Invoice penjualan'
+  const ok = await useConfirm().confirm(
+    `${invoice} sudah tercatat ${formatIDR(sync.recorded)}.\n\nItem yang dipakai sekarang mengubah tagihan menjadi ${formatIDR(sync.current)}.\n\nHitung ulang hanya jika invoice ini belum dibayar.`,
+    {
+      title: 'Hitung ulang penjualan',
+      variant: 'warning',
+      confirmText: 'Hitung ulang',
+      cancelText: 'Nanti'
+    }
+  )
+  if (ok) await recallSale()
 }
 const liveFinance = computed(() =>
   summarizeProjectRevenue(scopeLines.value, wageRows.value, materialCost.value, consumableLot.value.amount)
@@ -623,7 +675,7 @@ async function saveExtras() {
   extraError.value = ''
   savingExtras.value = true
   try {
-    await $fetch(`/api/products/${id}/extra-lines`, {
+    const saved = await $fetch(`/api/products/${id}/extra-lines`, {
       method: 'PUT',
       body: {
         lines: extraDraft.value,
@@ -633,9 +685,9 @@ async function saveExtras() {
         }))
       }
     })
-    await refresh()
-    await refreshRabPurchaseStatus()
+    await Promise.all([refresh(), refreshRabPurchaseStatus(), refreshSales()])
     useToast().success('Lingkup proyek tersimpan')
+    await promptSaleResync(saved?.saleSync)
   } catch (e) {
     extraError.value = e.data?.statusMessage || 'Gagal menyimpan item tambahan'
   } finally {
@@ -884,6 +936,29 @@ watch(
       >
         {{ t.label }}
       </button>
+    </div>
+
+    <div
+      v-if="saleOutOfSync"
+      class="rounded-panel border border-amber-200 bg-amber-50 px-3 py-3 sm:px-4 flex flex-col sm:flex-row sm:items-center gap-3"
+    >
+      <div class="flex items-start gap-2 min-w-0">
+        <ExclamationTriangleIcon class="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+        <p class="text-sm text-amber-950">
+          {{ saleSync.invoiceNumber ? `Invoice ${saleSync.invoiceNumber}` : 'Invoice penjualan' }}
+          sudah tercatat {{ formatIDR(saleSync.recorded) }}, tapi item yang dipakai sekarang
+          {{ formatIDR(saleSync.current) }}. Hitung ulang jika belum ditagih, atau kunci nilai invoice jika sudah dibayar.
+        </p>
+      </div>
+      <div v-if="isAdmin" class="flex flex-wrap gap-2 shrink-0">
+        <button type="button" class="btn-secondary" :disabled="recallingSale" @click="keepSaleInvoice">
+          Tetap nilai invoice
+        </button>
+        <button type="button" class="btn-secondary" :disabled="recallingSale" @click="recallSale">
+          <ArrowPathIcon class="w-4 h-4" :class="recallingSale ? 'animate-spin' : ''" />
+          {{ recallingSale ? 'Menyimpan…' : 'Hitung ulang' }}
+        </button>
+      </div>
     </div>
 
     <template v-if="tab === 'info'">

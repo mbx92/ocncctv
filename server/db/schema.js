@@ -543,6 +543,8 @@ export const sales = pgTable(
     paymentNotes: text('payment_notes'),
     // Snapshot uang muka proyek saat penjualan dicatat. Invoice: total − DP.
     downPaymentAmount: integer('down_payment_amount').notNull().default(0),
+    // Invoice sudah diterbitkan/dibayar di nilai penjualan ini; jangan hitung ulang otomatis.
+    invoiceLocked: boolean('invoice_locked').notNull().default(false),
     dueDate: date('due_date'),
     createdAt: timestamp('created_at').notNull().defaultNow()
   },

@@ -101,7 +101,7 @@ async function save() {
   errorMsg.value = ''
   saving.value = true
   try {
-    await $fetch(`/api/products/${props.projectId}/material-checklist`, {
+    const saved = await $fetch(`/api/products/${props.projectId}/material-checklist`, {
       method: 'PUT',
       body: {
         items: draft.value.map((row) => ({
@@ -113,7 +113,7 @@ async function save() {
       }
     })
     useToast().success('Pemakaian perlengkapan tersimpan.')
-    emit('saved')
+    emit('saved', saved)
   } catch (e) {
     errorMsg.value = e.data?.statusMessage || 'Gagal menyimpan pemakaian'
   } finally {

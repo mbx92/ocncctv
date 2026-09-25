@@ -40,6 +40,7 @@ export default defineEventHandler(async (event) => {
       discountPercent: schema.sales.discountPercent,
       paymentNotes: schema.sales.paymentNotes,
       downPaymentAmount: schema.sales.downPaymentAmount,
+      invoiceLocked: schema.sales.invoiceLocked,
       dueDate: schema.sales.dueDate
     })
     .from(schema.sales)

@@ -1,12 +1,42 @@
 <script setup>
-import { ArrowLeftIcon, PrinterIcon, ArrowDownTrayIcon, ShareIcon, ClipboardDocumentIcon } from '@heroicons/vue/24/outline'
+import { ArrowLeftIcon, ArrowPathIcon, ExclamationTriangleIcon, PrinterIcon, ArrowDownTrayIcon, ShareIcon, ClipboardDocumentIcon } from '@heroicons/vue/24/outline'
 import { parseQuoteStyle } from '~/utils/quoteStyle.js'
 
 definePageMeta({ layout: 'print' })
 
 const route = useRoute()
 const router = useRouter()
-const { data: invoice, error } = await useFetch(`/api/sales/${route.params.id}`)
+const { data: invoice, error, refresh } = await useFetch(`/api/sales/${route.params.id}`)
+const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
+const recallingSale = ref(false)
+
+async function recallSale() {
+  if (!invoice.value?.id || recallingSale.value) return
+  recallingSale.value = true
+  try {
+    await $fetch(`/api/sales/${invoice.value.id}/resync`, { method: 'POST' })
+    await refresh()
+    useToast().success('Perhitungan penjualan diperbarui dari lingkup terbaru.')
+  } catch (e) {
+    useToast().error(e.data?.statusMessage || 'Gagal menghitung ulang penjualan')
+  } finally {
+    recallingSale.value = false
+  }
+}
+
+async function keepSaleInvoice() {
+  if (!invoice.value?.id || recallingSale.value) return
+  recallingSale.value = true
+  try {
+    await $fetch(`/api/sales/${invoice.value.id}/keep-invoice`, { method: 'POST' })
+    await refresh()
+    useToast().success('Nilai invoice dikunci sesuai yang sudah diterbitkan.')
+  } catch (e) {
+    useToast().error(e.data?.statusMessage || 'Gagal mengunci nilai invoice')
+  } finally {
+    recallingSale.value = false
+  }
+}
 
 const invoiceStyle = computed({
   get: () => parseQuoteStyle(route.query.tampilan),
@@ -116,6 +146,31 @@ async function copyShareUrl() {
     </div>
 
     <p v-if="error" class="p-6 text-sm text-red-600">{{ error.data?.statusMessage || 'Invoice tidak ditemukan' }}</p>
+
+    <div
+      v-if="invoice?.saleOutOfSync"
+      class="no-print mx-auto mt-4 w-full sm:w-[210mm] max-w-full px-4 print:hidden"
+    >
+      <div class="rounded-panel border border-amber-200 bg-amber-50 p-3 flex flex-col sm:flex-row sm:items-center gap-3">
+        <div class="flex items-start gap-2 min-w-0">
+          <ExclamationTriangleIcon class="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+          <p class="text-sm text-amber-950">
+            Lingkup proyek berubah setelah invoice ini dicatat ({{ formatIDR(invoice.saleRecorded) }}).
+            Tagihan dari item yang dipakai sekarang {{ formatIDR(invoice.subtotal) }}.
+            Kunci nilai invoice jika sudah dibayar, atau hitung ulang jika belum ditagih.
+          </p>
+        </div>
+        <div v-if="isAdmin" class="flex flex-wrap gap-2 shrink-0">
+          <button type="button" class="btn-secondary" :disabled="recallingSale" @click="keepSaleInvoice">
+            Tetap nilai invoice
+          </button>
+          <button type="button" class="btn-secondary" :disabled="recallingSale" @click="recallSale">
+            <ArrowPathIcon class="w-4 h-4" :class="recallingSale ? 'animate-spin' : ''" />
+            {{ recallingSale ? 'Menyimpan…' : 'Hitung ulang' }}
+          </button>
+        </div>
+      </div>
+    </div>
 
     <div v-if="shareInfo" class="no-print mx-auto mt-4 w-full sm:w-[210mm] max-w-full px-4 print:hidden">
       <div class="rounded-panel border border-ink-200 bg-white p-3 text-sm space-y-2">

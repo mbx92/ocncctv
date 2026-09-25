@@ -44,6 +44,7 @@ const savingCategory = ref(false)
 const technicianWork = ref(null)
 const loadingTechnicianWork = ref(false)
 const selectedWageIds = ref([])
+const wagePayouts = ref({})
 const personalDraw = ref(null)
 const loadingPersonalDraw = ref(false)
 
@@ -157,9 +158,7 @@ const personalShortfall = computed(() => personalCapitalShortfall(form.value.amo
 const wageProjects = computed(() => technicianWork.value?.projects || [])
 const unpaidWageProjects = computed(() => wageProjects.value.filter((p) => p.unpaidAmount > 0))
 const selectedWageTotal = computed(() =>
-  wageProjects.value
-    .filter((p) => selectedWageIds.value.includes(p.id))
-    .reduce((sum, p) => sum + (p.unpaidAmount || 0), 0)
+  selectedWageIds.value.reduce((sum, id) => sum + Math.max(Math.round(Number(wagePayouts.value[id]) || 0), 0), 0)
 )
 const allUnpaidSelected = computed(
   () =>
@@ -174,13 +173,29 @@ function toggleWage(project) {
   if (!project?.unpaidAmount) return
   if (isWageSelected(project.id)) {
     selectedWageIds.value = selectedWageIds.value.filter((id) => id !== project.id)
+    const next = { ...wagePayouts.value }
+    delete next[project.id]
+    wagePayouts.value = next
   } else {
     selectedWageIds.value = [...selectedWageIds.value, project.id]
+    wagePayouts.value = { ...wagePayouts.value, [project.id]: project.unpaidAmount }
   }
 }
 function toggleAllUnpaidWages() {
-  if (allUnpaidSelected.value) selectedWageIds.value = []
-  else selectedWageIds.value = unpaidWageProjects.value.map((p) => p.id)
+  if (allUnpaidSelected.value) {
+    selectedWageIds.value = []
+    wagePayouts.value = {}
+    return
+  }
+  selectedWageIds.value = unpaidWageProjects.value.map((p) => p.id)
+  wagePayouts.value = Object.fromEntries(unpaidWageProjects.value.map((p) => [p.id, p.unpaidAmount]))
+}
+function setWagePayout(project, amount) {
+  const max = Math.max(Math.round(Number(project.unpaidAmount) || 0), 0)
+  wagePayouts.value = {
+    ...wagePayouts.value,
+    [project.id]: Math.min(Math.max(Math.round(Number(amount) || 0), 0), max)
+  }
 }
 
 async function loadTechnicianProjects() {
@@ -188,15 +203,18 @@ async function loadTechnicianProjects() {
   if (!isWageCreate() || !technicianId) {
     technicianWork.value = null
     selectedWageIds.value = []
+    wagePayouts.value = {}
     return
   }
   loadingTechnicianWork.value = true
   try {
     technicianWork.value = await $fetch(`/api/technicians/${technicianId}/work`)
     selectedWageIds.value = []
+    wagePayouts.value = {}
   } catch {
     technicianWork.value = null
     selectedWageIds.value = []
+    wagePayouts.value = {}
   } finally {
     loadingTechnicianWork.value = false
   }
@@ -232,6 +250,7 @@ function openAdd() {
   }
   technicianWork.value = null
   selectedWageIds.value = []
+  wagePayouts.value = {}
   personalDraw.value = null
   errorMsg.value = ''
   showForm.value = true
@@ -245,6 +264,7 @@ function openEdit(e) {
   }
   technicianWork.value = null
   selectedWageIds.value = []
+  wagePayouts.value = {}
   personalDraw.value = null
   errorMsg.value = ''
   showForm.value = true
@@ -267,6 +287,7 @@ function onExpenseCategoryChange() {
   if (formKind.value === 'personal') {
     technicianWork.value = null
     selectedWageIds.value = []
+    wagePayouts.value = {}
     form.value.relatedProductId = ''
     loadPersonalDraw()
     return
@@ -276,6 +297,7 @@ function onExpenseCategoryChange() {
     form.value.technicianId = ''
     technicianWork.value = null
     selectedWageIds.value = []
+    wagePayouts.value = {}
   } else {
     loadTechnicianProjects()
   }
@@ -334,12 +356,20 @@ async function save() {
         errorMsg.value = 'Centang minimal satu proyek'
         return
       }
+      const lines = selectedWageIds.value.map((id) => ({
+        productId: id,
+        amount: Math.max(Math.round(Number(wagePayouts.value[id]) || 0), 0)
+      }))
+      if (lines.some((line) => line.amount <= 0)) {
+        errorMsg.value = 'Isi nominal yang diambil untuk setiap proyek yang dipilih'
+        return
+      }
       const result = await $fetch('/api/expenses/technician-wages', {
         method: 'POST',
         body: {
           date: form.value.date,
           technicianId: form.value.technicianId,
-          productIds: selectedWageIds.value
+          lines
         }
       })
       useToast().success(`Tersimpan ${result.count} upah teknisi.`)
@@ -382,7 +412,7 @@ async function remove(e) {
             atau menu <NuxtLink to="/purchases" class="text-accent-600 hover:underline">Pembelian</NuxtLink>
             agar stok dan kas ikut.
           </p>
-          <p>Form menyesuaikan kategori: upah teknisi (centang proyek), pribadi dari gabungan upah Pande, stok lewat Pembelian, aset lewat Peralatan, listrik/alat/R&D punya field sendiri.</p>
+          <p>Form menyesuaikan kategori: upah teknisi (centang proyek, boleh diambil sebagian), pribadi dari gabungan upah Pande, stok lewat Pembelian, aset lewat Peralatan, listrik/alat/R&D punya field sendiri.</p>
         </InfoHint>
       </h1>
       <button class="btn-primary" @click="openAdd">
@@ -516,7 +546,7 @@ async function remove(e) {
     <AppModal
       v-if="showForm"
       :title="formTitle"
-      :size="isWageCreate() || formKind === 'personal' ? 'lg' : 'md'"
+      size="lg"
       @close="showForm = false"
     >
       <form class="space-y-3" @submit.prevent="save">
@@ -591,6 +621,7 @@ async function remove(e) {
                     <th class="text-right">Upah</th>
                     <th class="text-right">Dibayar</th>
                     <th class="text-right">Sisa</th>
+                    <th class="text-right">Diambil</th>
                     <th>Status</th>
                   </tr>
                 </thead>
@@ -617,6 +648,16 @@ async function remove(e) {
                     <td class="num">{{ formatIDR(p.wageAmount) }}</td>
                     <td class="num">{{ formatIDR(p.paidAmount) }}</td>
                     <td class="num">{{ formatIDR(p.unpaidAmount) }}</td>
+                    <td class="min-w-[8.5rem]" @click.stop>
+                      <IdrInput
+                        v-if="isWageSelected(p.id)"
+                        :model-value="wagePayouts[p.id] || 0"
+                        input-class="w-full text-right"
+                        :min="0"
+                        @update:model-value="setWagePayout(p, $event)"
+                      />
+                      <span v-else class="text-ink-400">—</span>
+                    </td>
                     <td>
                       <span class="badge" :class="technicianPayStatus(p).class">{{ technicianPayStatus(p).label }}</span>
                     </td>
@@ -624,8 +665,11 @@ async function remove(e) {
                 </tbody>
               </table>
             </div>
+            <p class="text-xs" :class="kindBodyClass">
+              Bisa diambil sebagian. Sisa tetap belum dibayar.
+            </p>
             <p class="text-xs font-medium" :class="kindTitleClass">
-              Dipilih {{ selectedWageIds.length }} proyek · total {{ formatIDR(selectedWageTotal) }}
+              Dipilih {{ selectedWageIds.length }} proyek · diambil {{ formatIDR(selectedWageTotal) }}
             </p>
           </div>
         </template>

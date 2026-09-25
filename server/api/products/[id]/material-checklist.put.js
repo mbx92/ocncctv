@@ -5,6 +5,7 @@ import { logAudit } from '../../../utils/audit.js'
 import { syncProjectMaterialChecklist } from '../../../utils/materialUsage.js'
 import { normalizeProductStatus } from '../../../utils/projectStatus.js'
 import { parseConsumableLotSale } from '../../../utils/consumableLot.js'
+import { loadSaleScopeSync } from '../../../utils/saleResync.js'
 
 export default defineEventHandler(async (event) => {
   requireAdmin(event)
@@ -25,5 +26,5 @@ export default defineEventHandler(async (event) => {
     entityId: id,
     summary: `Checklist perlengkapan proyek "${product.name}"`
   })
-  return { usages, lotSale }
+  return { usages, lotSale, saleSync: await loadSaleScopeSync(db, schema, id) }
 })

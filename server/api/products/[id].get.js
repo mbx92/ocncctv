@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
 import { getHppForProduct } from '../../utils/productHpp.js'
 import { loadProjectFinanceMap } from '../../utils/projectRevenue.js'
+import { loadSaleForProduct, saleSyncState } from '../../utils/saleResync.js'
 
 export default defineEventHandler(async (event) => {
   const id = Number(getRouterParam(event, 'id'))
@@ -16,6 +17,7 @@ export default defineEventHandler(async (event) => {
     .orderBy(schema.productImages.sortOrder, schema.productImages.id)
   const financeMap = await loadProjectFinanceMap(db, schema, [id])
   const finance = financeMap.get(id)
+  const sale = await loadSaleForProduct(db, schema, id)
   return {
     ...rows[0],
     images,
@@ -30,6 +32,7 @@ export default defineEventHandler(async (event) => {
       0
     ),
     finance: finance?.summary || null,
+    saleSync: saleSyncState(sale, finance?.summary?.revenue || 0),
     hpp: hpp.total,
     breakdown: hpp.breakdown,
     materialLines: hpp.materialLines,

@@ -11,6 +11,7 @@ import {
   replaceProjectExtraLines,
   replaceProjectRabAdjustments
 } from '../../../utils/projectLines.js'
+import { loadSaleScopeSync } from '../../../utils/saleResync.js'
 
 export default defineEventHandler(async (event) => {
   requireAdmin(event)
@@ -47,6 +48,7 @@ export default defineEventHandler(async (event) => {
   return {
     ok: true,
     extraLines: extraMap.get(id) || [],
-    rabAdjustments: adjMap.get(id) || []
+    rabAdjustments: adjMap.get(id) || [],
+    saleSync: await loadSaleScopeSync(db, schema, id)
   }
 })
