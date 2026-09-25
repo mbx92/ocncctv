@@ -1,5 +1,5 @@
 <script setup>
-import { CheckIcon, ArrowPathIcon } from '@heroicons/vue/24/outline'
+import { CheckIcon, ArrowDownTrayIcon, ArrowPathIcon } from '@heroicons/vue/24/outline'
 import { suggestedSalePrice } from '~/utils/rab.js'
 import { QUOTE_OFFICIAL_DEFAULTS } from '~/utils/quoteOfficial.js'
 
@@ -112,6 +112,9 @@ const erpTest = ref(null)
 const showErpSyncModal = ref(false)
 const erpPreviewProjects = ref([])
 const erpPreviewCompany = ref('')
+const backingUp = ref(false)
+const backupMsg = ref('')
+const backupError = ref('')
 
 watch(
   () => settings.value?.erpSyncBaseUrl,
@@ -196,6 +199,38 @@ async function syncErpProjects() {
     useToast().error(e.data?.statusMessage || 'Gagal mengambil daftar proyek dari ERP')
   } finally {
     erpPreviewLoading.value = false
+  }
+}
+
+async function downloadDbBackup() {
+  if (backingUp.value) return
+  backingUp.value = true
+  backupMsg.value = ''
+  backupError.value = ''
+  try {
+    const res = await fetch('/api/system/db-backup', { credentials: 'include' })
+    if (!res.ok) {
+      const data = await res.json().catch(() => null)
+      throw new Error(data?.statusMessage || data?.message || 'Gagal membuat backup')
+    }
+    const blob = await res.blob()
+    const match = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') || '')
+    const name = match?.[1] || `ocncctv-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}.sql`
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = name
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+    backupMsg.value = `Diunduh ${name}`
+    useToast().success('Backup database diunduh.')
+  } catch (e) {
+    backupError.value = e.message || 'Gagal membuat backup'
+    useToast().error(backupError.value)
+  } finally {
+    backingUp.value = false
   }
 }
 
@@ -424,6 +459,25 @@ async function confirmErpSync(projectIds) {
         <span v-if="savedMsg" class="text-sm text-green-600">{{ savedMsg }}</span>
       </div>
     </form>
+
+    <div v-if="tab === 'umum' && isAdmin" class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Backup database</span>
+      </div>
+      <div class="p-4 space-y-3">
+        <p class="text-sm text-ink-500">
+          Unduh salinan SQL (`pg_dump`) dari database yang sedang dipakai. File ini untuk cadangan atau restore manual.
+        </p>
+        <div class="flex flex-wrap items-center gap-3">
+          <button type="button" class="btn-primary" :disabled="backingUp" @click="downloadDbBackup">
+            <ArrowDownTrayIcon class="w-4 h-4" :class="backingUp ? 'animate-pulse' : ''" />
+            {{ backingUp ? 'Membuat dump…' : 'Unduh SQL dump' }}
+          </button>
+          <span v-if="backupMsg" class="text-sm text-green-600">{{ backupMsg }}</span>
+        </div>
+        <p v-if="backupError" class="text-sm text-red-600">{{ backupError }}</p>
+      </div>
+    </div>
 
     <div v-else-if="tab === 'user'">
       <SettingsUsers />
