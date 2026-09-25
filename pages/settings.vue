@@ -466,7 +466,7 @@ async function confirmErpSync(projectIds) {
       </div>
       <div class="p-4 space-y-3">
         <p class="text-sm text-ink-500">
-          Unduh salinan SQL (`pg_dump`) dari database yang sedang dipakai. File ini untuk cadangan atau restore manual.
+          Unduh salinan SQL dari database yang sedang dipakai. File ini untuk cadangan atau restore manual.
         </p>
         <div class="flex flex-wrap items-center gap-3">
           <button type="button" class="btn-primary" :disabled="backingUp" @click="downloadDbBackup">

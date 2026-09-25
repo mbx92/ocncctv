@@ -1,11 +1,11 @@
 import { requireAdmin } from '../../utils/rbac.js'
 import { logAudit } from '../../utils/audit.js'
-import { backupDumpFilename, runPgDump } from '../../utils/dbBackup.js'
+import { backupDumpFilename, createDatabaseDump } from '../../utils/dbBackup.js'
 
 export default defineEventHandler(async (event) => {
   requireAdmin(event)
   const config = useRuntimeConfig()
-  const sql = await runPgDump(config.databaseUrl)
+  const sql = await createDatabaseDump(config.databaseUrl)
   const filename = backupDumpFilename()
   await logAudit(event, {
     action: 'backup',
