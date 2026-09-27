@@ -7,11 +7,13 @@ const isIos = ref(false)
 const isStandalone = ref(false)
 
 const { $pwa } = useNuxtApp()
+const route = useRoute()
+const onPrintLayout = computed(() => route.meta.layout === 'print')
 
 const canNativeInstall = computed(() => Boolean($pwa?.showInstallPrompt) && !dismissed.value)
 const showIosHint = computed(() => isIos.value && !isStandalone.value && !dismissed.value)
-const visible = computed(() => canNativeInstall.value || showIosHint.value)
-const needRefresh = computed(() => Boolean($pwa?.needRefresh))
+const visible = computed(() => !onPrintLayout.value && (canNativeInstall.value || showIosHint.value))
+const needRefresh = computed(() => !onPrintLayout.value && Boolean($pwa?.needRefresh))
 
 function dismiss() {
   dismissed.value = true
