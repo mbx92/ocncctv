@@ -407,9 +407,9 @@ async function remove(e) {
 </script>
 
 <template>
-  <div class="space-y-4">
-    <div class="flex items-center justify-between gap-2">
-      <h1 class="text-xl font-bold inline-flex items-center gap-1.5">
+  <div class="space-y-4 min-w-0 max-w-full overflow-x-hidden overscroll-x-none">
+    <div class="flex items-center justify-between gap-2 min-w-0 max-w-full">
+      <h1 class="text-xl font-bold flex items-center gap-1.5 min-w-0">
         Pengeluaran
         <InfoHint label="Keterangan pengeluaran">
           <p>
@@ -555,7 +555,7 @@ async function remove(e) {
       size="lg"
       @close="showForm = false"
     >
-      <form class="space-y-3" @submit.prevent="save">
+      <form class="space-y-3 min-w-0" @submit.prevent="save">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div class="date-field">
             <label class="label">Tanggal</label>
@@ -610,7 +610,7 @@ async function remove(e) {
             <p v-else-if="!wageProjects.length" class="text-xs" :class="kindBodyClass">
               Teknisi ini belum tercatat di pembagian upah proyek.
             </p>
-            <div v-else class="overflow-x-auto -mx-1">
+            <div v-else class="overflow-x-auto max-w-full min-w-0 overscroll-x-contain">
               <table class="table-std text-sm bg-white rounded-panel">
                 <thead>
                   <tr>
@@ -654,7 +654,7 @@ async function remove(e) {
                     <td class="num">{{ formatIDR(p.wageAmount) }}</td>
                     <td class="num">{{ formatIDR(p.paidAmount) }}</td>
                     <td class="num">{{ formatIDR(p.unpaidAmount) }}</td>
-                    <td class="min-w-[8.5rem]" @click.stop>
+                    <td class="min-w-0 w-[7.5rem]" @click.stop>
                       <IdrInput
                         v-if="isWageSelected(p.id)"
                         :model-value="wagePayouts[p.id] || 0"
@@ -687,19 +687,19 @@ async function remove(e) {
               Teknisi bernama Pande belum ada. Tambahkan di daftar teknisi supaya total upah muncul di sini.
             </p>
             <template v-else>
-              <div class="grid grid-cols-3 gap-2">
-                <div class="rounded-panel bg-white px-2 py-2">
+              <div class="grid grid-cols-3 gap-2 min-w-0">
+                <div class="rounded-panel bg-white px-2 py-2 min-w-0 overflow-hidden">
                   <div class="text-[10px] uppercase tracking-wide text-ink-400">Total upah</div>
-                  <div class="font-mono text-sm font-semibold">{{ formatIDR(personalDraw.wageTotal) }}</div>
+                  <div class="font-mono text-xs sm:text-sm font-semibold truncate">{{ formatIDR(personalDraw.wageTotal) }}</div>
                 </div>
-                <div class="rounded-panel bg-white px-2 py-2">
+                <div class="rounded-panel bg-white px-2 py-2 min-w-0 overflow-hidden">
                   <div class="text-[10px] uppercase tracking-wide text-ink-400">Sudah dipakai</div>
-                  <div class="font-mono text-sm font-semibold">{{ formatIDR(personalDraw.personalSpent) }}</div>
+                  <div class="font-mono text-xs sm:text-sm font-semibold truncate">{{ formatIDR(personalDraw.personalSpent) }}</div>
                 </div>
-                <div class="rounded-panel bg-white px-2 py-2">
+                <div class="rounded-panel bg-white px-2 py-2 min-w-0 overflow-hidden">
                   <div class="text-[10px] uppercase tracking-wide text-ink-400">Sisa</div>
                   <div
-                    class="font-mono text-sm font-semibold"
+                    class="font-mono text-xs sm:text-sm font-semibold truncate"
                     :class="personalRemaining < 0 ? 'text-red-600' : 'text-rose-800'"
                   >
                     {{ formatIDR(personalRemaining) }}
@@ -709,7 +709,7 @@ async function remove(e) {
               <p class="text-xs" :class="kindBodyClass">
                 {{ personalDraw.projectCount }} proyek · {{ personalDraw.technician.name }}
               </p>
-              <div v-if="personalDraw.projects.length" class="overflow-x-auto -mx-1">
+              <div v-if="personalDraw.projects.length" class="overflow-x-auto max-w-full min-w-0 overscroll-x-contain">
                 <table class="table-std text-sm bg-white rounded-panel">
                   <thead>
                     <tr>

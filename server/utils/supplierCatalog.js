@@ -5,9 +5,15 @@ import {
   findCatalogSheet,
   getSupplierCatalogSettings
 } from './supplierCatalogConfig.js'
-import { parseCsv } from './supplierCatalogParse.js'
+import { parseCsv, csvIsInventoryDump, parseInventoryItems, uniqueCategoryCount } from './supplierCatalogParse.js'
 import { catalogDisplayName } from './catalogName.js'
 import { cableRollInfo } from './cableRoll.js'
+import {
+  discoverLiveSheets,
+  fetchSpreadsheetCsv,
+  filterDumpForSheet,
+  matchLiveSheet
+} from './supplierCatalogDiscover.js'
 
 function withCableRoll(item) {
   const roll = cableRollInfo(item)
@@ -205,36 +211,110 @@ export async function searchCatalogItems(db, {
   }
 }
 
-async function fetchSheetCsv(sheet) {
+function isUsableCatalogItem(item) {
+  const code = String(item?.code || '').trim()
+  const name = String(item?.name || '').trim()
+  if (code.length < 2 || name.length < 2) return false
+  if (/kode item/i.test(code) || /nama item/i.test(name)) return false
+  return true
+}
+
+function remapSheetItems(items, sheet) {
+  const seen = new Set()
+  const out = []
+  for (const item of items || []) {
+    const code = String(item.code || '').trim()
+    if (!code || seen.has(code)) continue
+    seen.add(code)
+    out.push({
+      ...item,
+      ref: `${sheet.key}:${code}`,
+      sheetKey: sheet.key,
+      sheetLabel: sheet.label,
+      supplierName: item.supplierName || catalogSupplierName()
+    })
+  }
+  return out.filter(isUsableCatalogItem)
+}
+
+function tabParseLooksSafe(csv, items, sheet) {
+  if (!items.length) return false
+  if (!csvIsInventoryDump(csv)) return true
+  if (sheet.categoryFilter) return uniqueCategoryCount(items) <= 3
+  return uniqueCategoryCount(items) <= 3 && items.length <= 400
+}
+
+let workspaceCache = { at: 0, value: null }
+
+export async function loadCatalogWorkspace() {
   const { spreadsheetId } = catalogConfigFromRuntime()
-  const url = sheet.gid
-    ? `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&gid=${encodeURIComponent(sheet.gid)}`
-    : `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheet.sheetName)}`
-  const res = await fetch(url, { signal: AbortSignal.timeout(30000) })
-  if (!res.ok) {
-    throw new Error(`Gagal memuat tab "${sheet.sheetName}" dari Google Sheets.`)
+  const supplierName = catalogSupplierName()
+  const [liveSheets, dumpCsv] = await Promise.all([
+    discoverLiveSheets(spreadsheetId).catch(() => []),
+    fetchSpreadsheetCsv(spreadsheetId, { gid: '0' }).catch(() => '')
+  ])
+  const dumpItems = dumpCsv ? parseInventoryItems(dumpCsv, supplierName) : []
+  return { spreadsheetId, supplierName, liveSheets, dumpItems }
+}
+
+export async function getCatalogWorkspace() {
+  if (workspaceCache.value && Date.now() - workspaceCache.at < 60_000) return workspaceCache.value
+  const value = await loadCatalogWorkspace()
+  workspaceCache = { at: Date.now(), value }
+  return value
+}
+
+function clearCatalogWorkspaceCache() {
+  workspaceCache = { at: 0, value: null }
+}
+
+export async function itemsForConfiguredSheet(sheet, workspace) {
+  const live = matchLiveSheet(sheet, workspace?.liveSheets || [])
+  if (live) {
+    const csv = await fetchSpreadsheetCsv(workspace.spreadsheetId, { gid: live.gid, sheetName: live.name })
+    if (csv) {
+      const parsed = remapSheetItems(parseCsv(csv, { ...sheet, gid: live.gid, sheetName: live.name }, workspace.supplierName), sheet)
+      if (tabParseLooksSafe(csv, parsed, sheet)) {
+        return { items: parsed, source: 'tab' }
+      }
+    }
   }
-  const body = (await res.text()).trim()
-  if (!body) {
-    throw new Error(`Tab "${sheet.sheetName}" kosong atau tidak dapat diakses.`)
-  }
-  return body
+
+  const fromDump = remapSheetItems(filterDumpForSheet(workspace?.dumpItems || [], sheet), sheet)
+  if (fromDump.length) return { items: fromDump, source: 'inventory' }
+  return { items: [], source: 'none' }
 }
 
 export async function fetchRemoteItemsForSheet(sheetKey) {
   const sheet = findCatalogSheet(sheetKey)
   if (!sheet) throw new Error(`Tab katalog "${sheetKey}" tidak dikenali.`)
-  const csv = await fetchSheetCsv(sheet)
-  return parseCsv(csv, sheet, catalogSupplierName())
+  const workspace = await getCatalogWorkspace()
+  const { items } = await itemsForConfiguredSheet(sheet, workspace)
+  return items
 }
 
-export async function syncSheet(db, sheetKey) {
-  const remoteItems = await fetchRemoteItemsForSheet(sheetKey)
+export async function syncSheet(db, sheetKey, workspace = null) {
+  const sheet = findCatalogSheet(sheetKey)
+  if (!sheet) {
+    return { created: 0, updated: 0, removed: 0, skipped: true, reason: 'unknown', source: 'none' }
+  }
+  const ws = workspace || (await getCatalogWorkspace())
+  const { items, source } = await itemsForConfiguredSheet(sheet, ws)
+  const remoteItems = remapSheetItems(items, sheet)
   if (!remoteItems.length) {
-    throw new Error(`Tab "${sheetKey}" tidak mengembalikan item. Cek SUPPLIER_CATALOG_SPREADSHEET_ID.`)
+    return { created: 0, updated: 0, removed: 0, skipped: true, reason: 'empty', source }
   }
 
   const table = schema.supplierCatalogItems
+  const [{ total: existingCount }] = await db
+    .select({ total: count() })
+    .from(table)
+    .where(eq(table.sheetKey, sheetKey))
+  const previous = Number(existingCount) || 0
+  if (previous >= 20 && remoteItems.length < Math.max(3, Math.ceil(previous * 0.15))) {
+    return { created: 0, updated: 0, removed: 0, skipped: true, reason: 'drop', source }
+  }
+
   const syncedAt = new Date()
   const refs = remoteItems.map((item) => item.ref)
 
@@ -289,22 +369,33 @@ export async function syncSheet(db, sheetKey) {
       .where(and(eq(table.sheetKey, sheetKey), notInArray(table.ref, refs)))
       .returning({ ref: table.ref })
 
-    return { created, updated, removed: deleted.length }
+    return { created, updated, removed: deleted.length, skipped: false, source }
   })
 }
 
 export async function syncAllSheets(db) {
-  const summary = { sheets: 0, created: 0, updated: 0, removed: 0, failed: [] }
-  for (const sheet of SUPPLIER_CATALOG_SHEETS) {
-    try {
-      const result = await syncSheet(db, sheet.key)
-      summary.sheets++
-      summary.created += result.created
-      summary.updated += result.updated
-      summary.removed += result.removed
-    } catch (e) {
-      summary.failed.push(`${sheet.key}: ${e.message || e}`)
+  const summary = { sheets: 0, created: 0, updated: 0, removed: 0, failed: [], skipped: [], filledFromInventory: [] }
+  const workspace = await loadCatalogWorkspace()
+  workspaceCache = { at: Date.now(), value: workspace }
+  try {
+    for (const sheet of SUPPLIER_CATALOG_SHEETS) {
+      try {
+        const result = await syncSheet(db, sheet.key, workspace)
+        if (result.skipped) {
+          summary.skipped.push(`${sheet.key}:${result.reason}`)
+          continue
+        }
+        summary.sheets++
+        summary.created += result.created
+        summary.updated += result.updated
+        summary.removed += result.removed
+        if (result.source === 'inventory') summary.filledFromInventory.push(sheet.key)
+      } catch (e) {
+        summary.failed.push(`${sheet.key}: ${e.message || e}`)
+      }
     }
+    return summary
+  } finally {
+    clearCatalogWorkspaceCache()
   }
-  return summary
 }

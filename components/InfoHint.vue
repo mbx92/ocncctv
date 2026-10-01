@@ -35,11 +35,8 @@ onUnmounted(() => document.removeEventListener('pointerdown', onDocPointer))
     </button>
     <span
       role="tooltip"
-      class="absolute top-full z-40 pt-1 w-[min(22rem,calc(100vw-2.5rem))] transition-opacity"
-      :class="[
-        align === 'end' ? 'right-0' : 'left-0',
-        pinned ? 'visible opacity-100' : 'invisible opacity-0 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100'
-      ]"
+      class="absolute top-full z-40 pt-1 w-52 max-w-[13rem] left-1/2 -translate-x-1/2 transition-opacity"
+      :class="pinned ? 'visible opacity-100' : 'invisible opacity-0 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100'"
     >
       <span class="block rounded-panel border border-ink-200 bg-white px-3 py-2 text-xs font-normal normal-case tracking-normal text-ink-600 text-left leading-relaxed shadow-lg space-y-1.5">
         <slot />

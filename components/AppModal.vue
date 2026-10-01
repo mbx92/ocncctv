@@ -93,14 +93,14 @@ function onFocusIn(e) {
 <template>
   <Teleport to="body">
     <div
-      class="app-overlay fixed flex items-end sm:items-center justify-center overflow-hidden overscroll-none right-0 bottom-0 sm:inset-0"
+      class="app-overlay fixed inset-0 flex items-end sm:items-center justify-center overflow-hidden overscroll-none max-w-full touch-none"
       :class="zClass"
       :style="overlayBoxStyle"
     >
-      <div class="absolute inset-0 bg-ink-950/50" @click="$emit('close')"></div>
+      <div class="absolute inset-0 bg-ink-950/50 touch-none" @click="$emit('close')"></div>
       <div
         ref="panelRef"
-        class="relative panel w-full overflow-y-auto overscroll-contain rounded-b-none sm:rounded-panel sm:m-4"
+        class="relative panel w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-contain rounded-b-none sm:rounded-panel sm:m-4 touch-pan-y"
         :class="[widthClass, isMobile && metrics.keyboardOpen ? 'pb-3' : 'pb-safe']"
         :style="panelBoxStyle"
         @focusin="onFocusIn"

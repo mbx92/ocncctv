@@ -15,8 +15,14 @@ export function isCatalogSyncRunning() {
 function buildSyncMessage(summary, source) {
   const prefix = source === 'schedule' ? 'Sync otomatis selesai' : 'Sync selesai'
   let message = `${prefix}: ${summary.sheets} tab, ${summary.created} baru, ${summary.updated} diperbarui, ${summary.removed} dihapus.`
+  if (summary.filledFromInventory?.length) {
+    message += ` Dari stok lengkap: ${summary.filledFromInventory.join(', ')}.`
+  }
+  if (summary.skipped?.length) {
+    message += ` ${summary.skipped.length} tab dilewati, data lama tetap.`
+  }
   if (summary.failed.length) {
-    message += ` Gagal: ${summary.failed.join('; ')}`
+    message += ` Gagal jaringan: ${summary.failed.join('; ')}`
   }
   return message
 }
@@ -97,6 +103,8 @@ export async function runCatalogSync({ source = 'manual', event = null } = {}) {
       updated: summary.updated,
       removed: summary.removed,
       failed: summary.failed,
+      skipped: summary.skipped || [],
+      filledFromInventory: summary.filledFromInventory || [],
       supplierName: catalogSupplierName(),
       spreadsheetId,
       lastSyncedAt,

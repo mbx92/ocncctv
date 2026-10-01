@@ -26,12 +26,25 @@ export function useVisualViewport() {
     metrics.keyboardOpen = vv.height < window.innerHeight * 0.85
   }
 
-  const overlayStyle = computed(() => ({
-    top: `${metrics.offsetTop}px`,
-    left: `${metrics.offsetLeft}px`,
-    width: `${metrics.width}px`,
-    height: `${metrics.height}px`
-  }))
+  const overlayStyle = computed(() => {
+    // Jangan ikuti geser visualViewport (rubber-band PWA) kecuali keyboard terbuka.
+    if (!metrics.keyboardOpen) {
+      return {
+        top: '0px',
+        left: '0px',
+        width: '100%',
+        maxWidth: '100%',
+        height: '100dvh'
+      }
+    }
+    return {
+      top: `${metrics.offsetTop}px`,
+      left: '0px',
+      width: '100%',
+      maxWidth: '100%',
+      height: `${metrics.height}px`
+    }
+  })
 
   const panelMaxHeightStyle = computed(() => {
     const h = metrics.height || (import.meta.client ? window.innerHeight : 0)

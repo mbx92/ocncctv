@@ -13,6 +13,12 @@ const db = drizzle(pool, { schema })
 const summary = await syncAllSheets(db)
 const message = `Sync selesai: ${summary.sheets} tab, ${summary.created} baru, ${summary.updated} diperbarui, ${summary.removed} dihapus.`
 console.log(`[OCN] ${message}`)
+if (summary.skipped?.length) {
+  console.log('[OCN] Dilewati:', summary.skipped.join(', '))
+}
+if (summary.filledFromInventory?.length) {
+  console.log('[OCN] Dari stok lengkap:', summary.filledFromInventory.join(', '))
+}
 if (summary.failed.length) {
   console.error('[OCN] Gagal:', summary.failed.join('\n'))
 }

@@ -42,7 +42,7 @@ function onPageSize(e) {
 <template>
   <div
     v-if="total > 0"
-    class="app-pagination flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 px-3 py-2.5 border-t border-ink-200"
+    class="app-pagination flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 px-3 py-2.5 border-t border-ink-200 min-w-0 overflow-x-hidden"
   >
     <div class="flex items-center gap-2 min-w-0 order-2 sm:order-1">
       <p class="text-xs text-ink-500 tabular-nums whitespace-nowrap">
@@ -66,7 +66,7 @@ function onPageSize(e) {
 
     <nav
       v-if="totalPages > 1"
-      class="inline-flex items-center self-start sm:self-auto rounded-panel border border-ink-200 bg-white overflow-hidden divide-x divide-ink-200 order-1 sm:order-2"
+      class="inline-flex items-center self-start sm:self-auto max-w-full rounded-panel border border-ink-200 bg-white overflow-x-auto overflow-y-hidden no-scrollbar divide-x divide-ink-200 order-1 sm:order-2"
       aria-label="Navigasi halaman"
     >
       <button

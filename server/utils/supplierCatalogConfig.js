@@ -16,7 +16,7 @@ export const SUPPLIER_CATALOG_SHEETS = [
   { key: 'ruijie', label: 'RUIJIE', sheetName: 'RUIJIE', gid: '489488932' },
   { key: 'imou', label: 'IMOU', sheetName: 'IMOU', gid: '697625412' },
   { key: 'microsd', label: 'MICROSD', sheetName: 'MICROSD', gid: '974456429' },
-  { key: 'hdd', label: 'HDD', sheetName: 'HDD', gid: '34342766' },
+  { key: 'hdd', label: 'HDD', sheetName: 'HDD', gid: '0', categoryFilter: 'HDD' },
   { key: 'ups', label: 'UPS', sheetName: 'UPS', gid: '1499124706' },
   { key: 'mikrotik', label: 'MIKROTIK', sheetName: 'MIKROTIK', gid: '2072391326' },
   { key: 'vention', label: 'VENTION', sheetName: 'VENTION', gid: '1729234644' },
