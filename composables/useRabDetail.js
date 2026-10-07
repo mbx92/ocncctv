@@ -45,7 +45,10 @@ export function useRabDetail(id) {
     saving.value = true
     errorMsg.value = ''
     try {
-      await $fetch(`/api/custom-orders/${orderId.value}`, { method: 'PUT', body: form.value })
+      await $fetch(`/api/custom-orders/${orderId.value}`, {
+      method: 'PUT',
+      body: { ...form.value, consumableLotSale: lotSale.value }
+    })
       editing.value = false
       await refresh()
     } catch (e) {
@@ -57,6 +60,10 @@ export function useRabDetail(id) {
 
   // --- Baris penawaran (draft lokal, baru tersimpan saat Simpan/aksi status) ---
   const lineDraft = ref([])
+  const { serviceList, addFromMaster: addTarif, addCustom: addCustomTarif } = useRabTarif(lineDraft)
+  const { lotKind, customLotSale, lotSale, setLotKind } = useRabConsumableLot(
+    () => order.value?.consumableLotSale
+  )
   const savingLines = ref(false)
   const lineError = ref('')
 
@@ -80,6 +87,7 @@ export function useRabDetail(id) {
           title: order.value.title,
           notes: order.value.notes || '',
           jobType: order.value.jobType || null,
+          consumableLotSale: lotSale.value,
           lines: lineDraft.value
         }
       })
@@ -233,6 +241,13 @@ export function useRabDetail(id) {
     startEdit,
     saveEdit,
     lineDraft,
+    serviceList,
+    addTarif,
+    addCustomTarif,
+    lotKind,
+    customLotSale,
+    lotSale,
+    setLotKind,
     savingLines,
     lineError,
     persistLines,

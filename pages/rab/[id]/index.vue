@@ -29,6 +29,10 @@ const {
   startEdit,
   saveEdit,
   lineDraft,
+  lotKind,
+  customLotSale,
+  lotSale,
+  setLotKind,
   savingLines,
   lineError,
   saveLines,
@@ -176,12 +180,27 @@ const {
           </div>
           <div class="flex flex-wrap justify-end gap-x-4 gap-y-1 text-sm pt-1">
             <span class="text-ink-500">Modal {{ formatIDR(order.totalCost) }}</span>
+            <span class="text-ink-500">Lot {{ formatIDR(order.lotSale || lotSale) }}</span>
             <span class="font-medium">Jual {{ formatIDR(order.totalSale) }}</span>
             <span :class="(order.margin || 0) >= 0 ? 'text-green-700' : 'text-red-600'">
               Margin {{ formatIDR(order.margin) }}
             </span>
           </div>
         </template>
+        <RabConsumableLot
+          :lot-kind="lotKind"
+          :custom-lot-sale="customLotSale"
+          :lot-sale="lotSale"
+          :can-edit="canEdit"
+          @set-lot-kind="setLotKind"
+          @update:custom-lot-sale="customLotSale = $event"
+        />
+        <div class="flex flex-wrap justify-end gap-x-4 gap-y-1 text-sm">
+          <span class="text-ink-500">Lot {{ formatIDR(lotSale) }}</span>
+          <span v-if="canEdit" class="font-medium">
+            Jual {{ formatIDR((order.totalSale || 0) - (order.lotSale || 0) + lotSale) }}
+          </span>
+        </div>
         <p v-if="lineError" class="text-sm text-red-600">{{ lineError }}</p>
         <div v-if="canEdit" class="flex justify-end">
           <button type="button" class="btn-primary" :disabled="savingLines" @click="saveLines">

@@ -434,6 +434,7 @@ export const customOrders = pgTable(
     status: customOrderStatusEnum('status').notNull().default('draft'),
     jobType: jobTypeEnum('job_type'),
     projectId: integer('project_id').references(() => products.id, { onDelete: 'set null' }),
+    consumableLotSale: integer('consumable_lot_sale').notNull().default(50000),
     createdAt: timestamp('created_at').notNull().defaultNow()
   },
   (t) => ({

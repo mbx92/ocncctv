@@ -25,7 +25,7 @@ async function logout() {
 
 <template>
   <NetworkingWorkspace v-if="theme === 'professional'"><slot /></NetworkingWorkspace>
-  <div v-else class="app-shell min-h-screen md:flex max-w-full overflow-x-hidden">
+  <div v-else class="app-shell min-h-screen md:flex max-w-full">
     <header
       class="app-topbar md:hidden sticky top-0 z-40 flex items-center gap-2 px-3 pt-safe min-h-topbar-safe bg-ink-900 text-ink-100 border-b border-ink-700"
     >
@@ -117,7 +117,7 @@ async function logout() {
       </div>
     </aside>
 
-    <main class="app-main flex-1 w-full min-w-0 max-w-full overflow-x-hidden p-3 sm:p-4 md:p-6 pb-safe">
+    <main class="app-main flex-1 w-full min-w-0 max-w-full p-3 sm:p-4 md:p-6 pb-safe">
       <slot />
     </main>
   </div>

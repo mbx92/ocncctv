@@ -17,8 +17,6 @@ const lines = computed({
   set: (v) => emit('update:modelValue', v)
 })
 
-const { data: services } = await useFetch('/api/services')
-const serviceList = computed(() => services.value || [])
 const showCatalog = ref(false)
 const showServicePicker = ref(false)
 const showStock = ref(false)
@@ -170,50 +168,15 @@ function addCatalogItems(items) {
   if (added) useToast().success(added === 1 ? '1 item ditambahkan.' : `${added} item ditambahkan.`)
 }
 
+const { serviceList, addFromMaster, addCustom } = useRabTarif(lines)
+
 function addServiceFromMaster(item) {
-  const next = [...lines.value]
-  const existing = next.findIndex(
-    (line) => line.lineType === 'service' && item.id && line.serviceId === item.id
-  )
-  if (existing >= 0) {
-    next[existing] = {
-      ...next[existing],
-      quantity: qtyInt(next[existing].quantity) + 1
-    }
-  } else {
-    next.push({
-      lineType: 'service',
-      catalogItemId: null,
-      serviceId: item.id,
-      packagingId: null,
-      name: item.name,
-      code: '',
-      unit: item.unit || 'titik',
-      quantity: 1,
-      costPrice: 0,
-      salePrice: Number(item.salePrice) || 0
-    })
-  }
-  lines.value = next
+  addFromMaster(item)
   showServicePicker.value = false
 }
 
 function addCustomService() {
-  lines.value = [
-    ...lines.value,
-    {
-      lineType: 'service',
-      catalogItemId: null,
-      serviceId: null,
-      packagingId: null,
-      name: '',
-      code: '',
-      unit: 'titik',
-      quantity: 1,
-      costPrice: 0,
-      salePrice: 0
-    }
-  ]
+  addCustom()
   showServicePicker.value = false
 }
 

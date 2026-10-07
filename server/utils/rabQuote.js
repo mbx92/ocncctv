@@ -5,6 +5,7 @@ import { loadRabLines, presentRabLines } from './customOrders.js'
 import { catalogDisplayName } from './catalogName.js'
 import { jobTypeLabelOf } from './jobType.js'
 import { resolveOfficialQuoteCopy } from './quoteOfficial.js'
+import { consumableLotItem } from './consumableLot.js'
 
 export function quoteNumberFor(id) {
   const n = Math.max(Math.round(Number(id) || 0), 0)
@@ -48,6 +49,8 @@ export function toRabQuotePayload(order, lines, settings) {
       }
     ]
   }
+  const lot = consumableLotItem(0, settings, order.consumableLotSale)
+  items = [...items, { ...lot, lineType: 'catalog', section: 'lot' }]
   const total = items.reduce((sum, item) => sum + item.amount, 0)
   const quoteNumber = quoteNumberFor(order.id)
   const businessName = settings.invoiceBusinessName || 'OCN'

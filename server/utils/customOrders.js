@@ -4,6 +4,7 @@ import { computeHpp } from './hpp.js'
 import { getSettings } from './settings.js'
 import { catalogDisplayName } from './catalogName.js'
 import { parseJobType } from './jobType.js'
+import { parseConsumableLotSale } from './consumableLot.js'
 
 export const RAB_OPEN_STATUSES = ['draft', 'sent', 'open', 'ready']
 export const RAB_LOCKED_STATUSES = ['deal', 'lost', 'delivered', 'cancelled']
@@ -96,7 +97,13 @@ export function parseCustomOrderBody(body, { allowEmptyLines = false, requireJob
   if ('jobType' in body || requireJobType) {
     header.jobType = parseJobType(body.jobType, { required: requireJobType })
   }
-  if (hasLines) header.pricePerUnit = totals.totalSale
+  if ('consumableLotSale' in body || 'lotSale' in body) {
+    header.consumableLotSale = parseConsumableLotSale(body.consumableLotSale ?? body.lotSale)
+  }
+  if (hasLines) {
+    const lotSale = header.consumableLotSale != null ? header.consumableLotSale : 0
+    header.pricePerUnit = totals.totalSale + lotSale
+  }
   return { header, lines, totals }
 }
 
@@ -197,17 +204,28 @@ export function presentRabLine(line, extra = {}) {
 export function withRabTotals(order, lines, extra = {}) {
   const presented = presentRabLines(lines)
   const totals = totalsFromLines(presented)
+  const lotSale = parseConsumableLotSale(order?.consumableLotSale)
   if (!presented.length && Number(order.pricePerUnit)) {
+    const fallback = Number(order.pricePerUnit) || 0
     return {
       ...order,
       lines: presented,
-      totalSale: Number(order.pricePerUnit) || 0,
+      lotSale,
+      totalSale: fallback,
       totalCost: 0,
-      margin: Number(order.pricePerUnit) || 0,
+      margin: fallback,
       ...extra
     }
   }
-  return { ...order, lines: presented, ...totals, ...extra }
+  return {
+    ...order,
+    lines: presented,
+    lotSale,
+    totalSale: totals.totalSale + lotSale,
+    totalCost: totals.totalCost,
+    margin: totals.margin + lotSale,
+    ...extra
+  }
 }
 
 export function productionValuesFromOrder(order, extra = {}) {

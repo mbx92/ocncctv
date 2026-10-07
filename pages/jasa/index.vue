@@ -2,7 +2,7 @@
 import { PlusIcon, PencilSquareIcon, TrashIcon, CheckIcon, XMarkIcon, MagnifyingGlassIcon } from '@heroicons/vue/24/outline'
 import { SERVICE_UNITS } from '~/utils/rab.js'
 
-const { data: items, refresh } = await useFetch('/api/services')
+const { list: items, create, update, remove: removeService } = useServices()
 const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
 
 const search = ref('')
@@ -38,15 +38,14 @@ async function save() {
   errorMsg.value = ''
   try {
     if (editing.value) {
-      await $fetch(`/api/services/${editing.value.id}`, { method: 'PUT', body: form.value })
+      await update(editing.value.id, form.value)
       useToast().success('Jasa diperbarui.')
     } else {
-      await $fetch('/api/services', { method: 'POST', body: form.value })
+      await create(form.value)
       useToast().success('Jasa tersimpan.')
     }
     showForm.value = false
     editing.value = null
-    await refresh()
   } catch (e) {
     errorMsg.value = e.data?.statusMessage || 'Gagal menyimpan'
   }
@@ -56,8 +55,7 @@ async function remove(s) {
     return
   }
   try {
-    await $fetch(`/api/services/${s.id}`, { method: 'DELETE' })
-    await refresh()
+    await removeService(s.id)
   } catch (e) {
     useToast().error(e.data?.statusMessage || 'Gagal menghapus')
   }

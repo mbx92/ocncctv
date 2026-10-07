@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm'
 import { useDb, schema } from '../../../db/index.js'
 import { logAudit } from '../../../utils/audit.js'
 import { loadRabLines, RAB_OPEN_STATUSES, withRabTotals } from '../../../utils/customOrders.js'
+import { parseConsumableLotSale } from '../../../utils/consumableLot.js'
 
 export default defineEventHandler(async (event) => {
   const id = Number(getRouterParam(event, 'id'))
@@ -29,7 +30,8 @@ export default defineEventHandler(async (event) => {
           description,
           customerName: existing.customerName,
           status: 'waiting',
-          jobType: existing.jobType || null
+          jobType: existing.jobType || null,
+          consumableLotSale: parseConsumableLotSale(existing.consumableLotSale)
         })
         .returning({
           id: schema.products.id,
